@@ -122,14 +122,24 @@
         }, 3200);
     }
 
-    async function fetchJson(url) {
-        if (apiCache.has(url)) {
-            return apiCache.get(url);
+    function resolveApiUrl(url) {
+        if (!url || typeof url !== 'string') return url;
+        const base = window.__API_BASE__ !== undefined ? window.__API_BASE__ : (window.location.port === '3000' ? `${window.location.protocol}//${window.location.hostname}:5000` : '');
+        if (url.startsWith('/api') && base) {
+            return `${base}${url}`;
         }
-        const resp = await fetch(url);
+        return url;
+    }
+
+    async function fetchJson(url) {
+        const fullUrl = resolveApiUrl(url);
+        if (apiCache.has(fullUrl)) {
+            return apiCache.get(fullUrl);
+        }
+        const resp = await fetch(fullUrl);
         if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
         const data = await resp.json();
-        apiCache.set(url, data);
+        apiCache.set(fullUrl, data);
         return data;
     }
 
@@ -850,7 +860,7 @@
         const tracks = source.tracks || streamData?.subtitles || [];
         const defaultSub = tracks.find(t => t.default) || tracks[0];
         const subtitleOption = defaultSub ? {
-            url: defaultSub.proxied_src || defaultSub.src,
+            url: resolveApiUrl(defaultSub.proxied_src || defaultSub.src),
             type: 'vtt',
             style: { color: '#ffffff', fontSize: '20px' }
         } : {};
@@ -865,7 +875,7 @@
                     { html: 'Off', value: '' },
                     ...tracks.map(t => ({
                         html: t.label || t.lang || 'Sub',
-                        value: t.proxied_src || t.src,
+                        value: resolveApiUrl(t.proxied_src || t.src),
                         default: !!t.default
                     }))
                 ],
@@ -883,7 +893,7 @@
 
         const art = new Artplayer({
             container: container,
-            url: source.proxy_m3u8_url,
+            url: resolveApiUrl(source.proxy_m3u8_url),
             type: 'm3u8',
             customType: {
                 m3u8: function (video, url, artInstance) {
@@ -1258,7 +1268,7 @@
 
     async function fetchSystemTelemetry() {
         try {
-            const resp = await fetch('/api/system/status');
+            const resp = await fetch(resolveApiUrl('/api/system/status'));
             if (!resp.ok) return;
             const data = await resp.json();
             renderSystemTelemetry(data);
@@ -1302,7 +1312,7 @@
 
             const start = performance.now();
             try {
-                const resp = await fetch(`/api/search?q=${encodeURIComponent(q)}&perPage=5`);
+                const resp = await fetch(resolveApiUrl(`/api/search?q=${encodeURIComponent(q)}&perPage=5`));
                 const elapsed = (performance.now() - start).toFixed(2);
                 const data = await resp.json();
                 const total = data.total || data.results?.length || 0;

@@ -1,6 +1,7 @@
 if (process.env.IPV6_FIRST === 'true') {
     try { require('node:dns').setDefaultResultOrder('ipv6first'); } catch {}
 }
+const http = require('http');
 const express = require('express');
 const cors = require('cors');
 const crypto = require('crypto');
@@ -14,8 +15,9 @@ const scraper = require('./scraper');
 const app = express();
 app.set('trust proxy', 1);
 
-// --- Configuration (Zero .env Required - Sensible Built-in Defaults) ---
-const PORT = parseInt(process.env.PORT) || 3000;
+// --- Dual-Port Configuration (Zero .env Required - Sensible Defaults) ---
+const BACKEND_PORT = parseInt(process.env.BACKEND_PORT || process.env.PORT) || 5000;
+const FRONTEND_PORT = parseInt(process.env.FRONTEND_PORT) || 3000;
 const HOST = process.env.HOST || '0.0.0.0';
 const CACHE_TTL_MS = parseInt(process.env.CACHE_TTL_MS) || 180000;
 const CACHE_MAX_ITEMS = parseInt(process.env.CACHE_MAX_ITEMS) || 3000;
@@ -324,7 +326,8 @@ app.get('/api/system/status', (req, res) => {
             externalMB: (memUsage.external / (1024 * 1024)).toFixed(1)
         },
         gateway: {
-            port: PORT,
+            port: BACKEND_PORT,
+            frontendPort: FRONTEND_PORT,
             engine: '100% Pure Express Native Pipeline',
             ipv6First: process.env.IPV6_FIRST === 'true',
             memoryMB: (memUsage.rss / (1024 * 1024)).toFixed(1),
@@ -831,24 +834,103 @@ app.get('/embed', async (req, res) => {
     }
 });
 
-// 13. Serve Single Page Web Player
+// Backend Root Discovery
 app.get('/', (req, res) => {
+    res.json({
+        engine: "ZokoAnime High-Performance Streaming & Scraper Backend API",
+        version: "4.1.0",
+        status: "online",
+        backend_port: BACKEND_PORT,
+        frontend_port: FRONTEND_PORT,
+        frontend_url: `http://${req.hostname === '0.0.0.0' ? 'localhost' : req.hostname}:${FRONTEND_PORT}/`,
+        endpoints: {
+            stream: `/api/stream?id=21&ep=1`,
+            search: `/api/search?q=naruto`,
+            docs: `/docs`,
+            health: `/health`,
+            discovery: `/api`
+        }
+    });
+});
+
+// --- Frontend Express Application (Port 3000) ---
+const frontendApp = express();
+frontendApp.use(cors());
+
+// Transparent fallback reverse-proxy for API/Streaming requests hitting the frontend port
+function proxyToBackend(req, res) {
+    const targetUrl = new URL(req.originalUrl || req.url, `http://127.0.0.1:${BACKEND_PORT}`);
+    const clientReq = http.request({
+        hostname: '127.0.0.1',
+        port: BACKEND_PORT,
+        path: targetUrl.pathname + targetUrl.search,
+        method: req.method,
+        headers: {
+            ...req.headers,
+            host: `127.0.0.1:${BACKEND_PORT}`,
+            'x-forwarded-host': req.get('host'),
+            'x-forwarded-proto': req.protocol
+        }
+    }, (clientRes) => {
+        res.writeHead(clientRes.statusCode, clientRes.headers);
+        clientRes.pipe(res);
+    });
+    clientReq.on('error', (err) => {
+        res.status(502).json({ error: `Backend unavailable on port ${BACKEND_PORT}`, details: err.message });
+    });
+    req.pipe(clientReq);
+}
+
+frontendApp.use(['/api', '/embed', '/docs', '/health'], proxyToBackend);
+frontendApp.use(express.static(path.join(__dirname, 'public')));
+frontendApp.use((req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-// Server Lifecycle
-let serverInstance = null;
+// Server Lifecycle (Dual-Port Support)
+let backendServer = null;
+let frontendServer = null;
+
 if (require.main === module) {
-    serverInstance = app.listen(PORT, HOST, () => {
-        console.log(`================================================================`);
-        console.log(`🚀 ZOKOANIME PURE EXPRESS ENGINE (v4.0.0)`);
-        console.log(`================================================================`);
-        console.log(`  🌐 Web App:         http://${HOST === '0.0.0.0' ? '127.0.0.1' : HOST}:${PORT}/`);
-        console.log(`  📖 Swagger API:     http://${HOST === '0.0.0.0' ? '127.0.0.1' : HOST}:${PORT}/docs`);
-        console.log(`  📊 Engine Metrics:  http://${HOST === '0.0.0.0' ? '127.0.0.1' : HOST}:${PORT}/api/system/status`);
-        console.log(`  ⚡ Architecture:    100% Pure Express Native Pipeline (Zero Python)`);
-        console.log(`================================================================`);
-    });
+    const isBackendOnly = process.argv.includes('--backend');
+    const isFrontendOnly = process.argv.includes('--frontend');
+
+    if (isBackendOnly) {
+        backendServer = app.listen(BACKEND_PORT, HOST, () => {
+            console.log(`================================================================`);
+            console.log(`⚡ ZOKO BACKEND API ENGINE ACTIVE`);
+            console.log(`================================================================`);
+            console.log(`  ⚡ Backend API:       http://${HOST === '0.0.0.0' ? '127.0.0.1' : HOST}:${BACKEND_PORT}/`);
+            console.log(`  📖 Swagger API Docs: http://${HOST === '0.0.0.0' ? '127.0.0.1' : HOST}:${BACKEND_PORT}/docs`);
+            console.log(`  🎬 Direct Stream:    http://${HOST === '0.0.0.0' ? '127.0.0.1' : HOST}:${BACKEND_PORT}/api/stream?id=21&ep=1`);
+            console.log(`  📊 Healthcheck:      http://${HOST === '0.0.0.0' ? '127.0.0.1' : HOST}:${BACKEND_PORT}/health`);
+            console.log(`================================================================`);
+        });
+    } else if (isFrontendOnly) {
+        frontendServer = frontendApp.listen(FRONTEND_PORT, HOST, () => {
+            console.log(`================================================================`);
+            console.log(`🌐 ZOKO FRONTEND ACTIVE`);
+            console.log(`================================================================`);
+            console.log(`  🌐 Web App / Player: http://${HOST === '0.0.0.0' ? '127.0.0.1' : HOST}:${FRONTEND_PORT}/`);
+            console.log(`  🔗 Connected Backend: http://${HOST === '0.0.0.0' ? '127.0.0.1' : HOST}:${BACKEND_PORT}/`);
+            console.log(`================================================================`);
+        });
+    } else {
+        backendServer = app.listen(BACKEND_PORT, HOST, () => {
+            frontendServer = frontendApp.listen(FRONTEND_PORT, HOST, () => {
+                console.log(`================================================================`);
+                console.log(`🚀 ZOKO DUAL-PORT ENGINE ACTIVE`);
+                console.log(`================================================================`);
+                console.log(`  🌐 Frontend (Web UI):     http://${HOST === '0.0.0.0' ? '127.0.0.1' : HOST}:${FRONTEND_PORT}/`);
+                console.log(`  ⚡ Backend (API & Stream): http://${HOST === '0.0.0.0' ? '127.0.0.1' : HOST}:${BACKEND_PORT}/`);
+                console.log(`  📖 Swagger Docs:          http://${HOST === '0.0.0.0' ? '127.0.0.1' : HOST}:${BACKEND_PORT}/docs`);
+                console.log(`  🎬 Stream Resolver:       http://${HOST === '0.0.0.0' ? '127.0.0.1' : HOST}:${BACKEND_PORT}/api/stream?id=21&ep=1`);
+                console.log(`================================================================`);
+            });
+        });
+    }
 }
 
 module.exports = app;
+module.exports.backendApp = app;
+module.exports.frontendApp = frontendApp;

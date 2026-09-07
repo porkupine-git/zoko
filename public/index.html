@@ -507,6 +507,12 @@
         </div>
     </footer>
 
+    <!-- Backend API Base Configuration -->
+    <script>
+        window.__API_BASE__ = (window.location.port === '3000' || window.location.port === '5173') 
+            ? `${window.location.protocol}//${window.location.hostname}:5000` 
+            : '';
+    </script>
     <!-- Main Client Script -->
     <script src="/app.js"></script>
 </body>

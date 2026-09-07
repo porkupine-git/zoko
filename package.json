@@ -9,6 +9,8 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node --watch server.js",
+    "backend": "node server.js --backend",
+    "frontend": "node server.js --frontend",
     "test": "node --check server.js && node --check scraper.js"
   },
   "keywords": [
