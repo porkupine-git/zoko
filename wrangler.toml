@@ -3,7 +3,11 @@ main = "worker.js"
 compatibility_date = "2024-11-01"
 compatibility_flags = ["nodejs_compat"]
 
-# Pure Backend Scraper API Mode (Zero Frontend Assets)
+# Cloudflare KV Cache Binding (Included in $5/mo Paid Plan)
+[[kv_namespaces]]
+binding = "ZOKO_CACHE"
+id = "b77a4adff5014a8d89516a290add396a"
+
 # Enable Cloudflare Edge Observability & Real-Time Logs
 [observability]
 enabled = true

@@ -1,13 +1,12 @@
 /**
- * ZOKO STREAMING SCRAPER & PROXY ENGINE - CLOUDFLARE WORKER
- * Optimized for Cloudflare Workers (Paid Plan / Edge V8 Runtime)
- * Handles:
- *  - /api/stream            : Decrypts upstream XOR payload and resolves HLS streams
- *  - /api/proxy/m3u8        : Rewrites HLS playlists at edge wire-speed
- *  - /api/proxy/ts          : Streams video chunks zero-buffer with CORS bypass
- *  - /api/proxy/vtt         : Subtitle proxy
- *  - /api/download/*        : AnimePahe / NekoStream download portal resolver
- *  - Static Assets          : Serves frontend (public/ index.html, app.js, style.css)
+ * ZOKO STREAMING SCRAPER & PROXY ENGINE - CLOUDFLARE WORKER (PAID PLAN EDITION)
+ * 
+ * Optimized for Cloudflare Workers Paid ($5/mo):
+ *  - 10M KV Reads & 1M Writes/month: Multi-tier stream and AniList ID caching (ZOKO_CACHE)
+ *  - Edge CDN Caching (caches.default + cf options): Video chunks (.ts) & subtitles (.vtt)
+ *  - Isolate In-Memory Micro-Cache: 0ms latency, zero CPU time for ultra-hot requests
+ *  - ctx.waitUntil: Non-blocking background writes for ultra-fast response dispatch
+ *  - Full CORS (*) on all routes
  */
 
 const ZOKO_BASE_URL = "https://zokoanime.video";
@@ -25,10 +24,39 @@ const CORS_HEADERS = {
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Methods": "GET, POST, OPTIONS, HEAD",
     "Access-Control-Allow-Headers": "Origin, X-Requested-With, Content-Type, Accept, Range, Authorization",
-    "Access-Control-Expose-Headers": "Content-Range, Accept-Ranges, Content-Length"
+    "Access-Control-Expose-Headers": "Content-Range, Accept-Ranges, Content-Length, X-Cache, X-Colo"
 };
 
+// -------------------------------------------------------------
+// TIER 1: In-Memory Isolate Micro-Cache (0ms, 0 CPU, 0 KV Ops)
+// -------------------------------------------------------------
+const MEM_CACHE = new Map();
+const MAX_MEM_ITEMS = 300;
+
+function getMemCache(key) {
+    const item = MEM_CACHE.get(key);
+    if (!item) return null;
+    if (Date.now() > item.expiresAt) {
+        MEM_CACHE.delete(key);
+        return null;
+    }
+    return item.data;
+}
+
+function setMemCache(key, data, ttlSeconds) {
+    if (MEM_CACHE.size >= MAX_MEM_ITEMS) {
+        const oldestKey = MEM_CACHE.keys().next().value;
+        if (oldestKey) MEM_CACHE.delete(oldestKey);
+    }
+    MEM_CACHE.set(key, {
+        data,
+        expiresAt: Date.now() + (ttlSeconds * 1000)
+    });
+}
+
+// -------------------------------------------------------------
 // Native Edge XOR Decryption
+// -------------------------------------------------------------
 function deobfuscatePayload(blob) {
     try {
         const binStr = atob(blob);
@@ -44,74 +72,123 @@ function deobfuscatePayload(blob) {
     }
 }
 
-// Resilient MAL ID mapping (AniList -> Kitsu Fallback)
-async function resolveMalId(aniId, title) {
+// -------------------------------------------------------------
+// Resilient MAL ID mapping with 30-Day KV & Memory Caching
+// -------------------------------------------------------------
+async function resolveMalId(aniId, title, env, ctx) {
     const numId = parseInt(aniId);
     if (!numId && !title) return null;
 
-    // 1. Try AniList GraphQL if numeric ID provided
+    const cacheKey = `ani_mal:${numId || encodeURIComponent(title.toLowerCase())}`;
+
+    // 1. Check Memory Cache
+    const memMatch = getMemCache(cacheKey);
+    if (memMatch) return memMatch;
+
+    // 2. Check Cloudflare KV (Included in Paid Plan)
+    if (env?.ZOKO_CACHE) {
+        try {
+            const kvMatch = await env.ZOKO_CACHE.get(cacheKey);
+            if (kvMatch) {
+                const parsed = parseInt(kvMatch);
+                setMemCache(cacheKey, parsed, 86400); // 24hr memory
+                return parsed;
+            }
+        } catch {}
+    }
+
+    let resolvedId = null;
+
+    // 3. Try AniList GraphQL if numeric ID provided
     if (numId) {
         try {
             const q = `query ($id: Int) { Media(id: $id, type: ANIME) { id idMal } }`;
             const aRes = await fetch("https://graphql.anilist.co", {
                 method: "POST",
                 headers: { "Content-Type": "application/json", "Accept": "application/json" },
-                body: JSON.stringify({ query: q, variables: { id: numId } })
+                body: JSON.stringify({ query: q, variables: { id: numId } }),
+                cf: { cacheEverything: true, cacheTtl: 2592000 }
             });
             if (aRes.ok) {
                 const j = await aRes.json();
-                if (j?.data?.Media?.idMal) return j.data.Media.idMal;
+                if (j?.data?.Media?.idMal) resolvedId = j.data.Media.idMal;
             }
         } catch {}
 
-        // 2. Try Kitsu mapping fallback if AniList is down
-        try {
-            const kRes = await fetch(`https://kitsu.io/api/edge/mappings?filter[externalSite]=anilist/anime&filter[externalId]=${numId}`);
-            if (kRes.ok) {
-                const kj = await kRes.json();
-                const mapId = kj?.data?.[0]?.id;
-                if (mapId) {
-                    const itemRes = await fetch(`https://kitsu.io/api/edge/mappings/${mapId}/item`);
-                    if (itemRes.ok) {
-                        const ij = await itemRes.json();
-                        const animeId = ij?.data?.id;
-                        if (animeId) {
-                            const mRes = await fetch(`https://kitsu.io/api/edge/anime/${animeId}/mappings`);
-                            if (mRes.ok) {
-                                const mj = await mRes.json();
-                                const mal = mj?.data?.find(x => x.attributes?.externalSite === 'myanimelist/anime');
-                                if (mal?.attributes?.externalId) return parseInt(mal.attributes.externalId);
+        // 4. Try Kitsu mapping fallback if AniList is down or missing
+        if (!resolvedId) {
+            try {
+                const kRes = await fetch(`https://kitsu.io/api/edge/mappings?filter[externalSite]=anilist/anime&filter[externalId]=${numId}`, {
+                    cf: { cacheEverything: true, cacheTtl: 2592000 }
+                });
+                if (kRes.ok) {
+                    const kj = await kRes.json();
+                    const mapId = kj?.data?.[0]?.id;
+                    if (mapId) {
+                        const itemRes = await fetch(`https://kitsu.io/api/edge/mappings/${mapId}/item`);
+                        if (itemRes.ok) {
+                            const ij = await itemRes.json();
+                            const animeId = ij?.data?.id;
+                            if (animeId) {
+                                const mRes = await fetch(`https://kitsu.io/api/edge/anime/${animeId}/mappings`);
+                                if (mRes.ok) {
+                                    const mj = await mRes.json();
+                                    const mal = mj?.data?.find(x => x.attributes?.externalSite === 'myanimelist/anime');
+                                    if (mal?.attributes?.externalId) resolvedId = parseInt(mal.attributes.externalId);
+                                }
                             }
                         }
                     }
                 }
-            }
-        } catch {}
+            } catch {}
+        }
     }
 
-    // 3. Try title search via Kitsu
-    if (title) {
+    // 5. Try title search via Kitsu
+    if (!resolvedId && title) {
         try {
-            const tRes = await fetch(`https://kitsu.io/api/edge/anime?filter[text]=${encodeURIComponent(title)}&include=mappings&page[limit]=1`);
+            const tRes = await fetch(`https://kitsu.io/api/edge/anime?filter[text]=${encodeURIComponent(title)}&include=mappings&page[limit]=1`, {
+                cf: { cacheEverything: true, cacheTtl: 2592000 }
+            });
             if (tRes.ok) {
                 const tj = await tRes.json();
                 const mappings = tj.included?.filter(x => x.type === 'mappings') || [];
                 const mal = mappings.find(m => m.attributes?.externalSite === 'myanimelist/anime');
-                if (mal?.attributes?.externalId) return parseInt(mal.attributes.externalId);
+                if (mal?.attributes?.externalId) resolvedId = parseInt(mal.attributes.externalId);
             }
         } catch {}
     }
 
-    return numId || null;
+    const finalId = resolvedId || numId || null;
+
+    // Cache in Memory and Cloudflare KV for 30 days (Non-blocking write)
+    if (finalId) {
+        setMemCache(cacheKey, finalId, 86400);
+        if (env?.ZOKO_CACHE && ctx?.waitUntil) {
+            ctx.waitUntil(
+                env.ZOKO_CACHE.put(cacheKey, finalId.toString(), { expirationTtl: 2592000 }).catch(() => {})
+            );
+        }
+    }
+
+    return finalId;
 }
 
-// Edge Stream Extractor
+// -------------------------------------------------------------
+// Edge Stream Extractor (Live Scraper + XOR Decrypt)
+// -------------------------------------------------------------
 async function extractStream(malId, episode, track, baseUrl) {
     const targetTrack = (track || 'sub').toLowerCase() === 'dub' ? 'dub' : 'sub';
     const targetEp = parseInt(episode) || 1;
     const streamUrl = `${ZOKO_BASE_URL}/stream/mal/${malId}/${targetEp}/${targetTrack}`;
 
-    const res = await fetch(streamUrl, { headers: DEFAULT_HEADERS });
+    const res = await fetch(streamUrl, {
+        headers: DEFAULT_HEADERS,
+        cf: {
+            cacheEverything: false
+        }
+    });
+
     if (!res.ok) {
         throw new Error(`Upstream mirror returned HTTP ${res.status}`);
     }
@@ -167,13 +244,30 @@ async function extractStream(malId, episode, track, baseUrl) {
     };
 }
 
-// Edge M3U8 Playlist Rewriter
-async function handleM3U8Proxy(targetUrl, baseUrl) {
+// -------------------------------------------------------------
+// Edge M3U8 Playlist Rewriter (Cached at Edge for 60s)
+// -------------------------------------------------------------
+async function handleM3U8Proxy(targetUrl, baseUrl, request, ctx) {
+    const cache = caches.default;
+    const cacheUrl = new URL(request.url);
+
+    // 1. Check Cloudflare Edge Cache
+    const cached = await cache.match(cacheUrl);
+    if (cached) {
+        const h = new Headers(cached.headers);
+        h.set("X-Cache", "EDGE-HIT");
+        return new Response(cached.body, { status: cached.status, headers: h });
+    }
+
     const upstreamRes = await fetch(targetUrl, {
         headers: {
             "User-Agent": DEFAULT_HEADERS["User-Agent"],
             "Referer": "https://zokoanime.video/",
             "Origin": "https://zokoanime.video"
+        },
+        cf: {
+            cacheEverything: true,
+            cacheTtl: 60
         }
     });
 
@@ -212,18 +306,40 @@ async function handleM3U8Proxy(targetUrl, baseUrl) {
         return `${baseUrl}/api/proxy/ts?url=${encodeURIComponent(absUrl)}`;
     }).join('\n');
 
-    return new Response(rewritten, {
+    const response = new Response(rewritten, {
         headers: {
             ...CORS_HEADERS,
             "Content-Type": "application/vnd.apple.mpegurl",
-            "Cache-Control": "public, max-age=60"
+            "Cache-Control": "public, max-age=60, s-maxage=60",
+            "X-Cache": "MISS"
         }
     });
+
+    if (ctx?.waitUntil) {
+        ctx.waitUntil(cache.put(cacheUrl, response.clone()));
+    }
+
+    return response;
 }
 
-// Edge TS Video Chunk Streamer
-async function handleTsProxy(targetUrl, request) {
+// -------------------------------------------------------------
+// Edge TS Video Chunk Streamer (Cloudflare CDN Edge Cached for 24h)
+// -------------------------------------------------------------
+async function handleTsProxy(targetUrl, request, ctx) {
     const rangeHeader = request.headers.get("Range");
+    const cache = caches.default;
+    const cacheUrl = new URL(request.url);
+
+    // If no range header, check Cloudflare Edge CDN cache
+    if (!rangeHeader) {
+        const cachedRes = await cache.match(cacheUrl);
+        if (cachedRes) {
+            const h = new Headers(cachedRes.headers);
+            h.set("X-Cache", "EDGE-HIT");
+            return new Response(cachedRes.body, { status: cachedRes.status, headers: h });
+        }
+    }
+
     const fetchHeaders = {
         "User-Agent": DEFAULT_HEADERS["User-Agent"],
         "Referer": "https://zokoanime.video/",
@@ -231,10 +347,20 @@ async function handleTsProxy(targetUrl, request) {
     };
     if (rangeHeader) fetchHeaders["Range"] = rangeHeader;
 
-    const upstreamRes = await fetch(targetUrl, { headers: fetchHeaders });
+    // Use Cloudflare CDN Edge Cache features
+    const upstreamRes = await fetch(targetUrl, {
+        headers: fetchHeaders,
+        cf: {
+            cacheEverything: true,
+            cacheTtl: 86400, // 24 hours edge cache
+            cacheKey: targetUrl
+        }
+    });
+
     const responseHeaders = new Headers(CORS_HEADERS);
     responseHeaders.set("Content-Type", upstreamRes.headers.get("Content-Type") || "video/mp2t");
-    responseHeaders.set("Cache-Control", "public, max-age=86400, immutable");
+    responseHeaders.set("Cache-Control", "public, max-age=86400, s-maxage=86400, immutable");
+    responseHeaders.set("X-Cache", "MISS");
 
     if (upstreamRes.headers.has("Content-Length")) {
         responseHeaders.set("Content-Length", upstreamRes.headers.get("Content-Length"));
@@ -246,36 +372,69 @@ async function handleTsProxy(targetUrl, request) {
         responseHeaders.set("Accept-Ranges", upstreamRes.headers.get("Accept-Ranges"));
     }
 
-    return new Response(upstreamRes.body, {
+    const response = new Response(upstreamRes.body, {
         status: upstreamRes.status,
         headers: responseHeaders
     });
+
+    // Cache immutable 200 chunks in Cloudflare Edge Cache
+    if (!rangeHeader && upstreamRes.status === 200 && ctx?.waitUntil) {
+        ctx.waitUntil(cache.put(cacheUrl, response.clone()));
+    }
+
+    return response;
 }
 
-// Edge VTT Subtitle Streamer
-async function handleVttProxy(targetUrl) {
+// -------------------------------------------------------------
+// Edge VTT Subtitle Streamer (Edge Cached for 7 Days)
+// -------------------------------------------------------------
+async function handleVttProxy(targetUrl, request, ctx) {
+    const cache = caches.default;
+    const cacheUrl = new URL(request.url);
+
+    const cachedRes = await cache.match(cacheUrl);
+    if (cachedRes) {
+        const h = new Headers(cachedRes.headers);
+        h.set("X-Cache", "EDGE-HIT");
+        return new Response(cachedRes.body, { status: cachedRes.status, headers: h });
+    }
+
     const upstreamRes = await fetch(targetUrl, {
         headers: {
             "User-Agent": DEFAULT_HEADERS["User-Agent"],
             "Referer": "https://zokoanime.video/"
+        },
+        cf: {
+            cacheEverything: true,
+            cacheTtl: 604800 // 7 days
         }
     });
 
-    return new Response(upstreamRes.body, {
+    const response = new Response(upstreamRes.body, {
         status: upstreamRes.status,
         headers: {
             ...CORS_HEADERS,
             "Content-Type": "text/vtt; charset=utf-8",
-            "Cache-Control": "public, max-age=86400"
+            "Cache-Control": "public, max-age=604800, s-maxage=604800, immutable",
+            "X-Cache": "MISS"
         }
     });
+
+    if (upstreamRes.status === 200 && ctx?.waitUntil) {
+        ctx.waitUntil(cache.put(cacheUrl, response.clone()));
+    }
+
+    return response;
 }
 
+// -------------------------------------------------------------
 // Cloudflare Worker Fetch Handler
+// -------------------------------------------------------------
 export default {
     async fetch(request, env, ctx) {
         const url = new URL(request.url);
         const baseUrl = url.origin;
+        const colo = request.cf?.colo || "EDGE";
 
         // Handle CORS Preflight
         if (request.method === "OPTIONS") {
@@ -284,7 +443,14 @@ export default {
 
         // 1. Health Endpoint
         if (url.pathname === "/health") {
-            return new Response(JSON.stringify({ status: "online", platform: "cloudflare-workers-edge" }), {
+            return new Response(JSON.stringify({
+                status: "online",
+                platform: "cloudflare-workers-edge",
+                plan: "workers-paid",
+                colo,
+                kv_active: !!env.ZOKO_CACHE,
+                mem_cache_items: MEM_CACHE.size
+            }), {
                 headers: { ...CORS_HEADERS, "Content-Type": "application/json" }
             });
         }
@@ -296,9 +462,9 @@ export default {
                 let malId = url.searchParams.get("malId");
                 const title = url.searchParams.get("title");
                 let ep = parseInt(url.searchParams.get("ep")) || 1;
-                const track = url.searchParams.get("track") || "sub";
+                const track = (url.searchParams.get("track") || "sub").toLowerCase();
 
-                // Handle shorthand
+                // Handle shorthand "id-ep"
                 if (typeof id === 'string' && id.includes('-')) {
                     const parts = id.split('-');
                     id = parts[0];
@@ -312,7 +478,7 @@ export default {
 
                 let targetMalId = malId;
                 if (!targetMalId) {
-                    targetMalId = await resolveMalId(id, title);
+                    targetMalId = await resolveMalId(id, title, env, ctx);
                 }
 
                 if (!targetMalId) {
@@ -325,9 +491,62 @@ export default {
                     });
                 }
 
+                const streamCacheKey = `stream:${targetMalId}:${ep}:${track}`;
+
+                // --- TIER 1: In-Memory Isolate Cache ---
+                const memData = getMemCache(streamCacheKey);
+                if (memData) {
+                    return new Response(JSON.stringify(memData), {
+                        headers: {
+                            ...CORS_HEADERS,
+                            "Content-Type": "application/json",
+                            "X-Cache": "MEM-HIT",
+                            "X-Colo": colo
+                        }
+                    });
+                }
+
+                // --- TIER 2: Cloudflare Workers KV (10M reads/month included in Paid Plan) ---
+                if (env.ZOKO_CACHE) {
+                    try {
+                        const kvDataStr = await env.ZOKO_CACHE.get(streamCacheKey);
+                        if (kvDataStr) {
+                            const kvData = JSON.parse(kvDataStr);
+                            setMemCache(streamCacheKey, kvData, 1800); // 30min memory cache
+                            return new Response(kvDataStr, {
+                                headers: {
+                                    ...CORS_HEADERS,
+                                    "Content-Type": "application/json",
+                                    "X-Cache": "KV-HIT",
+                                    "X-Colo": colo
+                                }
+                            });
+                        }
+                    } catch {}
+                }
+
+                // --- CACHE MISS: Scrape Upstream ZokoAnime & Decrypt XOR ---
                 const streamData = await extractStream(targetMalId, ep, track, baseUrl);
+
+                // Save in Memory (30 mins)
+                setMemCache(streamCacheKey, streamData, 1800);
+
+                // Save in Cloudflare KV asynchronously (3 hours TTL) via ctx.waitUntil
+                if (env.ZOKO_CACHE && ctx?.waitUntil) {
+                    ctx.waitUntil(
+                        env.ZOKO_CACHE.put(streamCacheKey, JSON.stringify(streamData), {
+                            expirationTtl: 10800 // 3 hours
+                        }).catch(() => {})
+                    );
+                }
+
                 return new Response(JSON.stringify(streamData), {
-                    headers: { ...CORS_HEADERS, "Content-Type": "application/json" }
+                    headers: {
+                        ...CORS_HEADERS,
+                        "Content-Type": "application/json",
+                        "X-Cache": "MISS",
+                        "X-Colo": colo
+                    }
                 });
             } catch (err) {
                 return new Response(JSON.stringify({ success: false, error: err.message }), {
@@ -341,21 +560,21 @@ export default {
         if (url.pathname === "/api/proxy/m3u8") {
             const target = url.searchParams.get("url");
             if (!target) return new Response("Missing target url", { status: 400, headers: CORS_HEADERS });
-            return handleM3U8Proxy(target, baseUrl);
+            return handleM3U8Proxy(target, baseUrl, request, ctx);
         }
 
-        // 4. Video TS Chunk Proxy: /api/proxy/ts
+        // 4. Video TS Chunk Proxy: /api/proxy/ts (Edge CDN Cached)
         if (url.pathname === "/api/proxy/ts") {
             const target = url.searchParams.get("url");
             if (!target) return new Response("Missing target url", { status: 400, headers: CORS_HEADERS });
-            return handleTsProxy(target, request);
+            return handleTsProxy(target, request, ctx);
         }
 
-        // 5. Subtitles VTT Proxy: /api/proxy/vtt
+        // 5. Subtitles VTT Proxy: /api/proxy/vtt (Edge CDN Cached)
         if (url.pathname === "/api/proxy/vtt") {
             const target = url.searchParams.get("url");
             if (!target) return new Response("Missing target url", { status: 400, headers: CORS_HEADERS });
-            return handleVttProxy(target);
+            return handleVttProxy(target, request, ctx);
         }
 
         // 6. Download Portal Resolver: /api/download/:id/:ep or /api/download
@@ -369,12 +588,14 @@ export default {
                 let targetMalId = id;
                 const num = parseInt(id);
                 if (num && num > 60000) {
-                    targetMalId = await resolveMalId(id, url.searchParams.get("title"));
+                    targetMalId = await resolveMalId(id, url.searchParams.get("title"), env, ctx);
                 }
 
+                const dlCacheKey = `dl:${targetMalId || id}:${ep}:${track}`;
                 const portalUrl = `https://zokoanime.video/download/mal/${targetMalId || id}/${ep}/${track}`;
+
                 if (url.searchParams.get("json") === "true") {
-                    return new Response(JSON.stringify({
+                    const dlData = {
                         success: true,
                         id,
                         malId: targetMalId || id,
@@ -382,8 +603,17 @@ export default {
                         track,
                         download_url: portalUrl,
                         note: "Powered by AnimePahe / NekoStream CDN"
-                    }), {
-                        headers: { ...CORS_HEADERS, "Content-Type": "application/json" }
+                    };
+
+                    // Cache in KV for 6 hours
+                    if (env.ZOKO_CACHE && ctx?.waitUntil) {
+                        ctx.waitUntil(
+                            env.ZOKO_CACHE.put(dlCacheKey, JSON.stringify(dlData), { expirationTtl: 21600 }).catch(() => {})
+                        );
+                    }
+
+                    return new Response(JSON.stringify(dlData), {
+                        headers: { ...CORS_HEADERS, "Content-Type": "application/json", "X-Colo": colo }
                     });
                 }
 
@@ -400,16 +630,22 @@ export default {
         if (url.pathname === "/" || url.pathname === "/api") {
             return new Response(JSON.stringify({
                 name: "Zoko Pure Edge Anime Streaming & Scraper API",
-                version: "4.2.0",
-                platform: "Cloudflare Workers Edge (V8 Runtime)",
+                version: "5.0.0 (Cloudflare Paid Optimized)",
+                platform: "Cloudflare Workers Edge (Paid V8 Runtime)",
                 cors_enabled: true,
                 status: "ONLINE",
-                description: "Zero-dependency pure backend scraper API. Call this from any frontend, mobile app, or client with full CORS enabled.",
+                optimizations: {
+                    kv_storage: "Cloudflare KV Multi-tier Caching (10M ops/mo)",
+                    edge_cdn_cache: "Cloudflare Cache API (caches.default + cf: cacheEverything)",
+                    isolate_memory_cache: "V8 Global Scope Micro-Cache (0ms latency)",
+                    async_non_blocking_writes: "ctx.waitUntil for maximum throughput",
+                    colo: colo
+                },
                 endpoints: {
                     stream: {
                         method: "GET",
                         path: "/api/stream",
-                        summary: "Extract HLS stream, proxy URLs, VTT subtitles, and skip markers",
+                        summary: "Extract HLS stream, proxy URLs, VTT subtitles, and skip markers (Cached in KV & Edge)",
                         params: {
                             id: "AniList ID or MAL ID (e.g. ?id=21)",
                             malId: "Direct MyAnimeList ID (e.g. ?malId=21)",
@@ -428,17 +664,17 @@ export default {
                     proxy_m3u8: {
                         method: "GET",
                         path: "/api/proxy/m3u8?url=...",
-                        summary: "HLS Master/Media playlist rewriter with CORS"
+                        summary: "HLS Master/Media playlist rewriter with Edge Caching"
                     },
                     proxy_ts: {
                         method: "GET",
                         path: "/api/proxy/ts?url=...",
-                        summary: "Zero-copy edge video chunk proxy"
+                        summary: "Zero-copy edge video chunk proxy with 24-hr Cloudflare CDN Edge Cache"
                     },
                     proxy_vtt: {
                         method: "GET",
                         path: "/api/proxy/vtt?url=...",
-                        summary: "Subtitle proxy"
+                        summary: "Subtitle proxy with 7-day Edge Cache"
                     },
                     health: {
                         method: "GET",
