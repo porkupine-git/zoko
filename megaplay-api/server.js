@@ -207,7 +207,11 @@ const server = http.createServer(async (req, res) => {
                     return res.end(`Subtitle fetch error: ${upstream.status}`);
                 }
 
-                const vttText = await upstream.text();
+                let vttText = await upstream.text();
+                vttText = vttText
+                    .replace(/\{[^}]+\}/g, '')
+                    .replace(/<\/?(c[.\w-]*|v[^>]*|lang[^>]*|ruby|rt)>/gi, '');
+
                 res.writeHead(200, {
                     "Access-Control-Allow-Origin": "*",
                     "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",

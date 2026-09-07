@@ -343,6 +343,25 @@
             box-shadow: 0 6px 20px rgba(139, 92, 246, 0.6);
         }
 
+        /* ArtPlayer Subtitle Styling */
+        .art-subtitle {
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.95), 0 0 3px #000, 0 0 6px rgba(0, 0, 0, 0.9) !important;
+        }
+
+        .art-subtitle-line {
+            line-height: 1.4;
+        }
+
+        .art-subtitle-line i,
+        .art-subtitle-line em {
+            font-style: italic !important;
+        }
+
+        .art-subtitle-line b,
+        .art-subtitle-line strong {
+            font-weight: 700 !important;
+        }
+
         .player-overlay-status {
             position: absolute;
             top: 12px;
@@ -866,7 +885,7 @@
                             return 'Off';
                         }
                         art.subtitle.show = true;
-                        art.subtitle.switch(item.url, { name: item.html });
+                        art.subtitle.switch(item.url, { name: item.html, escape: false });
                         return item.html;
                     }
                 });
@@ -960,12 +979,18 @@
                 subtitle: defaultSub ? {
                     url: defaultSub.proxy_url || defaultSub.url,
                     type: 'vtt',
+                    escape: false,
                     style: {
                         color: '#ffffff',
                         fontSize: '22px',
-                        textShadow: '0 2px 4px rgba(0,0,0,0.9), 0 0 2px #000'
+                        textShadow: '0 2px 4px rgba(0,0,0,0.95), 0 0 3px #000'
                     },
-                    encoding: 'utf-8'
+                    encoding: 'utf-8',
+                    onVttLoad: function (vtt) {
+                        return (vtt || '')
+                            .replace(/\{[^}]+\}/g, '')
+                            .replace(/<\/?(c[.\w-]*|v[^>]*|lang[^>]*|ruby|rt)>/gi, '');
+                    }
                 } : undefined,
                 highlight: highlights,
                 settings: settings,
