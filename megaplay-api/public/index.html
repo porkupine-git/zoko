@@ -205,20 +205,39 @@
         }
 
         input, select {
-            background: rgba(10, 12, 20, 0.7);
+            background: #111422;
             border: 1px solid var(--border-glass);
             border-radius: 10px;
             padding: 12px 14px;
-            color: #fff;
+            color: #ffffff !important;
             font-family: inherit;
             font-size: 14px;
             outline: none;
-            transition: border-color 0.2s;
+            transition: all 0.2s;
+        }
+
+        select {
+            cursor: pointer;
+            appearance: none;
+            -webkit-appearance: none;
+            -moz-appearance: none;
+            background-color: #111422;
+            background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23a78bfa' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
+            background-repeat: no-repeat;
+            background-position: right 14px center;
+            background-size: 14px;
+            padding-right: 38px;
+        }
+
+        select option {
+            background-color: #121422 !important;
+            color: #ffffff !important;
+            padding: 10px;
         }
 
         input:focus, select:focus {
             border-color: var(--accent-primary);
-            box-shadow: 0 0 10px var(--accent-glow);
+            box-shadow: 0 0 12px var(--accent-glow);
         }
 
         .btn-primary {
@@ -589,8 +608,8 @@
                     <div class="form-group">
                         <label>CDN Server Route</label>
                         <select id="cdn-server">
-                            <option value="" selected>Default CDN (Auto)</option>
-                            <option value="tcdn">tcdn (Fast Akamai/Cloudflare)</option>
+                            <option value="" selected>Default CDN (Auto-Route)</option>
+                            <option value="tcdn">tcdn (Akamai / Cloudflare Edge)</option>
                             <option value="bcdn">bcdn (Secondary Mirror)</option>
                         </select>
                     </div>
@@ -855,21 +874,21 @@
 
             // Server / CDN switcher in player settings
             const cdnSelect = document.getElementById('cdn-server');
-            const currentCdn = cdnSelect ? cdnSelect.value : 'mega';
+            const currentCdn = cdnSelect ? cdnSelect.value : '';
             settings.push({
-                html: 'CDN Server',
-                tooltip: currentCdn.toUpperCase(),
+                html: 'CDN Route',
+                tooltip: currentCdn ? currentCdn.toUpperCase() : 'AUTO',
                 selector: [
-                    { default: currentCdn === 'mega', html: 'MEGA (Primary)', value: 'mega' },
-                    { default: currentCdn === 'alpha', html: 'ALPHA (High Speed)', value: 'alpha' },
-                    { default: currentCdn === 'beta', html: 'BETA (Backup)', value: 'beta' }
+                    { default: currentCdn === '', html: 'Auto Route (Default)', value: '' },
+                    { default: currentCdn === 'tcdn', html: 'tcdn (Akamai / CF Edge)', value: 'tcdn' },
+                    { default: currentCdn === 'bcdn', html: 'bcdn (Secondary Mirror)', value: 'bcdn' }
                 ],
                 onSelect: function (item) {
                     if (cdnSelect) {
                         cdnSelect.value = item.value;
                         resolveAndPlay();
                     }
-                    return item.value.toUpperCase();
+                    return item.html;
                 }
             });
 
