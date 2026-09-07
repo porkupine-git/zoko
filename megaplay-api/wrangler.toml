@@ -1,0 +1,13 @@
+name = "aniko-backend"
+main = "worker.js"
+compatibility_date = "2024-11-01"
+compatibility_flags = ["nodejs_compat"]
+
+# Cloudflare KV Cache Binding (Paid Plan High Speed Cache)
+[[kv_namespaces]]
+binding = "ANIKO_CACHE"
+id = "8211149c8ced401a81b4fb16b345594d"
+
+# Enable Cloudflare Edge Observability & Logs
+[observability]
+enabled = true
