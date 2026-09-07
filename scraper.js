@@ -1,8 +1,8 @@
 /**
- * ZOKOANIME NATIVE EXPRESS ENGINE - SCRAPER (v4.0.0)
- * 100% Pure Node.js Scraper for https://zokoanime.video/
- * Decrypts XOR 'otaku-embed-v1' Stream Payloads + AniList GraphQL Metadata
- * Ultra-fast connection pooling, zero external Python or third-party scraper dependencies.
+ * ZOKOANIME NATIVE STREAMING SCRAPER ENGINE
+ * 100% Pure Video Streaming Resolver for https://zokoanime.video/
+ * Decrypts XOR 'otaku-embed-v1' Stream Payloads
+ * Note: All catalog/anime cards/metadata are queried directly from AniList in the frontend!
  */
 
 // DNS resolution order (opt-in for environments with native IPv6)
@@ -33,6 +33,7 @@ function getCached(key) {
     }
     return item.value;
 }
+
 // --- Constants & Config ---
 const ZOKO_BASE_URL = process.env.ZOKO_BASE_URL || "https://zokoanime.video";
 const ANILIST_ENDPOINT = process.env.ANILIST_GRAPHQL_ENDPOINT || "https://graphql.anilist.co";
@@ -52,14 +53,6 @@ const DEFAULT_HEADERS = {
     "Origin": "https://zokoanime.video",
     "Referer": "https://zokoanime.video/",
     "Accept": "*/*"
-};
-
-const ANILIST_HEADERS = {
-    "Content-Type": "application/json",
-    "Accept": "application/json",
-    "Origin": "https://anilist.co",
-    "Referer": "https://anilist.co/",
-    "User-Agent": DEFAULT_HEADERS["User-Agent"]
 };
 
 // --- Native Ultra-Fast Buffer XOR Deobfuscation ---
@@ -91,40 +84,8 @@ function runSingleflight(key, fn) {
     return p;
 }
 
-// --- AniList GraphQL Client ---
-async function queryAniListSafe(query, variables = {}) {
-    const cacheKey = `anilist:${JSON.stringify({ query: query.trim(), variables })}`;
-    const cached = getCached(cacheKey);
-    if (cached) return cached;
-
-    return runSingleflight(cacheKey, async () => {
-        try {
-            const res = await fetch(ANILIST_ENDPOINT, {
-                method: 'POST',
-                headers: ANILIST_HEADERS,
-                body: JSON.stringify({ query: query.trim(), variables }),
-                signal: AbortSignal.timeout(8000)
-            });
-
-            if (!res.ok) {
-                console.warn(`AniList responded with HTTP ${res.status}`);
-                return null;
-            }
-
-            const json = await res.json();
-            if (json?.data) {
-                setCached(cacheKey, json.data, 300000);
-                return json.data;
-            }
-            return null;
-        } catch (err) {
-            console.warn(`AniList query failed: ${err.message}`);
-            return null;
-        }
-    });
-}
-
-// --- Convert AniList ID to MyAnimeList (MAL) ID ---
+// --- Fallback Helper: Convert AniList ID to MyAnimeList (MAL) ID ---
+// Only used if caller did not provide malId directly
 async function getMalIdFromAniList(aniId) {
     const numericId = parseInt(aniId);
     if (!numericId) return null;
@@ -142,10 +103,22 @@ async function getMalIdFromAniList(aniId) {
     }
     `;
 
-    const data = await queryAniListSafe(query, { id: numericId });
-    const malId = data?.Media?.idMal || numericId;
-    setCached(cacheKey, malId, 86400000); // 24h TTL
-    return malId;
+    try {
+        const res = await fetch(ANILIST_ENDPOINT, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+            body: JSON.stringify({ query: query.trim(), variables: { id: numericId } }),
+            signal: AbortSignal.timeout(6000)
+        });
+        if (res.ok) {
+            const json = await res.json();
+            const malId = json?.data?.Media?.idMal || numericId;
+            setCached(cacheKey, malId, 86400000); // 24h cache
+            return malId;
+        }
+    } catch {}
+
+    return numericId;
 }
 
 // --- Core ZokoAnime Stream Extractor ---
@@ -250,246 +223,7 @@ async function extractZokoStream({ malId, anilistId, episode = 1, track = 'sub',
     });
 }
 
-// --- Anime Search (Instant SQLite with AniList Fallback) ---
-async function searchCatalog(query, page = 1, perPage = 20) {
-    const q = (query || '').trim();
-    if (!q) return { results: [] };
-
-    const cacheKey = `search:${q.toLowerCase()}:${page}:${perPage}`;
-    const cached = getCached(cacheKey);
-    if (cached) return cached;
-
-    const searchQuery = `
-    query ($search: String, $page: Int, $perPage: Int) {
-      Page(page: $page, perPage: $perPage) {
-        pageInfo { total currentPage lastPage hasNextPage }
-        media(search: $search, type: ANIME, isAdult: false) {
-          id
-          idMal
-          title { romaji english native }
-          coverImage { extraLarge large medium color }
-          bannerImage
-          format
-          episodes
-          averageScore
-          genres
-          seasonYear
-          status
-          description(asHtml: false)
-        }
-      }
-    }
-    `;
-
-    const data = await queryAniListSafe(searchQuery, { search: q, page, perPage });
-    if (!data?.Page?.media) return { results: [] };
-
-    const results = data.Page.media.map(m => {
-        return {
-            id: m.id,
-            mal_id: m.idMal || m.id,
-            title: m.title?.english || m.title?.romaji || m.title?.native,
-            english_title: m.title?.english || '',
-            romaji_title: m.title?.romaji || '',
-            cover: m.coverImage?.large || m.coverImage?.extraLarge || '',
-            coverImage: m.coverImage,
-            banner: m.bannerImage || '',
-            bannerImage: m.bannerImage || '',
-            format: m.format || 'TV',
-            episodes_total: m.episodes || null,
-            score: m.averageScore || null,
-            genres: m.genres || [],
-            year: m.seasonYear || null,
-            status: m.status || 'UNKNOWN',
-            description: m.description ? m.description.slice(0, 200) + '...' : ''
-        };
-    });
-
-    const response = {
-        total: data.Page.pageInfo.total,
-        page: data.Page.pageInfo.currentPage,
-        hasNextPage: data.Page.pageInfo.hasNextPage,
-        results
-    };
-
-    setCached(cacheKey, response, 300000);
-    return response;
-}
-
-// --- Detailed Anime Info & Episode Generator ---
-async function getAnimeInfo(identifier) {
-    const numId = parseInt(identifier);
-    if (!numId) throw new Error(`Invalid anime ID: ${identifier}`);
-
-    const cacheKey = `anime_info:${numId}`;
-    const cached = getCached(cacheKey);
-    if (cached) return cached;
-
-    const detailsQuery = `
-    query ($id: Int) {
-      Media(id: $id, type: ANIME) {
-        id
-        idMal
-        title { romaji english native }
-        coverImage { extraLarge large color }
-        bannerImage
-        description(asHtml: false)
-        episodes
-        duration
-        genres
-        averageScore
-        popularity
-        status
-        seasonYear
-        season
-        format
-        nextAiringEpisode { episode }
-        streamingEpisodes { title thumbnail url site }
-        studios(isMain: true) { nodes { name } }
-        relations {
-          edges {
-            relationType
-            node {
-              id
-              idMal
-              title { romaji english }
-              format
-              status
-              coverImage { medium }
-            }
-          }
-        }
-        recommendations(page: 1, perPage: 12, sort: RATING_DESC) {
-          nodes {
-            mediaRecommendation {
-              id
-              idMal
-              title { romaji english }
-              coverImage { large medium }
-              averageScore
-              format
-              episodes
-              genres
-            }
-          }
-        }
-      }
-    }
-    `;
-
-    const data = await queryAniListSafe(detailsQuery, { id: numId });
-    if (!data?.Media) {
-        throw new Error(`Anime not found with ID ${numId}`);
-    }
-
-    const m = data.Media;
-    const malId = m.idMal || m.id;
-    const declaredCount = m.episodes || 0;
-    const streamEps = m.streamingEpisodes || [];
-    const nextAir = m.nextAiringEpisode?.episode;
-    const totalEpisodes = Math.max(declaredCount, streamEps.length, nextAir ? nextAir - 1 : 0, 1);
-
-    const streamEpMap = new Map();
-    streamEps.forEach((se, idx) => {
-        const numMatch = se.title?.match(/Episode\s+(\d+)/i);
-        const n = numMatch ? parseInt(numMatch[1]) : (idx + 1);
-        if (!streamEpMap.has(n)) streamEpMap.set(n, se);
-    });
-
-    const episodes = [];
-    for (let i = 1; i <= totalEpisodes; i++) {
-        const se = streamEpMap.get(i);
-        episodes.push({
-            id: `${malId}-${i}`,
-            episode_number: i,
-            title: se?.title || `Episode ${i}`,
-            thumbnail: se?.thumbnail || m.bannerImage || m.coverImage?.large || ''
-        });
-    }
-
-    const relations = (m.relations?.edges || []).map(e => ({
-        relationType: e.relationType,
-        id: e.node?.id,
-        mal_id: e.node?.idMal || e.node?.id,
-        title: e.node?.title?.english || e.node?.title?.romaji || '',
-        format: e.node?.format,
-        status: e.node?.status,
-        cover: e.node?.coverImage?.medium
-    }));
-
-    const recommendations = (m.recommendations?.nodes || [])
-        .map(n => n.mediaRecommendation)
-        .filter(Boolean)
-        .map(r => ({
-            id: r.id,
-            mal_id: r.idMal || r.id,
-            title: r.title?.english || r.title?.romaji || '',
-            cover: r.coverImage?.large || r.coverImage?.medium,
-            score: r.averageScore,
-            format: r.format,
-            episodes: r.episodes,
-            genres: r.genres
-        }));
-
-    const result = {
-        id: m.id,
-        mal_id: malId,
-        title: m.title,
-        cover_image: m.coverImage?.large || m.coverImage?.extraLarge,
-        coverImage: m.coverImage,
-        banner_image: m.bannerImage,
-        bannerImage: m.bannerImage,
-        synopsis: m.description,
-        description: m.description,
-        total_episodes: totalEpisodes,
-        episodes,
-        duration: m.duration,
-        genres: m.genres,
-        averageScore: m.averageScore,
-        popularity: m.popularity,
-        status: m.status,
-        seasonYear: m.seasonYear,
-        season: m.season,
-        format: m.format,
-        studio: m.studios?.nodes?.[0]?.name || null,
-        relations,
-        recommendations
-    };
-
-    setCached(cacheKey, result, 600000);
-    return result;
-}
-
-// --- Episodes Catalog Endpoint ---
-async function getEpisodesCatalog(aniId, options = {}) {
-    const info = await getAnimeInfo(aniId);
-    const page = parseInt(options.page) || 1;
-    const size = parseInt(options.size) || 50;
-    const fetchAll = options.all === true || size >= 100;
-
-    const allEpisodes = info.episodes || [];
-    let pagedEpisodes = allEpisodes;
-
-    if (!fetchAll) {
-        const start = (page - 1) * size;
-        pagedEpisodes = allEpisodes.slice(start, start + size);
-    }
-
-    return {
-        id: info.id,
-        mal_id: info.mal_id,
-        paging: {
-            total: allEpisodes.length,
-            page,
-            size,
-            totalPages: Math.ceil(allEpisodes.length / size) || 1
-        },
-        total_episodes: allEpisodes.length,
-        episodes: pagedEpisodes
-    };
-}
-
-// --- Stream Sources Endpoint (Ultra-Fast Parallel Resolution) ---
+// --- Stream Sources Endpoint (Multi-Track Resolution) ---
 async function getStreamSources(epId, hostUrl = '') {
     const parts = String(epId).split('-');
     const malId = parseInt(parts[0]);
@@ -497,7 +231,6 @@ async function getStreamSources(epId, hostUrl = '') {
     const requestedTrack = (parts[2] || 'sub').toLowerCase() === 'dub' ? 'dub' : 'sub';
     const altTrack = requestedTrack === 'dub' ? 'sub' : 'dub';
 
-    // Parallel fetch both Sub and Dub tracks simultaneously
     const [primaryResult, altResult] = await Promise.allSettled([
         extractZokoStream({ malId, episode: epNum, track: requestedTrack, hostUrl }),
         extractZokoStream({ malId, episode: epNum, track: altTrack, hostUrl })
@@ -566,205 +299,12 @@ async function getStreamSources(epId, hostUrl = '') {
     };
 }
 
-// --- Smart Watch Stream Resolver ---
-async function resolveWatchStream({ title, ani_id, mal_id, hostUrl = '' }) {
-    let targetMalId = mal_id ? parseInt(mal_id) : null;
-    let targetAniId = ani_id ? parseInt(ani_id) : null;
-
-    if (!targetMalId && targetAniId) {
-        targetMalId = await getMalIdFromAniList(targetAniId);
-    }
-
-    if (!targetMalId && title) {
-        const search = await searchCatalog(title, 1, 1);
-        if (search.results?.length > 0) {
-            targetMalId = search.results[0].mal_id;
-            targetAniId = search.results[0].id;
-        }
-    }
-
-    if (!targetMalId) {
-        return { success: false, stream_map: {} };
-    }
-
-    const info = await getAnimeInfo(targetAniId || targetMalId);
-    const totalEps = info.total_episodes || 12;
-
-    const streamMap = {};
-    for (let ep = 1; ep <= totalEps; ep++) {
-        streamMap[ep] = {
-            id: `${targetMalId}-${ep}`,
-            has_stream: true,
-            servers: [
-                { type: 'sub', id: `${targetMalId}-${ep}-sub` },
-                { type: 'dub', id: `${targetMalId}-${ep}-dub` }
-            ]
-        };
-    }
-
-    return {
-        success: true,
-        mal_id: targetMalId,
-        anilist_id: targetAniId,
-        scraper_anime: {
-            id: targetMalId,
-            title: info.title?.english || info.title?.romaji || title
-        },
-        stream_map: streamMap
-    };
-}
-
-// --- Home & Trending Catalogs ---
-async function getHomepageCatalog() {
-    const cacheKey = 'catalog:home';
-    const cached = getCached(cacheKey);
-    if (cached) return cached;
-
-    const homeQuery = `
-    query {
-      hero: Page(page: 1, perPage: 6) {
-        media(sort: TRENDING_DESC, type: ANIME, isAdult: false) {
-          id idMal title { romaji english native } bannerImage coverImage { extraLarge large color }
-          description(asHtml: false) averageScore genres format episodes seasonYear status
-        }
-      }
-      trending: Page(page: 1, perPage: 12) {
-        media(sort: TRENDING_DESC, type: ANIME, isAdult: false) {
-          id idMal title { romaji english native } coverImage { extraLarge large medium color }
-          bannerImage averageScore format episodes genres seasonYear
-        }
-      }
-      popular: Page(page: 1, perPage: 12) {
-        media(sort: POPULARITY_DESC, type: ANIME, isAdult: false) {
-          id idMal title { romaji english native } coverImage { extraLarge large medium color }
-          bannerImage averageScore format episodes genres seasonYear
-        }
-      }
-      topRated: Page(page: 1, perPage: 12) {
-        media(sort: SCORE_DESC, type: ANIME, isAdult: false) {
-          id idMal title { romaji english native } coverImage { extraLarge large medium color }
-          bannerImage averageScore format episodes genres seasonYear
-        }
-      }
-    }
-    `;
-
-    const data = await queryAniListSafe(homeQuery);
-    if (!data) {
-        return { hero: [], trending: [], popular: [], topRated: [] };
-    }
-
-    const formatMedia = (m) => ({
-        id: m.id,
-        mal_id: m.idMal || m.id,
-        title: m.title?.english || m.title?.romaji || m.title?.native,
-        cover: m.coverImage?.large || m.coverImage?.extraLarge,
-        coverImage: m.coverImage,
-        bannerImage: m.bannerImage,
-        format: m.format,
-        episodes: m.episodes,
-        averageScore: m.averageScore,
-        genres: m.genres,
-        seasonYear: m.seasonYear,
-        status: m.status,
-        description: m.description
-    });
-
-    const result = {
-        hero: (data.hero?.media || []).map(formatMedia),
-        trending: (data.trending?.media || []).map(formatMedia),
-        popular: (data.popular?.media || []).map(formatMedia),
-        topRated: (data.topRated?.media || []).map(formatMedia)
-    };
-
-    setCached(cacheKey, result, 300000);
-    return result;
-}
-
-// --- Browse Catalog ---
-async function browseCatalog({ page = 1, perPage = 24, search, genre, format, sort = ['TRENDING_DESC'] } = {}) {
-    const cacheKey = `browse:${page}:${perPage}:${search || ''}:${genre || ''}:${format || ''}:${sort.join(',')}`;
-    const cached = getCached(cacheKey);
-    if (cached) return cached;
-
-    if (search) {
-        const searchResult = await searchCatalog(search, page, perPage);
-        const formattedMedia = (searchResult.results || []).map(r => ({
-            id: r.id,
-            mal_id: r.mal_id,
-            title: { english: r.title, romaji: r.romaji_title },
-            coverImage: { large: r.cover, extraLarge: r.cover },
-            bannerImage: r.banner,
-            format: r.format,
-            episodes: r.episodes_total,
-            averageScore: r.score,
-            genres: r.genres,
-            status: r.status
-        }));
-
-        const result = {
-            pageInfo: {
-                total: searchResult.total,
-                currentPage: page,
-                lastPage: Math.ceil(searchResult.total / perPage) || 1,
-                hasNextPage: searchResult.hasNextPage
-            },
-            media: formattedMedia
-        };
-        setCached(cacheKey, result, 180000);
-        return result;
-    }
-
-    const browseQuery = `
-    query ($page: Int, $perPage: Int, $genre: [String], $format: MediaFormat, $sort: [MediaSort]) {
-      Page(page: $page, perPage: $perPage) {
-        pageInfo { total currentPage lastPage hasNextPage }
-        media(genre_in: $genre, format: $format, sort: $sort, type: ANIME, isAdult: false) {
-          id idMal title { romaji english native } coverImage { extraLarge large medium color }
-          bannerImage format episodes averageScore genres seasonYear status
-        }
-      }
-    }
-    `;
-
-    const data = await queryAniListSafe(browseQuery, { page, perPage, genre, format, sort });
-    if (data?.Page) {
-        setCached(cacheKey, data.Page, 300000);
-        return data.Page;
-    }
-
-    const home = await getHomepageCatalog();
-    const fallbackList = [...home.trending, ...home.popular, ...home.topRated];
-    const unique = [];
-    const seen = new Set();
-    for (const item of fallbackList) {
-        if (!seen.has(item.id)) {
-            seen.add(item.id);
-            unique.push(item);
-        }
-    }
-
-    const result = {
-        pageInfo: { total: unique.length, currentPage: 1, lastPage: 1, hasNextPage: false },
-        media: unique
-    };
-    setCached(cacheKey, result, 300000);
-    return result;
-}
-
 module.exports = {
     DEFAULT_HEADERS,
     ZOKO_BASE_URL,
     OBF_KEY,
     deobfuscatePayload,
     extractZokoStream,
-    searchCatalog,
-    getAnimeInfo,
-    getEpisodesCatalog,
     getStreamSources,
-    resolveWatchStream,
-    getHomepageCatalog,
-    browseCatalog,
-    queryAniListSafe,
     getMalIdFromAniList
 };

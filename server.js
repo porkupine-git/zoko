@@ -249,23 +249,18 @@ app.get('/api', (req, res) => {
 const swaggerDocument = {
     openapi: "3.0.0",
     info: {
-        title: "ZokoAnime Pure Express Anime Engine API",
-        version: "4.0.0",
-        description: "Pure Express.js Native Reverse-Engineered Anime Scraper & Streaming Engine for zokoanime.video"
+        title: "ZokoAnime Pure Streaming Engine API",
+        version: "4.1.0",
+        description: "Zero-dependency, high-throughput HLS anime streaming API with built-in CORS bypass, multi-subtitles, and skip intro/outro markers. (Frontend queries AniList directly for catalog & metadata)"
     },
     paths: {
-        "/api/search": { get: { summary: "Search Anime Catalog", tags: ["Scraper"] } },
-        "/api/info/{identifier}": { get: { summary: "Anime Metadata", tags: ["Scraper"] } },
-        "/api/episodes/{ani_id}": { get: { summary: "Episode Catalog", tags: ["Scraper"] } },
-        "/api/stream/{ep_id}": { get: { summary: "Stream Sources", tags: ["Streams"] } },
         "/api/stream": { get: { summary: "Direct ZokoAnime Stream Extractor", tags: ["Streams"] } },
+        "/api/stream/{id}/{ep}": { get: { summary: "REST Stream Route", tags: ["Streams"] } },
+        "/api/stream/{ep_id}": { get: { summary: "Multi-Track Stream Sources", tags: ["Streams"] } },
         "/embed": { get: { summary: "Embeddable Artplayer HTML Player", tags: ["Player"] } },
-        "/api/home": { get: { summary: "Home Spotlight & Trending", tags: ["Catalog"] } },
-        "/api/browse": { get: { summary: "Browse Catalog", tags: ["Catalog"] } },
-        "/api/anime/{id}": { get: { summary: "Anime Details & Episodes", tags: ["Catalog"] } },
-        "/api/watch/resolve": { get: { summary: "Smart Watch Stream Resolver", tags: ["Resolver"] } },
         "/api/proxy/m3u8": { get: { summary: "HLS Master/Media Playlist Proxy", tags: ["Proxy"] } },
-        "/api/proxy/ts": { get: { summary: "Zero-Copy Video Chunk Proxy", tags: ["Proxy"] } }
+        "/api/proxy/ts": { get: { summary: "Zero-Copy Video Chunk Proxy", tags: ["Proxy"] } },
+        "/health": { get: { summary: "Health Check", tags: ["System"] } }
     }
 };
 app.use('/docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument));
@@ -368,58 +363,8 @@ app.get('/api/system/stream-metrics', (req, res) => {
 });
 
 // ==========================================
-// SCRAPER & CATALOG API ENDPOINTS
+// PURE STREAMING API ENDPOINTS
 // ==========================================
-
-// 1. Search Anime
-app.get('/api/search', async (req, res) => {
-    try {
-        const query = (req.query.q || '').trim();
-        if (!query) return res.status(400).json({ error: 'Query param "q" is required' });
-
-        const page = parseInt(req.query.page) || 1;
-        const perPage = parseInt(req.query.perPage) || 20;
-
-        req.tier = 'EXPRESS-SCRAPER';
-        const data = await scraper.searchCatalog(query, page, perPage);
-        res.json(data);
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
-});
-
-// 2. Anime Metadata / Details
-async function handleAnimeDetails(req, res) {
-    try {
-        const id = req.params.id || req.params.identifier;
-        if (!id) return res.status(400).json({ error: 'Anime ID is required' });
-
-        req.tier = 'EXPRESS-DETAILS';
-        const data = await scraper.getAnimeInfo(id);
-        res.json(data);
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
-}
-app.get('/api/info/:identifier', handleAnimeDetails);
-app.get('/api/anime/:id', handleAnimeDetails);
-app.get('/api/meta/anime/:id', handleAnimeDetails);
-
-// 3. Episodes Catalog
-app.get('/api/episodes/:ani_id', async (req, res) => {
-    try {
-        const { ani_id } = req.params;
-        const page = parseInt(req.query.page) || 1;
-        const size = parseInt(req.query.size) || 50;
-        const fetchAll = req.query.all === 'true' || size >= 100;
-
-        req.tier = 'EXPRESS-SCRAPER';
-        const data = await scraper.getEpisodesCatalog(ani_id, { all: fetchAll, page, size });
-        res.json(data);
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
-});
 
 // 4. Stream Sources (Compatible with /api/stream/:ep_id and /api/stream/:id/:ep)
 app.get('/api/stream/:id/:ep', async (req, res) => {
@@ -475,20 +420,10 @@ app.get('/api/stream', async (req, res) => {
             ep = parseInt(parts[1]) || ep;
         }
 
-        // Support title-based query fallback if id is not passed (e.g. ?title=Naruto&ep=1)
-        const titleQuery = (req.query.title || req.query.q || req.query.name || '').trim();
-        if (!id && !malId && titleQuery) {
-            const search = await scraper.searchCatalog(titleQuery, 1, 1);
-            if (search.results && search.results.length > 0) {
-                id = search.results[0].id;
-                malId = search.results[0].mal_id;
-            }
-        }
-
         if (!id && !malId) {
             return res.status(400).json({
                 success: false,
-                error: 'Missing identifier. Please provide "id" (e.g. ?id=21&ep=1) or "malId" or "title" (e.g. ?title=Naruto&ep=1)'
+                error: 'Missing anime identifier. Please provide "id" (AniList ID, e.g. ?id=21&ep=1) or "malId" (MyAnimeList ID).'
             });
         }
 
@@ -507,57 +442,6 @@ app.get('/api/stream', async (req, res) => {
     }
 });
 
-// 6. Home Catalog (Trending, Popular, Top Rated)
-async function handleHomePage(req, res) {
-    try {
-        req.tier = 'EXPRESS-HOME';
-        const data = await scraper.getHomepageCatalog();
-        res.json(data);
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
-}
-app.get('/api/home', handleHomePage);
-app.get('/api/meta/home', handleHomePage);
-
-// 7. Browse Catalog (Filters, Genres, Search)
-async function handleBrowse(req, res) {
-    try {
-        const page = parseInt(req.query.page) || 1;
-        const perPage = Math.min(parseInt(req.query.perPage) || 24, 50);
-        const search = req.query.q && req.query.q.trim() ? req.query.q.trim() : undefined;
-        const genre = req.query.genre && req.query.genre !== 'All' ? [req.query.genre] : undefined;
-        const format = req.query.format && req.query.format !== 'All' ? req.query.format : undefined;
-        const sort = req.query.sort ? [req.query.sort] : ['TRENDING_DESC'];
-
-        req.tier = 'EXPRESS-BROWSE';
-        const data = await scraper.browseCatalog({ page, perPage, search, genre, format, sort });
-        res.json(data);
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
-}
-app.get('/api/browse', handleBrowse);
-app.get('/api/meta/browse', handleBrowse);
-
-// 8. Smart Watch Stream Resolver
-app.get('/api/watch/resolve', async (req, res) => {
-    try {
-        const title = (req.query.title || '').trim();
-        const ani_id = req.query.id || req.query.ani_id;
-        const mal_id = req.query.malId || req.query.mal_id;
-        if (!title && !ani_id && !mal_id) {
-            return res.status(400).json({ error: 'Parameter "title" or "id" or "malId" is required' });
-        }
-
-        const hostUrl = getBaseUrl(req);
-        req.tier = 'EXPRESS-RESOLVER';
-        const data = await scraper.resolveWatchStream({ title, ani_id, mal_id, hostUrl });
-        res.json(data);
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
-});
 
 // ==========================================
 // HIGH PERFORMANCE HLS STREAMING PROXY

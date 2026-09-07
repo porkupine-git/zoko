@@ -1,13 +1,16 @@
 /**
  * ZOKO ANIME ENGINE - SINGLE PAGE APPLICATION (SPA)
- * Metadata: AniList GraphQL
- * Streaming: Reverse-Engineered xanime Scraper (HLS + Kernel Pipe)
+ * 100% Client-Side Metadata: Direct AniList GraphQL API (https://graphql.anilist.co)
+ * Streaming: Backend Scraper Resolver API (/api/stream)
  * Player: ArtPlayer v5 with Hls.js & Auto Skip Intro/Outro
  * Aesthetic: Razor-Sharp, Matte Dark Mode, ZERO GLOW
  */
 
 (function () {
     'use strict';
+
+    // AniList Public GraphQL Endpoint
+    const ANILIST_GRAPHQL_ENDPOINT = 'https://graphql.anilist.co';
 
     // App State Store
     const state = {
@@ -27,25 +30,21 @@
 
         watch: {
             anilistId: null,
+            malId: null,
             title: '',
             meta: null,
-            scraperAnime: null,
-            streamMap: null,
             episodes: [],
             activeEpisodeIndex: 1,
             activeEpisodeData: null,
             streamData: null,
             audioMode: 'sub', // 'sub' or 'dub'
             autoSkip: true,
-            currentSegment: 0, // 0 for 1-50, 1 for 51-100 etc.
-            playerInstance: null,
-            resolvePromise: null
+            currentSegment: 0,
+            playerInstance: null
         }
     };
 
-
-
-    // Cache Store
+    // Client In-Memory Cache Store
     const apiCache = new Map();
 
     // DOM Cache
@@ -53,14 +52,10 @@
         navHome: document.getElementById('nav-home'),
         navBrowse: document.getElementById('nav-browse'),
         navWatch: document.getElementById('nav-watch'),
-        navSystem: document.getElementById('nav-system'),
-        btnSystemTelemetry: document.getElementById('btn-system-telemetry'),
-        headerDbBadge: document.getElementById('header-db-badge'),
 
         viewHome: document.getElementById('view-home'),
         viewBrowse: document.getElementById('view-browse'),
         viewWatch: document.getElementById('view-watch'),
-        viewSystem: document.getElementById('view-system'),
 
         globalSearch: document.getElementById('global-search-input'),
         searchDropdown: document.getElementById('search-dropdown'),
@@ -111,7 +106,7 @@
 
     function showToast(message, type = 'info') {
         if (!dom.toastContainer) return;
-        dom.toastContainer.innerHTML = ''; // Keep at most 1 toast on screen
+        dom.toastContainer.innerHTML = '';
         const toast = document.createElement('div');
         toast.className = 'toast';
         toast.innerHTML = `<span>${type === 'success' ? '✓' : type === 'warn' ? '⚠️' : 'ℹ️'}</span> <span>${message}</span>`;
@@ -122,6 +117,7 @@
         }, 3200);
     }
 
+    // Dynamic Backend API Base (defaults to port 5000 if frontend is served on port 3000)
     function resolveApiUrl(url) {
         if (!url || typeof url !== 'string') return url;
         const base = window.__API_BASE__ !== undefined ? window.__API_BASE__ : (window.location.port === '3000' ? `${window.location.protocol}//${window.location.hostname}:5000` : '');
@@ -143,6 +139,30 @@
         return data;
     }
 
+    // Direct Browser Client for AniList GraphQL (Zero Backend Middleman)
+    async function queryAniList(query, variables = {}) {
+        const cacheKey = `anilist:${JSON.stringify({ query: query.trim(), variables })}`;
+        if (apiCache.has(cacheKey)) {
+            return apiCache.get(cacheKey);
+        }
+        const resp = await fetch(ANILIST_GRAPHQL_ENDPOINT, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+            },
+            body: JSON.stringify({ query: query.trim(), variables })
+        });
+        if (!resp.ok) throw new Error(`AniList GraphQL Error: HTTP ${resp.status}`);
+        const json = await resp.json();
+        if (json.errors && json.errors.length > 0) {
+            throw new Error(json.errors[0].message || 'AniList query failed');
+        }
+        const data = json.data;
+        apiCache.set(cacheKey, data);
+        return data;
+    }
+
     function getAnimeTitle(item) {
         if (!item) return 'Unknown Title';
         if (typeof item.title === 'string') return item.title;
@@ -160,14 +180,9 @@
     function navigateTo(viewName, params = {}) {
         state.currentView = viewName;
 
-        // Stop telemetry timer if leaving system view
-        if (viewName !== 'system') {
-            stopSystemTelemetry();
-        }
-
         // Update nav tabs
-        [dom.navHome, dom.navBrowse, dom.navWatch, dom.navSystem].forEach(btn => btn?.classList.remove('active'));
-        [dom.viewHome, dom.viewBrowse, dom.viewWatch, dom.viewSystem].forEach(v => v?.classList.remove('active'));
+        [dom.navHome, dom.navBrowse, dom.navWatch].forEach(btn => btn?.classList.remove('active'));
+        [dom.viewHome, dom.viewBrowse, dom.viewWatch].forEach(v => v?.classList.remove('active'));
 
         if (viewName === 'home') {
             dom.navHome?.classList.add('active');
@@ -187,11 +202,6 @@
             if (params.title || params.id) {
                 initWatchPage(params);
             }
-        } else if (viewName === 'system') {
-            dom.navSystem?.classList.add('active');
-            dom.viewSystem?.classList.add('active');
-            window.location.hash = '#system';
-            startSystemTelemetry();
         }
 
         window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -203,8 +213,6 @@
             navigateTo('home');
         } else if (hash === 'browse') {
             navigateTo('browse');
-        } else if (hash === 'system') {
-            navigateTo('system');
         } else if (hash.startsWith('watch')) {
             const queryPart = hash.includes('?') ? hash.split('?')[1] : '';
             const searchParams = new URLSearchParams(queryPart);
@@ -218,35 +226,64 @@
 
     window.addEventListener('hashchange', parseHash);
 
-    // --- HOME PAGE CONTROLLER ---
+    // --- HOME PAGE CONTROLLER (100% DIRECT ANILIST GRAPHQL) ---
 
     async function loadHomePage() {
         try {
-            const data = await fetchJson('/api/meta/home');
+            const homeQuery = `
+            query {
+              hero: Page(page: 1, perPage: 6) {
+                media(sort: TRENDING_DESC, type: ANIME, isAdult: false) {
+                  id idMal title { romaji english native } bannerImage coverImage { extraLarge large color }
+                  description(asHtml: false) averageScore genres format episodes seasonYear status
+                }
+              }
+              trending: Page(page: 1, perPage: 12) {
+                media(sort: TRENDING_DESC, type: ANIME, isAdult: false) {
+                  id idMal title { romaji english native } coverImage { extraLarge large medium color }
+                  bannerImage averageScore format episodes genres seasonYear
+                }
+              }
+              popular: Page(page: 1, perPage: 12) {
+                media(sort: POPULARITY_DESC, type: ANIME, isAdult: false) {
+                  id idMal title { romaji english native } coverImage { extraLarge large medium color }
+                  bannerImage averageScore format episodes genres seasonYear
+                }
+              }
+              topRated: Page(page: 1, perPage: 12) {
+                media(sort: SCORE_DESC, type: ANIME, isAdult: false) {
+                  id idMal title { romaji english native } coverImage { extraLarge large medium color }
+                  bannerImage averageScore format episodes genres seasonYear
+                }
+              }
+            }
+            `;
+
+            const data = await queryAniList(homeQuery);
 
             // 1. Render Spotlight Hero
-            if (data.hero && data.hero.length > 0) {
-                state.heroItems = data.hero;
+            if (data.hero?.media && data.hero.media.length > 0) {
+                state.heroItems = data.hero.media;
                 renderHeroCarousel();
             }
 
             // 2. Render Trending Now
-            if (data.trending) {
-                renderAnimeGrid(dom.trendingGrid, data.trending, { showRank: true });
+            if (data.trending?.media) {
+                renderAnimeGrid(dom.trendingGrid, data.trending.media, { showRank: true });
             }
 
             // 3. Render Popular This Season
-            if (data.popular) {
-                renderAnimeGrid(dom.popularGrid, data.popular);
+            if (data.popular?.media) {
+                renderAnimeGrid(dom.popularGrid, data.popular.media);
             }
 
             // 4. Render Top Rated Masterpieces
-            if (data.topRated) {
-                renderAnimeGrid(dom.topRatedGrid, data.topRated);
+            if (data.topRated?.media) {
+                renderAnimeGrid(dom.topRatedGrid, data.topRated.media);
             }
         } catch (err) {
-            console.error('Home load error:', err);
-            showToast('Unable to load AniList metadata. Retrying...', 'warn');
+            console.error('Home AniList load error:', err);
+            showToast('Unable to load AniList metadata directly from browser.', 'warn');
         }
     }
 
@@ -294,14 +331,12 @@
             `;
             dom.heroCarousel.appendChild(slide);
 
-            // Dot indicator
             const dot = document.createElement('div');
             dot.className = `hero-dot ${idx === 0 ? 'active' : ''}`;
             dot.addEventListener('click', () => setHeroSlide(idx));
             dom.heroIndicators.appendChild(dot);
         });
 
-        // Setup Carousel Auto-rotation
         if (state.heroInterval) clearInterval(state.heroInterval);
         state.heroInterval = setInterval(() => {
             const next = (state.heroIndex + 1) % state.heroItems.length;
@@ -365,30 +400,56 @@
         });
     }
 
-    // --- BROWSE PAGE CONTROLLER ---
+    // --- BROWSE PAGE CONTROLLER (100% DIRECT ANILIST GRAPHQL) ---
 
     async function loadBrowsePage() {
         try {
             dom.browseGrid.innerHTML = `
                 <div style="grid-column: 1 / -1; text-align: center; padding: 4rem; color: var(--text-muted);">
                     <div style="font-size: 1.1rem; font-weight: 600; color: var(--text-primary); margin-bottom: 8px;">Loading Anime Catalog...</div>
-                    <div style="font-size: 0.85rem;">Fetching real-time entries from AniList</div>
+                    <div style="font-size: 0.85rem;">Fetching real-time entries directly from AniList</div>
                 </div>
             `;
 
-            const queryParams = new URLSearchParams({
+            const browseQuery = `
+            query ($page: Int, $perPage: Int, $search: String, $genre: [String], $format: MediaFormat, $sort: [MediaSort]) {
+              Page(page: $page, perPage: $perPage) {
+                pageInfo {
+                  total
+                  currentPage
+                  lastPage
+                  hasNextPage
+                }
+                media(search: $search, genre_in: $genre, format: $format, sort: $sort, type: ANIME, isAdult: false) {
+                  id
+                  idMal
+                  title { romaji english native }
+                  coverImage { extraLarge large medium color }
+                  bannerImage
+                  format
+                  episodes
+                  averageScore
+                  genres
+                  seasonYear
+                  status
+                }
+              }
+            }
+            `;
+
+            const variables = {
                 page: state.browse.page,
                 perPage: 24,
-                genre: state.browse.genre,
-                format: state.browse.format,
-                sort: state.browse.sort
-            });
-            if (state.browse.query) queryParams.append('q', state.browse.query);
+                sort: [state.browse.sort || 'TRENDING_DESC']
+            };
+            if (state.browse.query) variables.search = state.browse.query;
+            if (state.browse.genre && state.browse.genre !== 'All') variables.genre = [state.browse.genre];
+            if (state.browse.format && state.browse.format !== 'All') variables.format = state.browse.format;
 
-            const data = await fetchJson(`/api/meta/browse?${queryParams.toString()}`);
+            const data = await queryAniList(browseQuery, variables);
 
-            const media = data.media || [];
-            const pageInfo = data.pageInfo || {};
+            const media = data?.Page?.media || [];
+            const pageInfo = data?.Page?.pageInfo || {};
             state.browse.totalPages = pageInfo.lastPage || 1;
 
             dom.browseCount.innerText = pageInfo.total ? `${pageInfo.total.toLocaleString()} anime found` : `${media.length} results`;
@@ -409,11 +470,10 @@
             renderAnimeGrid(dom.browseGrid, media);
         } catch (err) {
             console.error('Browse load error:', err);
-            dom.browseGrid.innerHTML = `<div style="grid-column: 1/-1; text-align: center; padding: 3rem; color: var(--accent-crimson);">Failed to load browse results.</div>`;
+            dom.browseGrid.innerHTML = `<div style="grid-column: 1/-1; text-align: center; padding: 3rem; color: var(--accent-crimson);">Failed to load AniList results.</div>`;
         }
     }
 
-    // Genre filter setup
     const GENRE_LIST = [
         'All', 'Action', 'Adventure', 'Comedy', 'Drama', 'Fantasy', 'Horror',
         'Mystery', 'Romance', 'Sci-Fi', 'Supernatural', 'Slice of Life', 'Sports', 'Thriller'
@@ -436,7 +496,6 @@
         });
     }
 
-    // Debounced search for Browse
     let browseSearchTimer = null;
     dom.browseSearch?.addEventListener('input', (e) => {
         clearTimeout(browseSearchTimer);
@@ -473,14 +532,13 @@
         window.scrollTo({ top: 0, behavior: 'smooth' });
     });
 
-    // --- WATCH PAGE CONTROLLER (ARTPLAYER + SCRAPER STREAMING) ---
+    // --- WATCH PAGE CONTROLLER (ANILIST METADATA + BACKEND STREAMING) ---
 
     async function initWatchPage(params) {
         const incomingId = params.id ? String(params.id) : null;
         const incomingTitle = params.title ? decodeURIComponent(params.title) : '';
         const targetEp = parseInt(params.ep) || 1;
 
-        // Check if already watching this anime (prevents re-fetching whole anime on episode switch)
         const isSameAnime = state.watch.meta && (
             (incomingId && String(state.watch.anilistId) === incomingId) ||
             (incomingTitle && state.watch.title && state.watch.title.toLowerCase() === incomingTitle.toLowerCase())
@@ -495,10 +553,9 @@
         }
 
         state.watch.anilistId = incomingId;
+        state.watch.malId = null;
         state.watch.title = incomingTitle;
         state.watch.meta = null;
-        state.watch.scraperAnime = null;
-        state.watch.streamMap = null;
         state.watch.episodes = [];
         state.watch.activeEpisodeIndex = targetEp;
         state.watch.activeEpisodeData = null;
@@ -514,7 +571,7 @@
         dom.epCountPill.innerText = `Loading AniList...`;
         dom.epListContainer.innerHTML = `
             <div style="padding:2.5rem 1rem; text-align:center; color:var(--text-muted); font-size:0.84rem;">
-                Fetching official episode catalog from AniList...
+                Fetching official anime metadata directly from AniList...
             </div>
         `;
         dom.artContainer.innerHTML = `
@@ -524,44 +581,81 @@
             </div>
         `;
 
-        // 1. STEP ONE: Fetch 100% pure metadata & episode list from AniList
+        // 1. STEP ONE: Fetch 100% pure metadata & episodes directly from AniList GraphQL
         let meta = null;
         try {
-            if (state.watch.anilistId) {
-                meta = await fetchJson(`/api/meta/anime/${state.watch.anilistId}`);
-            } else if (state.watch.title) {
-                const searchRes = await fetchJson(`/api/meta/browse?q=${encodeURIComponent(state.watch.title)}&perPage=1`);
-                if (searchRes.media && searchRes.media.length > 0) {
-                    state.watch.anilistId = String(searchRes.media[0].id);
-                    meta = await fetchJson(`/api/meta/anime/${state.watch.anilistId}`);
+            const animeDetailsQuery = `
+            query ($id: Int, $search: String) {
+              Media(id: $id, search: $search, type: ANIME) {
+                id
+                idMal
+                title { romaji english native }
+                coverImage { extraLarge large color }
+                bannerImage
+                description(asHtml: false)
+                episodes
+                duration
+                genres
+                averageScore
+                status
+                seasonYear
+                format
+                relations {
+                  edges {
+                    relationType
+                    node {
+                      id
+                      idMal
+                      title { romaji english }
+                      format
+                      status
+                      coverImage { medium }
+                    }
+                  }
                 }
+                recommendations(limit: 6, sort: RATING_DESC) {
+                  nodes {
+                    mediaRecommendation {
+                      id
+                      idMal
+                      title { romaji english }
+                      coverImage { large medium }
+                      averageScore
+                      format
+                    }
+                  }
+                }
+              }
             }
+            `;
+            const vars = state.watch.anilistId ? { id: parseInt(state.watch.anilistId) } : { search: state.watch.title };
+            const data = await queryAniList(animeDetailsQuery, vars);
+            meta = data?.Media;
         } catch (err) {
             console.error('AniList meta fetch error:', err);
         }
 
         if (meta) {
             state.watch.meta = meta;
+            state.watch.anilistId = String(meta.id);
+            state.watch.malId = meta.idMal ? String(meta.idMal) : null;
             state.watch.title = getAnimeTitle(meta) || state.watch.title;
             dom.currentAnimeTitle.innerText = state.watch.title;
             renderWatchMetadata(meta);
 
-            // Populating Episodes 100% strictly from AniList
-            state.watch.episodes = (meta.episodes && meta.episodes.length > 0) ? meta.episodes : [];
-            const epCount = meta.total_episodes || state.watch.episodes.length || 1;
+            // Populate episodes from AniList total episodes
+            state.watch.episodes = [];
+            const epCount = meta.episodes || 1;
             dom.epCountPill.innerText = `${epCount} Episodes`;
 
-            if (state.watch.episodes.length === 0) {
-                for (let i = 1; i <= epCount; i++) {
-                    state.watch.episodes.push({
-                        episode_number: i,
-                        title: `Episode ${i}`,
-                        thumbnail: meta.bannerImage || getAnimeCover(meta)
-                    });
-                }
+            for (let i = 1; i <= epCount; i++) {
+                state.watch.episodes.push({
+                    episode_number: i,
+                    title: `Episode ${i}`,
+                    thumbnail: meta.bannerImage || getAnimeCover(meta)
+                });
             }
 
-            // Immediately build episode range selector and render episode drawer from AniList
             buildEpisodeRangeSelector();
         } else {
             dom.epCountPill.innerText = `0 Episodes`;
@@ -572,31 +666,7 @@
             `;
         }
 
-        // 2. STEP TWO: Headless Stream Resolver (xanime Scraper Backend)
-        // Background stream resolution without overriding AniList episode numbers or catalog
-        const resolvePromise = (async () => {
-            try {
-                const resolveUrl = `/api/watch/resolve?title=${encodeURIComponent(state.watch.title)}&id=${state.watch.anilistId || ''}`;
-                const resolveData = await fetchJson(resolveUrl);
-
-                if (resolveData.success) {
-                    state.watch.scraperAnime = resolveData.scraper_anime || null;
-                    state.watch.streamMap = resolveData.stream_map || {};
-                } else {
-                    state.watch.streamMap = {};
-                }
-            } catch (err) {
-                console.warn('Watch stream resolve error:', err);
-                state.watch.streamMap = {};
-            }
-
-            // Update badges in the episode drawer once stream mapping is ready
-            renderEpisodeList();
-        })();
-
-        state.watch.resolvePromise = resolvePromise;
-
-        // 3. STEP THREE: Play Target Episode
+        // 2. STEP TWO: Play Target Episode via Backend Scraper
         const targetEpObj = state.watch.episodes.find(e => e.episode_number === targetEp) || state.watch.episodes[0] || {
             episode_number: targetEp,
             title: `Episode ${targetEp}`
@@ -608,43 +678,49 @@
     function buildEpisodeRangeSelector() {
         const total = state.watch.episodes.length;
         const SEGMENT_SIZE = 50;
-        const segmentCount = Math.ceil(total / SEGMENT_SIZE);
-
         dom.rangeSelector.innerHTML = '';
-        if (segmentCount <= 1) {
+
+        if (total <= SEGMENT_SIZE) {
             dom.rangeSelector.style.display = 'none';
-        } else {
-            dom.rangeSelector.style.display = 'flex';
-            for (let i = 0; i < segmentCount; i++) {
-                const start = i * SEGMENT_SIZE + 1;
-                const end = Math.min((i + 1) * SEGMENT_SIZE, total);
-                const pill = document.createElement('button');
-                pill.className = `range-pill ${state.watch.currentSegment === i ? 'active' : ''}`;
-                pill.innerText = `${start} - ${end}`;
-                pill.onclick = () => {
-                    state.watch.currentSegment = i;
-                    document.querySelectorAll('.range-pill').forEach(p => p.classList.remove('active'));
-                    pill.classList.add('active');
-                    renderEpisodeList();
-                };
-                dom.rangeSelector.appendChild(pill);
-            }
+            renderEpisodeList();
+            return;
         }
+
+        dom.rangeSelector.style.display = 'flex';
+        const numSegments = Math.ceil(total / SEGMENT_SIZE);
+
+        for (let i = 0; i < numSegments; i++) {
+            const start = i * SEGMENT_SIZE + 1;
+            const end = Math.min((i + 1) * SEGMENT_SIZE, total);
+            const btn = document.createElement('button');
+            btn.className = `range-tab-btn ${i === state.watch.currentSegment ? 'active' : ''}`;
+            btn.innerText = `${start}-${end}`;
+            btn.onclick = () => {
+                state.watch.currentSegment = i;
+                document.querySelectorAll('.range-tab-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                renderEpisodeList();
+            };
+            dom.rangeSelector.appendChild(btn);
+        }
+
         renderEpisodeList();
     }
 
     function renderEpisodeList(filterQuery = '') {
         const SEGMENT_SIZE = 50;
-        let episodesToRender = [...state.watch.episodes];
+        const total = state.watch.episodes.length;
+        let episodesToRender = state.watch.episodes;
 
         if (filterQuery) {
-            const q = filterQuery.toLowerCase();
-            episodesToRender = episodesToRender.filter(e =>
-                String(e.episode_number).includes(q) || (e.title && e.title.toLowerCase().includes(q))
+            const qLower = filterQuery.toLowerCase();
+            episodesToRender = state.watch.episodes.filter(e =>
+                String(e.episode_number).includes(qLower) ||
+                (e.title && e.title.toLowerCase().includes(qLower))
             );
-        } else if (state.watch.episodes.length > SEGMENT_SIZE) {
-            const start = state.watch.currentSegment * SEGMENT_SIZE;
-            episodesToRender = episodesToRender.slice(start, start + SEGMENT_SIZE);
+        } else if (total > SEGMENT_SIZE) {
+            const startIdx = state.watch.currentSegment * SEGMENT_SIZE;
+            episodesToRender = state.watch.episodes.slice(startIdx, startIdx + SEGMENT_SIZE);
         }
 
         dom.epListContainer.innerHTML = '';
@@ -655,21 +731,14 @@
             item.id = `ep-item-${ep.episode_number}`;
             item.onclick = () => playEpisode(ep);
 
-            const streamInfo = state.watch.streamMap ? state.watch.streamMap[ep.episode_number] : null;
-            const hasDub = streamInfo && (streamInfo.servers || []).some(s => s.type === 'dub');
-            const hasSub = streamInfo && (streamInfo.servers || []).some(s => s.type === 'sub');
-            const isResolved = state.watch.streamMap !== null;
-            const isUnmirrored = isResolved && (!streamInfo || !streamInfo.has_stream);
-
             item.innerHTML = `
                 <div class="ep-item-left">
                     <span class="ep-number">${ep.episode_number}</span>
                     <span class="ep-name" title="${ep.title || `Episode ${ep.episode_number}`}">${ep.title || `Episode ${ep.episode_number}`}</span>
                 </div>
                 <div class="ep-item-right">
-                    ${hasSub ? '<span style="font-size:0.65rem; background:#1c2433; padding:1px 4px; border-radius:2px; color:#93c5fd;">SUB</span>' : ''}
-                    ${hasDub ? '<span style="font-size:0.65rem; background:#1c2433; padding:1px 4px; border-radius:2px; color:#fca5a5;">DUB</span>' : ''}
-                    ${isUnmirrored ? '<span style="font-size:0.65rem; background:#181c24; padding:1px 4px; border-radius:2px; color:#64748b;">UNAVAILABLE</span>' : ''}
+                    <span style="font-size:0.65rem; background:#1c2433; padding:1px 4px; border-radius:2px; color:#93c5fd;">SUB</span>
+                    <span style="font-size:0.65rem; background:#1c2433; padding:1px 4px; border-radius:2px; color:#fca5a5;">DUB</span>
                     <div class="playing-bars">
                         <div class="playing-bar"></div>
                         <div class="playing-bar"></div>
@@ -681,7 +750,6 @@
         });
     }
 
-    // Episode search in drawer
     dom.epSearchInput?.addEventListener('input', (e) => {
         renderEpisodeList(e.target.value.trim());
     });
@@ -696,40 +764,20 @@
 
         const meta = state.watch.meta;
         const isNotYetReleased = meta?.status === 'NOT_YET_RELEASED';
-        const prequels = (meta?.relations || []).filter(r => r.relationType === 'PREQUEL' || r.relationType === 'PARENT');
-
-        let extraActionHtml = '';
-        if (prequels.length > 0) {
-            const p = prequels[0];
-            const pTitle = getAnimeTitle(p);
-            extraActionHtml = `
-                <button class="btn-primary" onclick="window.ZokoApp.startWatching('${p.id}', '${encodeURIComponent(pTitle)}')">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-                    Watch Available Prequel: ${pTitle}
-                </button>
-            `;
-        }
-
-        const noticeHeading = isNotYetReleased ? `Upcoming / Not Yet Aired` : `Episode ${epNum} Stream Unmirrored`;
-        const noticeDesc = isNotYetReleased
-            ? `This anime title is announced on AniList but has not yet aired on TV or streamed on upstream CDNs.`
-            : `This episode is cataloged on AniList (${meta?.total_episodes || ''} episodes), but the upstream video mirror is not yet hosted on the CDN for this season.`;
 
         dom.artContainer.innerHTML = `
             <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; height:100%; color:var(--text-secondary); text-align:center; padding:2rem;">
                 <div style="font-size:2.2rem; margin-bottom:10px;">${isNotYetReleased ? '⏳' : '🎞️'}</div>
-                <div style="font-size:1.1rem; font-weight:700; color:#fff; margin-bottom:6px;">${noticeHeading}</div>
+                <div style="font-size:1.1rem; font-weight:700; color:#fff; margin-bottom:6px;">${isNotYetReleased ? 'Upcoming / Not Yet Aired' : `Episode ${epNum} Stream Unmirrored`}</div>
                 <div style="font-size:0.84rem; max-width:460px; line-height:1.5; color:var(--text-muted); margin-bottom:18px;">
-                    ${noticeDesc}
+                    This episode could not be resolved from the upstream video mirror.
                 </div>
-                <div style="display:flex; gap:10px; flex-wrap:wrap; justify-content:center;">
-                    ${extraActionHtml}
-                    <button class="btn-secondary" onclick="window.ZokoApp.navigateTo('browse')">Browse Other Anime</button>
-                </div>
+                <button class="btn-secondary" onclick="window.ZokoApp.navigateTo('browse')">Browse Other Anime</button>
             </div>
         `;
     }
 
+    // Play Episode: Sends Request to Backend Scraper API ONLY FOR STREAMING!
     async function playEpisode(ep) {
         if (!ep) return;
         state.watch.activeEpisodeData = ep;
@@ -737,18 +785,15 @@
 
         dom.currentEpTitle.innerText = `Episode ${ep.episode_number}: ${ep.title || ''}`;
 
-        // Update URL hash without re-triggering navigation
         const newHash = `#watch?id=${state.watch.anilistId || ''}&title=${encodeURIComponent(state.watch.title)}&ep=${ep.episode_number}`;
         if (window.location.hash !== newHash) {
             history.replaceState(null, '', newHash);
         }
 
-        // Update Prev / Next button states
         const currentIndex = state.watch.episodes.findIndex(e => e.episode_number === ep.episode_number);
         dom.btnPrevEp.disabled = currentIndex <= 0;
         dom.btnNextEp.disabled = currentIndex < 0 || currentIndex >= state.watch.episodes.length - 1;
 
-        // Re-render episode items highlight
         document.querySelectorAll('.ep-item').forEach(el => el.classList.remove('active'));
         const activeElem = document.getElementById(`ep-item-${ep.episode_number}`);
         if (activeElem) {
@@ -756,49 +801,36 @@
             activeElem.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
         }
 
-        // Wait for stream resolver if still connecting
-        if (!state.watch.streamMap && state.watch.resolvePromise) {
-            dom.artContainer.innerHTML = `
-                <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; height:100%; color:var(--text-secondary);">
-                    <div style="color:var(--accent-crimson); font-weight:900; font-size:1.6rem; letter-spacing:2px; margin-bottom:8px;">ZOKO</div>
-                    <div style="font-size:0.86rem; color:var(--text-muted);">Resolving video stream for Episode ${ep.episode_number}...</div>
-                </div>
-            `;
-            await state.watch.resolvePromise;
-        }
-
-        const streamEntry = state.watch.streamMap ? state.watch.streamMap[ep.episode_number] : null;
-        if (!streamEntry || !streamEntry.has_stream || !streamEntry.id) {
-            showUnmirroredNotice(ep.episode_number);
-            return;
-        }
+        dom.artContainer.innerHTML = `
+            <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; height:100%; color:var(--text-secondary);">
+                <div style="color:var(--accent-crimson); font-weight:900; font-size:1.6rem; letter-spacing:2px; margin-bottom:8px;">ZOKO</div>
+                <div style="font-size:0.86rem; color:var(--text-muted);">Resolving video stream for Episode ${ep.episode_number}...</div>
+            </div>
+        `;
 
         try {
-            // Fetch stream sources for this episode
-            const streamData = await fetchJson(`/api/stream/${streamEntry.id}`);
+            // CALL BACKEND SCRAPER API (ONLY FOR STREAMING)
+            const malIdParam = state.watch.malId ? `&malId=${state.watch.malId}` : '';
+            const streamUrl = `/api/stream?id=${state.watch.anilistId}${malIdParam}&ep=${ep.episode_number}&track=${state.watch.audioMode}`;
+            const streamData = await fetchJson(streamUrl);
             state.watch.streamData = streamData;
 
-            const sources = streamData.sources || [];
-            if (sources.length === 0) {
-                showToast(`Episode ${ep.episode_number} has no available stream sources.`, 'warn');
+            if (!streamData.stream_url) {
+                showToast(`Episode ${ep.episode_number} has no available stream.`, 'warn');
                 showUnmirroredNotice(ep.episode_number);
                 return;
             }
 
-            // Select preferred source: SUB or DUB
-            let activeSource = sources.find(s => s.type === state.watch.audioMode);
-            if (!activeSource) activeSource = sources[0]; // fallback
+            dom.btnSub.style.display = 'inline-block';
+            dom.btnDub.style.display = 'inline-block';
+            dom.btnSub.classList.toggle('active', state.watch.audioMode === 'sub');
+            dom.btnDub.classList.toggle('active', state.watch.audioMode === 'dub');
 
-            // Update SUB / DUB buttons
-            const hasSub = sources.some(s => s.type === 'sub');
-            const hasDub = sources.some(s => s.type === 'dub');
-            dom.btnSub.style.display = hasSub ? 'inline-block' : 'none';
-            dom.btnDub.style.display = hasDub ? 'inline-block' : 'none';
-            dom.btnSub.classList.toggle('active', activeSource.type === 'sub');
-            dom.btnDub.classList.toggle('active', activeSource.type === 'dub');
-
-            // Initialize or update ArtPlayer v5
-            mountArtPlayer(activeSource, streamData);
+            mountArtPlayer({
+                proxy_m3u8_url: streamData.stream_url,
+                tracks: streamData.subtitles || [],
+                jump: streamData.skip || {}
+            }, streamData);
 
         } catch (err) {
             console.error('Stream load error:', err);
@@ -807,7 +839,6 @@
         }
     }
 
-    // Previous & Next Episode Navigation
     dom.btnPrevEp?.addEventListener('click', () => {
         const curIdx = state.watch.episodes.findIndex(e => e.episode_number === state.watch.activeEpisodeData?.episode_number);
         if (curIdx > 0) playEpisode(state.watch.episodes[curIdx - 1]);
@@ -820,7 +851,6 @@
         }
     });
 
-    // Audio Switchers
     dom.btnSub?.addEventListener('click', () => {
         state.watch.audioMode = 'sub';
         if (state.watch.activeEpisodeData) playEpisode(state.watch.activeEpisodeData);
@@ -831,7 +861,6 @@
         if (state.watch.activeEpisodeData) playEpisode(state.watch.activeEpisodeData);
     });
 
-    // Skip Intro/Outro Toggle
     dom.skipToggle?.addEventListener('click', () => {
         state.watch.autoSkip = !state.watch.autoSkip;
         dom.skipToggle.classList.toggle('active', state.watch.autoSkip);
@@ -851,12 +880,10 @@
 
         container.innerHTML = '';
 
-        // Extract Jump Timestamps (Intro & Outro)
         const jump = source.jump || {};
         const intro = jump.intro || null;
         const outro = jump.outro || null;
 
-        // Subtitles configuration
         const tracks = source.tracks || streamData?.subtitles || [];
         const defaultSub = tracks.find(t => t.default) || tracks[0];
         const subtitleOption = defaultSub ? {
@@ -908,75 +935,65 @@
                         hls.attachMedia(video);
                         artInstance.hls = hls;
                         artInstance.on('destroy', () => hls.destroy());
-
-                        hls.on(Hls.Events.ERROR, function (event, data) {
-                            if (data.fatal) {
-                                switch (data.type) {
-                                    case Hls.ErrorTypes.NETWORK_ERROR:
-                                        hls.startLoad();
-                                        break;
-                                    case Hls.ErrorTypes.MEDIA_ERROR:
-                                        hls.recoverMediaError();
-                                        break;
-                                    default:
-                                        hls.destroy();
-                                        break;
-                                }
-                            }
-                        });
                     } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
                         video.src = url;
-                    } else {
-                        artInstance.notice.show = 'HLS Playback is not supported in this browser';
                     }
                 }
             },
             theme: '#e50914',
-            volume: 0.85,
-            isLive: false,
-            autoplay: false,
-            pip: true,
-            setting: true,
+            autoplay: true,
             playbackRate: true,
             aspectRatio: true,
             fullscreen: true,
             fullscreenWeb: true,
-            miniProgressBar: true,
+            pip: true,
             autoOrientation: true,
             subtitle: subtitleOption,
             settings: settings
         });
 
-        // Attempt autoplay gracefully if supported by browser policy
-        art.on('ready', () => {
-            art.play().catch(() => {
-                // Autoplay blocked by browser policy without interaction, ready for user click
-            });
-        });
-
-        // Event: Timeupdate for Automatic Intro & Outro Skipping
+        // Intro / Outro Skip Markers
         art.on('video:timeupdate', () => {
             if (!state.watch.autoSkip) return;
             const cur = art.currentTime;
 
-            // Auto-skip Intro
-            if (intro && intro.start !== undefined && intro.end !== undefined) {
-                if (cur >= intro.start && cur < intro.end - 1) {
-                    art.currentTime = intro.end;
-                    art.notice.show = `Skipped Intro (${intro.start}s - ${intro.end}s)`;
+            if (intro && intro.end > 0 && cur >= intro.start && cur < intro.end) {
+                if (!document.getElementById('art-skip-intro-btn')) {
+                    const btn = document.createElement('button');
+                    btn.id = 'art-skip-intro-btn';
+                    btn.className = 'art-skip-pill';
+                    btn.innerHTML = `<span>Skip Intro</span> <span style="opacity:0.7;">⇥</span>`;
+                    btn.onclick = () => {
+                        art.seek = intro.end;
+                        btn.remove();
+                        showToast('Skipped Opening Theme', 'info');
+                    };
+                    art.template.$container.appendChild(btn);
                 }
+            } else {
+                const introBtn = document.getElementById('art-skip-intro-btn');
+                if (introBtn) introBtn.remove();
             }
 
-            // Auto-skip Outro
-            if (outro && outro.start !== undefined && outro.end !== undefined) {
-                if (cur >= outro.start && cur < outro.end - 1) {
-                    art.currentTime = outro.end;
-                    art.notice.show = `Skipped Outro (${outro.start}s - ${outro.end}s)`;
+            if (outro && outro.end > 0 && cur >= outro.start && cur < outro.end) {
+                if (!document.getElementById('art-skip-outro-btn')) {
+                    const btn = document.createElement('button');
+                    btn.id = 'art-skip-outro-btn';
+                    btn.className = 'art-skip-pill';
+                    btn.innerHTML = `<span>Skip Outro</span> <span style="opacity:0.7;">⇥</span>`;
+                    btn.onclick = () => {
+                        art.seek = outro.end;
+                        btn.remove();
+                        showToast('Skipped Ending Theme', 'info');
+                    };
+                    art.template.$container.appendChild(btn);
                 }
+            } else {
+                const outroBtn = document.getElementById('art-skip-outro-btn');
+                if (outroBtn) outroBtn.remove();
             }
         });
 
-        // Event: Video Ended -> Auto-advance to Next Episode
         art.on('video:ended', () => {
             showToast('Episode finished. Playing next episode...', 'info');
             const curIdx = state.watch.episodes.findIndex(e => e.episode_number === state.watch.activeEpisodeData?.episode_number);
@@ -995,7 +1012,6 @@
         const title = getAnimeTitle(meta);
         const cover = getAnimeCover(meta);
         const score = meta.averageScore ? (meta.averageScore / 10).toFixed(1) : '8.5';
-        const studio = meta.studio || 'Studio';
         const format = meta.format || 'TV';
         const year = meta.seasonYear || '';
 
@@ -1007,19 +1023,19 @@
             <span class="badge badge-score">★ ${score}</span>
             <span class="badge badge-format">${format}</span>
             <span class="badge badge-status">${meta.status || 'FINISHED'}</span>
-            <span style="font-size:0.8rem; color:var(--text-muted);">${studio} • ${year}</span>
+            <span style="font-size:0.8rem; color:var(--text-muted);">${year}</span>
         `;
 
-        // Render Relations / Seasons Switcher
-        if (meta.relations && meta.relations.length > 0) {
+        if (meta.relations?.edges && meta.relations.edges.length > 0) {
             dom.relationsSection.style.display = 'block';
             dom.relationsChips.innerHTML = '';
-            meta.relations.slice(0, 8).forEach(rel => {
+            meta.relations.edges.slice(0, 8).forEach(edge => {
+                const rel = edge.node;
                 const relTitle = getAnimeTitle(rel);
                 const chip = document.createElement('button');
                 chip.className = 'relation-chip';
                 chip.innerHTML = `
-                    <span class="relation-type-tag">${rel.relationType || 'RELATED'}</span>
+                    <span class="relation-type-tag">${edge.relationType || 'RELATED'}</span>
                     <span>${relTitle}</span>
                 `;
                 chip.onclick = () => window.ZokoApp.startWatching(rel.id, encodeURIComponent(relTitle));
@@ -1029,16 +1045,16 @@
             dom.relationsSection.style.display = 'none';
         }
 
-        // Render Recommendations Section
-        if (meta.recommendations && meta.recommendations.length > 0) {
+        if (meta.recommendations?.nodes && meta.recommendations.nodes.length > 0) {
             dom.recommendationsSection.style.display = 'block';
-            renderAnimeGrid(dom.recommendationsGrid, meta.recommendations);
+            const recList = meta.recommendations.nodes.map(n => n.mediaRecommendation).filter(Boolean);
+            renderAnimeGrid(dom.recommendationsGrid, recList);
         } else {
             dom.recommendationsSection.style.display = 'none';
         }
     }
 
-    // --- GLOBAL SEARCH AUTOCOMPLETE IN HEADER ---
+    // --- GLOBAL SEARCH (DIRECT ANILIST GRAPHQL AUTOCOMPLETE) ---
 
     let searchDebounceTimer = null;
     dom.globalSearch?.addEventListener('input', (e) => {
@@ -1052,8 +1068,19 @@
 
         searchDebounceTimer = setTimeout(async () => {
             try {
-                const data = await fetchJson(`/api/meta/browse?q=${encodeURIComponent(q)}&perPage=6`);
-                const results = data.media || [];
+                const searchQuery = `
+                query ($search: String) {
+                  Page(page: 1, perPage: 6) {
+                    media(search: $search, type: ANIME, isAdult: false) {
+                      id idMal title { romaji english native } coverImage { medium large }
+                      format seasonYear averageScore
+                    }
+                  }
+                }
+                `;
+                const data = await queryAniList(searchQuery, { search: q });
+                const results = data?.Page?.media || [];
+
                 if (results.length === 0) {
                     dom.searchDropdown.innerHTML = `<div style="padding:12px; font-size:0.82rem; color:var(--text-muted); text-align:center;">No anime found matching "${q}"</div>`;
                 } else {
@@ -1090,14 +1117,12 @@
         }, 250);
     });
 
-    // Close search dropdown on click outside
     document.addEventListener('click', (e) => {
         if (!dom.globalSearch.contains(e.target) && !dom.searchDropdown.contains(e.target)) {
             dom.searchDropdown.classList.remove('open');
         }
     });
 
-    // Keyboard shortcut '/' to focus search
     document.addEventListener('keydown', (e) => {
         if (e.key === '/' && document.activeElement !== dom.globalSearch && document.activeElement !== dom.browseSearch) {
             e.preventDefault();
@@ -1113,252 +1138,24 @@
             navigateTo('watch', { id, title: encodedTitle });
         },
         viewAnimeDetails: (id) => {
-            // Find anime in current hero
             const item = state.heroItems.find(h => String(h.id) === String(id));
             const title = item ? getAnimeTitle(item) : 'Anime';
             window.ZokoApp.startWatching(id, encodeURIComponent(title));
         }
     };
 
-    // --- VPS & DATABASE TELEMETRY CONTROLLER ---
-
-    let telemetryTimer = null;
-
-    function formatUptime(seconds) {
-        if (!seconds || seconds <= 0) return '0s';
-        const d = Math.floor(seconds / (3600 * 24));
-        const h = Math.floor((seconds % (3600 * 24)) / 3600);
-        const m = Math.floor((seconds % 3600) / 60);
-        const s = Math.floor(seconds % 60);
-        if (d > 0) return `${d}d ${h}h ${m}m ${s}s`;
-        if (h > 0) return `${h}h ${m}m ${s}s`;
-        if (m > 0) return `${m}m ${s}s`;
-        return `${s}s`;
-    }
-
-    function renderSystemTelemetry(data) {
-        if (!data) return;
-
-        // Header and pills
-        const vpsIp = document.getElementById('vps-ip-pill');
-        if (vpsIp) vpsIp.textContent = `Host: ${data.system?.host || data.vps?.ip || 'Cloud Instance'}`;
-
-        const vpsOs = document.getElementById('vps-os-pill');
-        if (vpsOs) vpsOs.textContent = `${data.system?.type || data.vps?.type || 'Linux'} (${data.system?.release || data.vps?.release || 'Kernel'})`;
-
-        const vpsNode = document.getElementById('vps-node-pill');
-        if (vpsNode) vpsNode.textContent = `${data.process?.nodeVersion || 'Node v22'}`;
-
-        const hostCard = document.getElementById('card-vps-host');
-        if (hostCard) hostCard.textContent = `${data.system?.hostname || data.vps?.hostname || 'Cloud Host'}`;
-
-        // CPU & Host
-        const cpuModel = document.getElementById('tele-cpu-model');
-        if (cpuModel) cpuModel.textContent = `${data.vps?.cpu?.model || 'Cloud Processor'}`;
-
-        const cpuCores = document.getElementById('tele-cpu-cores');
-        if (cpuCores) cpuCores.textContent = `${data.vps?.cpu?.cores || 2} Cores (${data.vps?.arch || 'x64'})`;
-
-        const loadAvg = document.getElementById('tele-load-avg');
-        if (loadAvg) loadAvg.textContent = `${data.vps?.cpu?.loadAvg1m || '0.00'}, ${data.vps?.cpu?.loadAvg5m || '0.00'}, ${data.vps?.cpu?.loadAvg15m || '0.00'}`;
-
-        const hostUptime = document.getElementById('tele-host-uptime');
-        if (hostUptime) hostUptime.textContent = formatUptime(data.vps?.uptimeSeconds);
-
-        const ramText = document.getElementById('tele-ram-text');
-        if (ramText) ramText.textContent = `${data.vps?.memory?.usedGB || '0'} GB / ${data.vps?.memory?.totalGB || '0'} GB (${data.vps?.memory?.usedPercent || '0%'})`;
-
-        const ramBar = document.getElementById('tele-ram-bar');
-        if (ramBar && data.vps?.memory?.usedPercent) {
-            ramBar.style.width = data.vps.memory.usedPercent;
-        }
-
-        // Database Intelligence
-        const dbAnime = document.getElementById('tele-db-anime');
-        if (dbAnime) dbAnime.textContent = (data.database?.indexedAnime || 11449).toLocaleString();
-
-        const dbEpisodes = document.getElementById('tele-db-episodes');
-        if (dbEpisodes) dbEpisodes.textContent = (data.database?.cachedEpisodes || 1315).toLocaleString();
-
-        const dbSize = document.getElementById('tele-db-size');
-        if (dbSize) dbSize.textContent = `${data.database?.databaseSizeMB || '13.94'} MB`;
-
-        const dbLatency = document.getElementById('tele-db-latency');
-        if (dbLatency) {
-            const lat = data.database?.queryLatencyMs !== undefined ? `${data.database.queryLatencyMs} ms` : '< 0.1 ms';
-            dbLatency.textContent = `${lat} (Ultra-Fast)`;
-        }
-
-        const dbJournal = document.getElementById('tele-db-journal');
-        if (dbJournal) dbJournal.textContent = `${data.database?.journalMode || 'WAL (Write-Ahead Logging)'}`;
-
-        const cardDbFile = document.getElementById('card-db-file');
-        if (cardDbFile) cardDbFile.textContent = `${data.database?.databaseFile || 'zoko_meta.db'} (${data.database?.storageEngine || 'NVMe SSD'})`;
-
-        // Update header badge
-        if (dom.headerDbBadge) {
-            dom.headerDbBadge.textContent = `${(data.database?.indexedAnime || 11449).toLocaleString()} DB`;
-        }
-
-        // Process Cluster
-        const procInst = document.getElementById('tele-process-instance');
-        if (procInst) procInst.textContent = `${data.process?.instanceId || 'PM2 Worker #0'} (PID: ${data.process?.pid || '-'})`;
-
-        const procRss = document.getElementById('tele-process-rss');
-        if (procRss) procRss.textContent = `${data.process?.memoryRSS_MB || '0'} MB`;
-
-        const procHeap = document.getElementById('tele-process-heap');
-        if (procHeap) procHeap.textContent = `${data.process?.heapUsedMB || '0'} MB / ${data.process?.heapTotalMB || '0'} MB`;
-
-        const procUptime = document.getElementById('tele-process-uptime');
-        if (procUptime) procUptime.textContent = formatUptime(data.process?.uptimeSeconds);
-
-        const totalReq = document.getElementById('tele-requests-total');
-        if (totalReq) totalReq.textContent = (data.gateway?.totalRequests || 0).toLocaleString();
-
-        // Scraper & Network
-        const routePriority = document.getElementById('tele-routing-priority');
-        if (routePriority) routePriority.textContent = data.gateway?.ipv6First ? 'IPv6 Priority (13x Faster)' : 'Standard';
-
-        const upScraper = document.getElementById('tele-upstream-scraper');
-        if (upScraper) upScraper.textContent = `${data.scraper?.upstreamStatus || 'ONLINE'}`;
-
-        const cacheHit = document.getElementById('tele-cache-hitrate');
-        if (cacheHit) cacheHit.textContent = `${data.gateway?.hitRate || '0%'} (${data.gateway?.cacheHits || 0} hits)`;
-
-        const activeStreams = document.getElementById('tele-active-streams');
-        if (activeStreams) activeStreams.textContent = `${data.gateway?.activeStreams || 0}`;
-
-        // Formats Breakdown
-        const formatsList = document.getElementById('tele-formats-list');
-        if (formatsList && data.database?.formats) {
-            const colors = ['', 'blue', 'green', 'amber', 'purple', 'blue', 'green'];
-            formatsList.innerHTML = data.database.formats.map((f, idx) => `
-                <div class="breakdown-item">
-                    <div class="breakdown-item-header">
-                        <span class="breakdown-item-name">${f.format}</span>
-                        <span class="breakdown-item-count">${Number(f.count).toLocaleString()} (${f.percentage}%)</span>
-                    </div>
-                    <div class="breakdown-track">
-                        <div class="breakdown-bar ${colors[idx % colors.length]}" style="width: ${f.percentage}%;"></div>
-                    </div>
-                </div>
-            `).join('');
-
-            const formatsTotal = document.getElementById('tele-formats-total');
-            if (formatsTotal) formatsTotal.textContent = `${(data.database.indexedAnime || 11449).toLocaleString()} Records`;
-        }
-
-        // Status Breakdown
-        const statusesList = document.getElementById('tele-statuses-list');
-        if (statusesList && data.database?.statuses) {
-            statusesList.innerHTML = data.database.statuses.map(s => `
-                <div class="breakdown-item">
-                    <div class="breakdown-item-header">
-                        <span class="breakdown-item-name">${s.status}</span>
-                        <span class="breakdown-item-count">${Number(s.count).toLocaleString()} (${s.percentage}%)</span>
-                    </div>
-                    <div class="breakdown-track">
-                        <div class="breakdown-bar ${s.status === 'FINISHED' ? 'green' : s.status === 'RELEASING' ? 'blue' : 'amber'}" style="width: ${s.percentage}%;"></div>
-                    </div>
-                </div>
-            `).join('');
-        }
-    }
-
-    async function fetchSystemTelemetry() {
-        try {
-            const resp = await fetch(resolveApiUrl('/api/system/status'));
-            if (!resp.ok) return;
-            const data = await resp.json();
-            renderSystemTelemetry(data);
-        } catch (err) {
-            console.warn('Telemetry fetch error:', err);
-        }
-    }
-
-    function startSystemTelemetry() {
-        fetchSystemTelemetry();
-        if (!telemetryTimer) {
-            telemetryTimer = setInterval(fetchSystemTelemetry, 3000);
-        }
-    }
-
-    function stopSystemTelemetry() {
-        if (telemetryTimer) {
-            clearInterval(telemetryTimer);
-            telemetryTimer = null;
-        }
-    }
-
-    function initTelemetryQueryConsole() {
-        const input = document.getElementById('db-test-input');
-        const btn = document.getElementById('btn-run-db-query');
-        const consoleEl = document.getElementById('db-query-result');
-        const manualRefreshBtn = document.getElementById('btn-manual-refresh');
-
-        manualRefreshBtn?.addEventListener('click', () => {
-            fetchSystemTelemetry();
-            showToast('Telemetry refreshed from live VPS', 'success');
-        });
-
-        const executeQuery = async () => {
-            const q = input?.value.trim();
-            if (!q) return;
-            if (!consoleEl) return;
-
-            consoleEl.style.display = 'block';
-            consoleEl.innerHTML = `<span style="color:#fbbf24;">[SQLITE] Executing SELECT query for "${q}"...</span>`;
-
-            const start = performance.now();
-            try {
-                const resp = await fetch(resolveApiUrl(`/api/search?q=${encodeURIComponent(q)}&perPage=5`));
-                const elapsed = (performance.now() - start).toFixed(2);
-                const data = await resp.json();
-                const total = data.total || data.results?.length || 0;
-
-                let output = `<span style="color:#10b981;">✓ 200 OK (${elapsed}ms roundtrip) - Found ${total} matching anime in SQLite DB:</span>\n\n`;
-                if (data.results && data.results.length > 0) {
-                    data.results.slice(0, 5).forEach((item, idx) => {
-                        output += `[#${idx + 1}] ID: ${item.id} | MAL: ${item.mal_id || '-'} | Title: ${item.title} | Format: ${item.format} | Year: ${item.year || '-'} | Score: ${item.score ? item.score / 10 : '-'}\n`;
-                    });
-                } else {
-                    output += `No matches found for "${q}".`;
-                }
-                consoleEl.innerHTML = output;
-            } catch (err) {
-                consoleEl.innerHTML = `<span style="color:#ef4444;">Query failed: ${err.message}</span>`;
-            }
-        };
-
-        btn?.addEventListener('click', executeQuery);
-        input?.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') executeQuery();
-        });
-    }
-
     // --- APP INITIALIZATION ---
 
     function init() {
         initGenreChips();
 
-        // Nav Click Handlers
         dom.navHome?.addEventListener('click', () => navigateTo('home'));
         dom.navBrowse?.addEventListener('click', () => navigateTo('browse'));
         dom.navWatch?.addEventListener('click', () => {
             if (state.watch.title) navigateTo('watch');
             else navigateTo('browse');
         });
-        dom.navSystem?.addEventListener('click', () => navigateTo('system'));
-        dom.btnSystemTelemetry?.addEventListener('click', () => navigateTo('system'));
 
-        // Initialize Query Console
-        initTelemetryQueryConsole();
-
-        // Initial background fetch to populate header badge with real DB anime count
-        fetchSystemTelemetry();
-
-        // Parse initial route
         parseHash();
     }
 
