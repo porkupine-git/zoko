@@ -2,6 +2,7 @@ import http from 'http';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { Readable } from 'stream';
 import megaplay from './megaplay.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -158,14 +159,17 @@ const server = http.createServer(async (req, res) => {
                     if (trimmed.startsWith('#')) {
                         return line.replace(/URI=["']([^"']+)["']/g, (m, u) => {
                             const resolved = new URL(u, target).toString();
-                            return `URI="/api/proxy/m3u8?url=${encodeURIComponent(resolved)}"`;
+                            if (resolved.includes('.m3u8') || resolved.includes('master') || resolved.includes('playlist')) {
+                                return `URI="/api/proxy/m3u8?url=${encodeURIComponent(resolved)}"`;
+                            }
+                            return `URI="/api/proxy/ts?url=${encodeURIComponent(resolved)}"`;
                         });
                     }
                     const resolved = new URL(trimmed, target).toString();
                     if (resolved.includes('.m3u8') || resolved.includes('master') || resolved.includes('playlist')) {
                         return `/api/proxy/m3u8?url=${encodeURIComponent(resolved)}`;
                     }
-                    return resolved;
+                    return `/api/proxy/ts?url=${encodeURIComponent(resolved)}`;
                 }).join('\n');
 
                 res.writeHead(200, {
@@ -217,6 +221,69 @@ const server = http.createServer(async (req, res) => {
                     "Content-Type": "text/plain"
                 });
                 return res.end(`Proxy vtt error: ${err.message}`);
+            }
+        }
+
+        // 10. High-Performance TS / Segment Stream Proxy: /api/proxy/ts?url=...
+        if (pathname === "/api/proxy/ts") {
+            const target = query.url;
+            if (!target) return sendError(res, 400, "Missing url query parameter");
+
+            try {
+                const reqHeaders = {
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+                    "Referer": "https://megaplay.buzz/",
+                    "Origin": "https://megaplay.buzz"
+                };
+
+                if (req.headers.range) {
+                    reqHeaders["Range"] = req.headers.range;
+                }
+
+                const upstream = await fetch(target, { headers: reqHeaders });
+
+                if (!upstream.ok && upstream.status !== 206) {
+                    res.writeHead(upstream.status, {
+                        "Access-Control-Allow-Origin": "*",
+                        "Content-Type": "text/plain"
+                    });
+                    return res.end(`Segment fetch error: ${upstream.status}`);
+                }
+
+                const responseHeaders = {
+                    "Access-Control-Allow-Origin": "*",
+                    "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
+                    "Content-Type": "video/mp2t",
+                    "Cache-Control": "public, max-age=31536000, immutable"
+                };
+
+                if (upstream.headers.get("content-length")) {
+                    responseHeaders["Content-Length"] = upstream.headers.get("content-length");
+                }
+                if (upstream.headers.get("content-range")) {
+                    responseHeaders["Content-Range"] = upstream.headers.get("content-range");
+                }
+                if (upstream.headers.get("accept-ranges")) {
+                    responseHeaders["Accept-Ranges"] = upstream.headers.get("accept-ranges");
+                }
+
+                res.writeHead(upstream.status, responseHeaders);
+
+                if (upstream.body) {
+                    const nodeReadable = Readable.fromWeb(upstream.body);
+                    nodeReadable.pipe(res);
+                } else {
+                    res.end();
+                }
+                return;
+            } catch (err) {
+                if (!res.headersSent) {
+                    res.writeHead(502, {
+                        "Access-Control-Allow-Origin": "*",
+                        "Content-Type": "text/plain"
+                    });
+                }
+                return res.end(`Segment proxy error: ${err.message}`);
             }
         }
 
