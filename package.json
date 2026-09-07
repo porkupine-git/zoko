@@ -11,6 +11,8 @@
     "dev": "node --watch server.js",
     "backend": "node server.js --backend",
     "frontend": "node server.js --frontend",
+    "deploy": "wrangler deploy",
+    "cf:dev": "wrangler dev",
     "test": "node --check server.js && node --check scraper.js"
   },
   "keywords": [

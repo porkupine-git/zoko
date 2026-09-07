@@ -1,0 +1,9 @@
+name = "zoko-stream"
+main = "worker.js"
+compatibility_date = "2024-11-01"
+compatibility_flags = ["nodejs_compat"]
+
+# Pure Backend Scraper API Mode (Zero Frontend Assets)
+# Enable Cloudflare Edge Observability & Real-Time Logs
+[observability]
+enabled = true
