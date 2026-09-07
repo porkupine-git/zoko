@@ -1,11 +1,11 @@
-/**
- * MegaPlay & Anikoto Standalone HTTP API Server
- * Built with Node.js built-in http module (Zero npm dependencies required)
- */
-
 import http from 'http';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import megaplay from './megaplay.js';
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 const PORT = process.env.PORT || 4004;
 
 const CORS_HEADERS = {
@@ -115,8 +115,20 @@ const server = http.createServer(async (req, res) => {
             return sendJson(res, 200, data);
         }
 
-        // 8. API Documentation (Root /)
-        if (pathname === "/" || pathname === "/api") {
+        // 8. Serve Interactive Testbench UI on root (or JSON on /api)
+        if (pathname === "/") {
+            const indexPath = path.join(__dirname, 'public', 'index.html');
+            if (fs.existsSync(indexPath)) {
+                const html = fs.readFileSync(indexPath, 'utf8');
+                res.writeHead(200, {
+                    "Content-Type": "text/html; charset=utf-8",
+                    "Access-Control-Allow-Origin": "*"
+                });
+                return res.end(html);
+            }
+        }
+
+        if (pathname === "/api" || pathname === "/") {
             return sendJson(res, 200, {
                 name: "MegaPlay & Anikoto Reverse-Engineered API Server",
                 version: "1.0.0",

@@ -1,0 +1,898 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MegaPlay & Anikoto Scraper Testbench</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+    <style>
+        :root {
+            --bg-base: #090a0f;
+            --bg-surface: #12141e;
+            --bg-card: rgba(23, 26, 38, 0.7);
+            --border-glass: rgba(255, 255, 255, 0.08);
+            --accent-primary: #8b5cf6;
+            --accent-glow: rgba(139, 92, 246, 0.4);
+            --accent-cyan: #06b6d4;
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --text-subtle: #64748b;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background-color: var(--bg-base);
+            background-image: 
+                radial-gradient(at 0% 0%, rgba(139, 92, 246, 0.12) 0px, transparent 50%),
+                radial-gradient(at 100% 100%, rgba(6, 182, 212, 0.1) 0px, transparent 50%);
+            color: var(--text-main);
+            font-family: 'Outfit', sans-serif;
+            min-height: 100vh;
+            padding: 24px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        /* Header */
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-bottom: 24px;
+            border-bottom: 1px solid var(--border-glass);
+            margin-bottom: 24px;
+        }
+
+        .logo-group {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+        }
+
+        .logo-icon {
+            width: 44px;
+            height: 44px;
+            background: linear-gradient(135deg, var(--accent-primary), var(--accent-cyan));
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 22px;
+            box-shadow: 0 0 20px var(--accent-glow);
+        }
+
+        h1 {
+            font-size: 24px;
+            font-weight: 700;
+            background: linear-gradient(to right, #fff, #cbd5e1);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(16, 185, 129, 0.1);
+            border: 1px solid rgba(16, 185, 129, 0.25);
+            color: var(--success);
+            padding: 6px 14px;
+            border-radius: 20px;
+            font-size: 13px;
+            font-weight: 600;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            background: var(--success);
+            border-radius: 50%;
+            box-shadow: 0 0 10px var(--success);
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.4; transform: scale(0.85); }
+        }
+
+        /* Navigation Tabs */
+        .tabs {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 24px;
+        }
+
+        .tab-btn {
+            background: var(--bg-surface);
+            border: 1px solid var(--border-glass);
+            color: var(--text-muted);
+            padding: 10px 22px;
+            border-radius: 10px;
+            font-family: inherit;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .tab-btn:hover {
+            color: #fff;
+            border-color: rgba(255, 255, 255, 0.2);
+        }
+
+        .tab-btn.active {
+            background: var(--accent-primary);
+            color: #fff;
+            border-color: var(--accent-primary);
+            box-shadow: 0 0 20px var(--accent-glow);
+        }
+
+        /* Main Layout Grid */
+        .main-grid {
+            display: grid;
+            grid-template-columns: 1fr 1.2fr;
+            gap: 24px;
+        }
+
+        @media (max-width: 1024px) {
+            .main-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* Cards */
+        .card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-glass);
+            border-radius: 16px;
+            padding: 24px;
+            backdrop-filter: blur(16px);
+        }
+
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .card-title {
+            font-size: 18px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        /* Form Controls */
+        .form-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+            margin-bottom: 20px;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .form-group.full {
+            grid-column: span 2;
+        }
+
+        label {
+            font-size: 13px;
+            color: var(--text-muted);
+            font-weight: 500;
+        }
+
+        input, select {
+            background: rgba(10, 12, 20, 0.7);
+            border: 1px solid var(--border-glass);
+            border-radius: 10px;
+            padding: 12px 14px;
+            color: #fff;
+            font-family: inherit;
+            font-size: 14px;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        input:focus, select:focus {
+            border-color: var(--accent-primary);
+            box-shadow: 0 0 10px var(--accent-glow);
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--accent-primary), #6d28d9);
+            color: #fff;
+            border: none;
+            border-radius: 10px;
+            padding: 14px 20px;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            width: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            transition: all 0.2s;
+            box-shadow: 0 0 20px var(--accent-glow);
+        }
+
+        .btn-primary:hover {
+            filter: brightness(1.1);
+            transform: translateY(-1px);
+        }
+
+        .btn-primary:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        /* Quick Suggestions */
+        .suggestions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 14px;
+        }
+
+        .chip {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--border-glass);
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-size: 12px;
+            color: var(--text-muted);
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .chip:hover {
+            color: #fff;
+            border-color: var(--accent-primary);
+            background: rgba(139, 92, 246, 0.1);
+        }
+
+        /* Video Player Box */
+        .player-wrapper {
+            position: relative;
+            width: 100%;
+            aspect-ratio: 16 / 9;
+            background: #000;
+            border-radius: 12px;
+            overflow: hidden;
+            border: 1px solid var(--border-glass);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+        }
+
+        video {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
+
+        .player-overlay-status {
+            position: absolute;
+            top: 12px;
+            left: 12px;
+            background: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(8px);
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-family: 'JetBrains Mono', monospace;
+            border: 1px solid var(--border-glass);
+            z-index: 10;
+        }
+
+        /* Skip Buttons Bar */
+        .skip-bar {
+            display: flex;
+            gap: 10px;
+            margin-top: 12px;
+        }
+
+        .btn-skip {
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid var(--border-glass);
+            color: #fff;
+            padding: 8px 14px;
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            transition: all 0.2s;
+        }
+
+        .btn-skip:hover {
+            background: var(--accent-primary);
+        }
+
+        /* JSON Output Box */
+        .json-box {
+            margin-top: 20px;
+            background: #07090e;
+            border: 1px solid var(--border-glass);
+            border-radius: 10px;
+            padding: 16px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 12px;
+            color: #38bdf8;
+            max-height: 280px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+
+        /* Catalog Tab */
+        .catalog-section {
+            display: none;
+        }
+
+        .catalog-section.active {
+            display: block;
+        }
+
+        .anime-cards-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+            gap: 20px;
+        }
+
+        .anime-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-glass);
+            border-radius: 12px;
+            overflow: hidden;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .anime-card:hover {
+            transform: translateY(-4px);
+            border-color: var(--accent-primary);
+            box-shadow: 0 10px 25px rgba(139, 92, 246, 0.2);
+        }
+
+        .anime-poster {
+            width: 100%;
+            aspect-ratio: 3 / 4;
+            object-fit: cover;
+            background: #1e293b;
+        }
+
+        .anime-info {
+            padding: 12px;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+
+        .anime-title {
+            font-size: 14px;
+            font-weight: 600;
+            line-height: 1.3;
+            margin-bottom: 8px;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+
+        .anime-meta {
+            font-size: 11px;
+            color: var(--text-subtle);
+            display: flex;
+            justify-content: space-between;
+        }
+
+        /* Episodes Modal */
+        .modal-backdrop {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.8);
+            backdrop-filter: blur(8px);
+            z-index: 100;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .modal-backdrop.open {
+            display: flex;
+        }
+
+        .modal-content {
+            background: var(--bg-surface);
+            border: 1px solid var(--border-glass);
+            border-radius: 16px;
+            max-width: 650px;
+            width: 100%;
+            max-height: 80vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .modal-header {
+            padding: 18px 24px;
+            border-bottom: 1px solid var(--border-glass);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .modal-body {
+            padding: 20px 24px;
+            overflow-y: auto;
+        }
+
+        .episodes-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+            gap: 10px;
+        }
+
+        .ep-btn {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--border-glass);
+            color: #fff;
+            padding: 10px;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-align: center;
+        }
+
+        .ep-btn:hover {
+            background: var(--accent-primary);
+            border-color: var(--accent-primary);
+        }
+
+        .close-btn {
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            font-size: 20px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header>
+            <div class="logo-group">
+                <div class="logo-icon">⚡</div>
+                <div>
+                    <h1>MegaPlay & Anikoto Scraper Engine</h1>
+                    <div style="font-size: 13px; color: var(--text-muted); margin-top: 2px;">
+                        Reverse-Engineered Direct HLS Master Extractor (Port 4004)
+                    </div>
+                </div>
+            </div>
+            <div class="status-badge">
+                <div class="status-dot"></div>
+                <span>ENGINE ONLINE</span>
+            </div>
+        </header>
+
+        <!-- Navigation Tabs -->
+        <div class="tabs">
+            <button class="tab-btn active" onclick="switchTab('player')">🎬 Stream Resolver & Player</button>
+            <button class="tab-btn" onclick="switchTab('catalog')">📚 Anikoto Catalog Explorer</button>
+        </div>
+
+        <!-- TAB 1: Player & Stream Resolver -->
+        <div id="player-tab" class="main-grid">
+            <!-- Left Column: Controls & Input -->
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-title">
+                        <span>🎯</span>
+                        <span>Stream Parameters</span>
+                    </div>
+                    <span id="latency-badge" style="font-size: 12px; font-family: 'JetBrains Mono'; color: var(--accent-cyan); display: none;">0ms</span>
+                </div>
+
+                <div class="form-grid">
+                    <div class="form-group full">
+                        <label>ID Resolver Type</label>
+                        <select id="id-type" onchange="updateIdPlaceholder()">
+                            <option value="mal">MyAnimeList ID (Recommended)</option>
+                            <option value="ani">AniList ID (Auto-Fallback)</option>
+                            <option value="catalog">Anikoto Catalog Episode ID (s-2)</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label id="id-label">Anime MAL ID</label>
+                        <input type="text" id="anime-id" value="21" placeholder="e.g. 21">
+                    </div>
+
+                    <div class="form-group">
+                        <label>Episode Number</label>
+                        <input type="number" id="ep-num" value="1" min="1">
+                    </div>
+
+                    <div class="form-group">
+                        <label>Audio Track</label>
+                        <select id="track">
+                            <option value="sub" selected>Subbed (Japanese)</option>
+                            <option value="dub">Dubbed (English)</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label>CDN Server Route</label>
+                        <select id="cdn-server">
+                            <option value="" selected>Default CDN (Auto)</option>
+                            <option value="tcdn">tcdn (Fast Akamai/Cloudflare)</option>
+                            <option value="bcdn">bcdn (Secondary Mirror)</option>
+                        </select>
+                    </div>
+                </div>
+
+                <button class="btn-primary" id="btn-resolve" onclick="resolveAndPlay()">
+                    <span>▶</span>
+                    <span>Extract & Play Stream</span>
+                </button>
+
+                <!-- Quick Presets -->
+                <div style="margin-top: 20px;">
+                    <span style="font-size: 12px; color: var(--text-subtle); font-weight: 600; text-transform: uppercase;">Quick Presets:</span>
+                    <div class="suggestions">
+                        <span class="chip" onclick="setPreset('mal', '21', 1, 'sub')">One Piece (MAL 21)</span>
+                        <span class="chip" onclick="setPreset('mal', '40748', 1, 'sub')">Jujutsu Kaisen (MAL 40748)</span>
+                        <span class="chip" onclick="setPreset('mal', '38000', 1, 'sub')">Demon Slayer (MAL 38000)</span>
+                        <span class="chip" onclick="setPreset('ani', '154587', 1, 'sub')">Frieren (AniList 154587)</span>
+                        <span class="chip" onclick="setPreset('ani', '151807', 1, 'sub')">Solo Leveling (AniList 151807)</span>
+                    </div>
+                </div>
+
+                <!-- JSON Response Inspector -->
+                <div style="margin-top: 24px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <span style="font-size: 13px; font-weight: 600; color: var(--text-muted);">Decrypted JSON Response</span>
+                        <button onclick="copyJson()" style="background: none; border: none; color: var(--accent-cyan); font-size: 12px; cursor: pointer;">Copy JSON</button>
+                    </div>
+                    <div class="json-box" id="json-output">Waiting for query...</div>
+                </div>
+            </div>
+
+            <!-- Right Column: Video Player & Output -->
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-title">
+                        <span>📺</span>
+                        <span>Live Video Stream Player</span>
+                    </div>
+                    <span id="player-format" style="font-size: 12px; color: var(--text-muted);">Format: HLS (.m3u8)</span>
+                </div>
+
+                <div class="player-wrapper">
+                    <div class="player-overlay-status" id="player-status">Player Standby</div>
+                    <video id="video-player" controls playsinline></video>
+                </div>
+
+                <!-- Intro / Outro Skip Markers -->
+                <div class="skip-bar" id="skip-bar" style="display: none;">
+                    <button class="btn-skip" id="btn-skip-intro" onclick="skipTo('intro')">⏩ Skip Intro</button>
+                    <button class="btn-skip" id="btn-skip-outro" onclick="skipTo('outro')">⏩ Skip Outro</button>
+                </div>
+
+                <div style="margin-top: 18px; font-size: 13px; color: var(--text-muted); line-height: 1.6;">
+                    <strong>Notice:</strong> This player plays the direct <strong>1080p Master HLS stream</strong> extracted straight from MegaPlay's backend without ads, timers, or tracking redirects.
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB 2: Anikoto Catalog Explorer -->
+        <div id="catalog-tab" class="catalog-section">
+            <div class="card" style="margin-bottom: 24px;">
+                <div class="card-header">
+                    <div class="card-title">
+                        <span>📚</span>
+                        <span>Anikoto Recent Releases (anikotoapi.site)</span>
+                    </div>
+                    <button class="tab-btn" onclick="loadRecentCatalog()">🔄 Refresh Catalog</button>
+                </div>
+                <div class="anime-cards-grid" id="catalog-grid">
+                    <div style="color: var(--text-muted); padding: 20px;">Loading anime catalog...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Episodes Modal -->
+    <div class="modal-backdrop" id="ep-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="modal-title" style="font-size: 16px;">Episodes List</h3>
+                <button class="close-btn" onclick="closeModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="episodes-grid" id="modal-episodes-grid"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentHls = null;
+        let lastStreamData = null;
+
+        function updateIdPlaceholder() {
+            const type = document.getElementById('id-type').value;
+            const label = document.getElementById('id-label');
+            const input = document.getElementById('anime-id');
+
+            if (type === 'mal') {
+                label.innerText = 'Anime MAL ID';
+                input.placeholder = 'e.g. 21';
+            } else if (type === 'ani') {
+                label.innerText = 'Anime AniList ID';
+                input.placeholder = 'e.g. 154587';
+            } else {
+                label.innerText = 'Catalog Episode ID';
+                input.placeholder = 'e.g. 2142 or 812601';
+            }
+        }
+
+        function setPreset(type, id, ep, track) {
+            document.getElementById('id-type').value = type;
+            document.getElementById('anime-id').value = id;
+            document.getElementById('ep-num').value = ep;
+            document.getElementById('track').value = track;
+            updateIdPlaceholder();
+            resolveAndPlay();
+        }
+
+        async function resolveAndPlay() {
+            const type = document.getElementById('id-type').value;
+            const id = document.getElementById('anime-id').value.trim();
+            const ep = document.getElementById('ep-num').value;
+            const track = document.getElementById('track').value;
+            const cdn = document.getElementById('cdn-server').value;
+
+            if (!id) {
+                alert('Please enter an ID');
+                return;
+            }
+
+            const btn = document.getElementById('btn-resolve');
+            const statusBox = document.getElementById('player-status');
+            const jsonBox = document.getElementById('json-output');
+            const latencyBadge = document.getElementById('latency-badge');
+
+            btn.disabled = true;
+            btn.innerText = 'Extracting Stream...';
+            statusBox.innerText = 'Decrypting Stream Payload...';
+            statusBox.style.color = '#38bdf8';
+
+            let endpoint = '';
+            if (type === 'mal') {
+                endpoint = `/api/stream/mal/${id}/${ep}/${track}`;
+            } else if (type === 'ani') {
+                endpoint = `/api/stream/ani/${id}/${ep}/${track}`;
+            } else {
+                endpoint = `/api/stream/catalog/${id}/${track}`;
+            }
+            if (cdn) endpoint += `?s=${cdn}`;
+
+            const t0 = performance.now();
+
+            try {
+                const res = await fetch(endpoint);
+                const data = await res.json();
+                const dur = Math.round(performance.now() - t0);
+
+                lastStreamData = data;
+                jsonBox.innerText = JSON.stringify(data, null, 2);
+                latencyBadge.innerText = `${dur}ms`;
+                latencyBadge.style.display = 'inline-block';
+
+                if (!data.success || !data.stream_url) {
+                    throw new Error(data.error || 'Failed to extract stream URL');
+                }
+
+                statusBox.innerText = `Stream Ready (${dur}ms)`;
+                statusBox.style.color = '#10b981';
+
+                // Play in Hls.js
+                playStream(data.stream_url, data.subtitles);
+
+                // Setup Skip buttons
+                const skipBar = document.getElementById('skip-bar');
+                if (data.intro && data.intro.end > 0) {
+                    skipBar.style.display = 'flex';
+                } else {
+                    skipBar.style.display = 'none';
+                }
+            } catch (err) {
+                statusBox.innerText = `Error: ${err.message}`;
+                statusBox.style.color = '#ef4444';
+                jsonBox.innerText = JSON.stringify({ error: err.message }, null, 2);
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '<span>▶</span><span>Extract & Play Stream</span>';
+            }
+        }
+
+        function playStream(m3u8Url, subtitles = []) {
+            const video = document.getElementById('video-player');
+
+            if (currentHls) {
+                currentHls.destroy();
+                currentHls = null;
+            }
+
+            // Remove existing subtitle tracks
+            while (video.firstChild) {
+                video.removeChild(video.firstChild);
+            }
+
+            // Add subtitle tracks
+            if (Array.isArray(subtitles)) {
+                subtitles.forEach((sub, idx) => {
+                    const track = document.createElement('track');
+                    track.kind = 'subtitles';
+                    track.label = sub.label || `Track ${idx + 1}`;
+                    track.srclang = 'en';
+                    track.src = sub.url;
+                    if (sub.default || idx === 0) track.default = true;
+                    video.appendChild(track);
+                });
+            }
+
+            if (Hls.isSupported()) {
+                currentHls = new Hls({
+                    enableWorker: true,
+                    lowLatencyMode: true
+                });
+                currentHls.loadSource(m3u8Url);
+                currentHls.attachMedia(video);
+                currentHls.on(Hls.Events.MANIFEST_PARSED, function () {
+                    video.play().catch(() => {});
+                });
+            } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+                video.src = m3u8Url;
+                video.addEventListener('loadedmetadata', function () {
+                    video.play().catch(() => {});
+                });
+            }
+        }
+
+        function skipTo(type) {
+            const video = document.getElementById('video-player');
+            if (!lastStreamData) return;
+            if (type === 'intro' && lastStreamData.intro?.end) {
+                video.currentTime = lastStreamData.intro.end;
+            } else if (type === 'outro' && lastStreamData.outro?.end) {
+                video.currentTime = lastStreamData.outro.end;
+            }
+        }
+
+        function copyJson() {
+            const text = document.getElementById('json-output').innerText;
+            navigator.clipboard.writeText(text);
+            alert('JSON copied to clipboard!');
+        }
+
+        function switchTab(tab) {
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            if (tab === 'player') {
+                document.querySelectorAll('.tab-btn')[0].classList.add('active');
+                document.getElementById('player-tab').style.display = 'grid';
+                document.getElementById('catalog-tab').classList.remove('active');
+            } else {
+                document.querySelectorAll('.tab-btn')[1].classList.add('active');
+                document.getElementById('player-tab').style.display = 'none';
+                document.getElementById('catalog-tab').classList.add('active');
+                loadRecentCatalog();
+            }
+        }
+
+        // Catalog tab functions
+        async function loadRecentCatalog() {
+            const grid = document.getElementById('catalog-grid');
+            grid.innerHTML = '<div style="color: var(--text-muted); padding: 20px;">Fetching recent releases from Anikoto API...</div>';
+            try {
+                const res = await fetch('/api/catalog/recent?page=1&per_page=20');
+                const data = await res.json();
+                const animeList = data.data || [];
+
+                grid.innerHTML = animeList.map(a => `
+                    <div class="anime-card" onclick="openSeriesModal(${a.id}, '${escapeQuotes(a.title)}')">
+                        <img class="anime-poster" src="${a.poster || ''}" alt="${escapeQuotes(a.title)}" loading="lazy">
+                        <div class="anime-info">
+                            <div class="anime-title" title="${escapeQuotes(a.title)}">${a.title}</div>
+                            <div class="anime-meta">
+                                <span>MAL: ${a.mal_id || 'N/A'}</span>
+                                <span>Ep ${a.episodes || '?'}</span>
+                            </div>
+                        </div>
+                    </div>
+                `).join('');
+            } catch (err) {
+                grid.innerHTML = `<div style="color: var(--danger); padding: 20px;">Failed to load catalog: ${err.message}</div>`;
+            }
+        }
+
+        async function openSeriesModal(seriesId, title) {
+            const modal = document.getElementById('ep-modal');
+            const modalTitle = document.getElementById('modal-title');
+            const epGrid = document.getElementById('modal-episodes-grid');
+
+            modalTitle.innerText = `${title} — Episodes`;
+            epGrid.innerHTML = 'Loading episodes...';
+            modal.classList.add('open');
+
+            try {
+                const res = await fetch(`/api/catalog/series/${seriesId}`);
+                const data = await res.json();
+                const eps = data.data?.episodes || [];
+
+                if (eps.length === 0) {
+                    epGrid.innerHTML = 'No episodes listed yet.';
+                    return;
+                }
+
+                epGrid.innerHTML = eps.map(e => `
+                    <button class="ep-btn" onclick="playEpisodeFromCatalog('${e.episode_embed_id}', ${e.number})">
+                        Ep ${e.number}
+                    </button>
+                `).join('');
+            } catch (err) {
+                epGrid.innerHTML = `Error: ${err.message}`;
+            }
+        }
+
+        function playEpisodeFromCatalog(embedId, epNum) {
+            closeModal();
+            switchTab('player');
+            document.getElementById('id-type').value = 'catalog';
+            document.getElementById('anime-id').value = embedId;
+            document.getElementById('ep-num').value = epNum;
+            updateIdPlaceholder();
+            resolveAndPlay();
+        }
+
+        function closeModal() {
+            document.getElementById('ep-modal').classList.remove('open');
+        }
+
+        function escapeQuotes(str) {
+            return (str || '').replace(/'/g, "\\'").replace(/"/g, '&quot;');
+        }
+    </script>
+</body>
+</html>
