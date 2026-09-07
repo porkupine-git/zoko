@@ -12,6 +12,7 @@ import megaplay, {
     getRecentAnime,
     getSeriesEpisodes
 } from './megaplay.js';
+import { HTML_PAGE } from './html.js';
 
 const CORS_HEADERS = {
     "Access-Control-Allow-Origin": "*",
@@ -408,12 +409,27 @@ export default {
                 });
             }
 
-            // 12. Root / Documentation & Discovery
+            // 12. Frontend Web UI (MegaPlay ArtPlayer Testbench)
+            const acceptHeader = request.headers.get("accept") || "";
+            if (pathname === "/player" || pathname === "/test" || (pathname === "/" && acceptHeader.includes("text/html"))) {
+                return new Response(HTML_PAGE, {
+                    status: 200,
+                    headers: {
+                        ...CORS_HEADERS,
+                        "Content-Type": "text/html; charset=utf-8",
+                        "Cache-Control": "public, max-age=3600",
+                        "X-Colo": colo
+                    }
+                });
+            }
+
+            // 13. Root / Documentation & Discovery (JSON API)
             if (pathname === "/" || pathname === "/api") {
                 return jsonResponse({
                     name: "Aniko Backend - MegaPlay & Anikoto Edge Anime Streaming API",
                     version: "1.0.0",
                     platform: "Cloudflare Workers Edge (Paid Plan V8 Runtime)",
+                    web_player: `${origin}/player`,
                     documentation: "Use this API directly in any web or mobile frontend (Anigo, Next.js, React, Android, iOS, etc.)",
                     subdomain: "https://aniko-backend.rk18109ry.workers.dev",
                     edge_colo: colo,
