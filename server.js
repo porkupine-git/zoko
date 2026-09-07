@@ -431,6 +431,7 @@ app.get('/api/stream', async (req, res) => {
         const data = await scraper.extractZokoStream({
             malId,
             anilistId: id,
+            title: req.query.title,
             episode: ep,
             track,
             hostUrl

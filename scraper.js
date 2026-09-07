@@ -94,27 +94,59 @@ async function getMalIdFromAniList(aniId) {
     const cached = getCached(cacheKey);
     if (cached) return cached;
 
-    const query = `
-    query ($id: Int) {
-      Media(id: $id, type: ANIME) {
-        id
-        idMal
-      }
-    }
-    `;
-
+    // 1. Try AniList GraphQL first
     try {
+        const query = `
+        query ($id: Int) {
+          Media(id: $id, type: ANIME) {
+            id
+            idMal
+          }
+        }
+        `;
         const res = await fetch(ANILIST_ENDPOINT, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
             body: JSON.stringify({ query: query.trim(), variables: { id: numericId } }),
-            signal: AbortSignal.timeout(6000)
+            signal: AbortSignal.timeout(4000)
         });
         if (res.ok) {
             const json = await res.json();
-            const malId = json?.data?.Media?.idMal || numericId;
-            setCached(cacheKey, malId, 86400000); // 24h cache
-            return malId;
+            const malId = json?.data?.Media?.idMal;
+            if (malId) {
+                setCached(cacheKey, malId, 86400000); // 24h cache
+                return malId;
+            }
+        }
+    } catch {}
+
+    // 2. Fallback: Query Kitsu mappings if AniList is down/disabled
+    try {
+        const kRes = await fetch(`https://kitsu.io/api/edge/mappings?filter[externalSite]=anilist/anime&filter[externalId]=${numericId}`, {
+            signal: AbortSignal.timeout(4000)
+        });
+        if (kRes.ok) {
+            const kJson = await kRes.json();
+            const mappingId = kJson?.data?.[0]?.id;
+            if (mappingId) {
+                const itemRes = await fetch(`https://kitsu.io/api/edge/mappings/${mappingId}/item`, { signal: AbortSignal.timeout(4000) });
+                if (itemRes.ok) {
+                    const itemJson = await itemRes.json();
+                    const animeId = itemJson?.data?.id;
+                    if (animeId) {
+                        const mapRes = await fetch(`https://kitsu.io/api/edge/anime/${animeId}/mappings`, { signal: AbortSignal.timeout(4000) });
+                        if (mapRes.ok) {
+                            const mapJson = await mapRes.json();
+                            const mal = mapJson?.data?.find(x => x.attributes?.externalSite === 'myanimelist/anime');
+                            if (mal?.attributes?.externalId) {
+                                const malId = parseInt(mal.attributes.externalId);
+                                setCached(cacheKey, malId, 86400000);
+                                return malId;
+                            }
+                        }
+                    }
+                }
+            }
         }
     } catch {}
 
@@ -122,15 +154,29 @@ async function getMalIdFromAniList(aniId) {
 }
 
 // --- Core ZokoAnime Stream Extractor ---
-async function extractZokoStream({ malId, anilistId, episode = 1, track = 'sub', hostUrl = '' }) {
+async function extractZokoStream({ malId, anilistId, title, episode = 1, track = 'sub', hostUrl = '' }) {
     let resolvedMalId = malId;
 
     if (!resolvedMalId && anilistId) {
         resolvedMalId = await getMalIdFromAniList(anilistId);
     }
 
+    if (!resolvedMalId && title) {
+        try {
+            const tRes = await fetch(`https://kitsu.io/api/edge/anime?filter[text]=${encodeURIComponent(title)}&include=mappings&page[limit]=1`, { signal: AbortSignal.timeout(4000) });
+            if (tRes.ok) {
+                const tJson = await tRes.json();
+                const mappings = tJson.included?.filter(x => x.type === 'mappings') || [];
+                const mal = mappings.find(m => m.attributes?.externalSite === 'myanimelist/anime');
+                if (mal?.attributes?.externalId) {
+                    resolvedMalId = parseInt(mal.attributes.externalId);
+                }
+            }
+        } catch {}
+    }
+
     if (!resolvedMalId) {
-        throw new Error("Cannot extract stream: Neither malId nor anilistId was provided or resolved.");
+        throw new Error("Cannot extract stream: Neither malId nor anilistId could be resolved.");
     }
 
     const targetTrack = (track || 'sub').toLowerCase() === 'dub' ? 'dub' : 'sub';

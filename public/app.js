@@ -163,6 +163,173 @@
         return data;
     }
 
+    // --- Kitsu Fallback Adapter (Instant failover if AniList is disabled or down) ---
+
+    function normalizeKitsuAnime(item, mappings = []) {
+        if (!item || !item.attributes) return null;
+        const attr = item.attributes;
+        const aniMapping = mappings.find(m => m.attributes?.externalSite === 'anilist/anime');
+        const malMapping = mappings.find(m => m.attributes?.externalSite === 'myanimelist/anime');
+
+        const titleRomaji = attr.titles?.en_jp || attr.canonicalTitle || 'Untitled';
+        const titleEnglish = attr.titles?.en || attr.canonicalTitle || titleRomaji;
+        const titleNative = attr.titles?.ja_jp || '';
+
+        const cover = attr.posterImage?.large || attr.posterImage?.original || attr.posterImage?.medium || '';
+        const banner = attr.coverImage?.large || attr.coverImage?.original || cover;
+
+        return {
+            id: aniMapping?.attributes?.externalId || item.id,
+            idMal: malMapping?.attributes?.externalId ? parseInt(malMapping.attributes.externalId) : null,
+            kitsuId: item.id,
+            title: {
+                romaji: titleRomaji,
+                english: titleEnglish,
+                native: titleNative
+            },
+            coverImage: {
+                extraLarge: attr.posterImage?.original || cover,
+                large: cover,
+                medium: attr.posterImage?.medium || cover,
+                color: '#e50914'
+            },
+            bannerImage: banner,
+            description: attr.synopsis || attr.description || '',
+            episodes: attr.episodeCount || 12,
+            duration: attr.episodeLength || 24,
+            genres: [],
+            averageScore: Math.round(parseFloat(attr.averageRating || 80)),
+            status: attr.status === 'finished' ? 'FINISHED' : (attr.status === 'current' ? 'RELEASING' : 'NOT_YET_RELEASED'),
+            seasonYear: attr.startDate ? parseInt(attr.startDate.substring(0, 4)) : null,
+            format: (attr.subtype || 'TV').toUpperCase()
+        };
+    }
+
+    async function fetchKitsuHomePage() {
+        try {
+            const [tRes, pRes, trRes] = await Promise.all([
+                fetch('https://kitsu.io/api/edge/trending/anime?include=mappings'),
+                fetch('https://kitsu.io/api/edge/anime?sort=-userCount&page[limit]=12&include=mappings'),
+                fetch('https://kitsu.io/api/edge/anime?sort=-averageRating&page[limit]=12&include=mappings')
+            ]);
+            const [tJson, pJson, trJson] = await Promise.all([tRes.json(), pRes.json(), trRes.json()]);
+
+            const mapKitsu = (json) => {
+                const mappings = json.included?.filter(x => x.type === 'mappings') || [];
+                return (json.data || []).map(item => normalizeKitsuAnime(item, mappings)).filter(Boolean);
+            };
+
+            const trending = mapKitsu(tJson);
+            const popular = mapKitsu(pJson);
+            const topRated = mapKitsu(trJson);
+
+            return {
+                hero: { media: trending.slice(0, 6) },
+                trending: { media: trending },
+                popular: { media: popular },
+                topRated: { media: topRated }
+            };
+        } catch (e) {
+            console.error('Kitsu home load error:', e);
+            return null;
+        }
+    }
+
+    async function fetchKitsuBrowse({ page = 1, query = '', sort = 'TRENDING_DESC' }) {
+        try {
+            const limit = 24;
+            const offset = (page - 1) * limit;
+            let sortParam = '-userCount';
+            if (sort === 'SCORE_DESC') sortParam = '-averageRating';
+            if (sort === 'POPULARITY_DESC') sortParam = '-userCount';
+
+            let url = `https://kitsu.io/api/edge/anime?page[limit]=${limit}&page[offset]=${offset}&include=mappings`;
+            if (query) {
+                url += `&filter[text]=${encodeURIComponent(query)}`;
+            } else {
+                url += `&sort=${sortParam}`;
+            }
+
+            const res = await fetch(url);
+            if (!res.ok) return { media: [], pageInfo: { total: 0, currentPage: 1, lastPage: 1 } };
+            const json = await res.json();
+            const mappings = json.included?.filter(x => x.type === 'mappings') || [];
+            const media = (json.data || []).map(item => normalizeKitsuAnime(item, mappings)).filter(Boolean);
+            const total = json.meta?.count || media.length;
+            const lastPage = Math.ceil(total / limit) || 1;
+
+            return {
+                media,
+                pageInfo: {
+                    total,
+                    currentPage: page,
+                    lastPage,
+                    hasNextPage: page < lastPage
+                }
+            };
+        } catch (e) {
+            console.error('Kitsu browse error:', e);
+            return { media: [], pageInfo: { total: 0, currentPage: 1, lastPage: 1 } };
+        }
+    }
+
+    async function fetchKitsuAnimeDetails(aniId, title) {
+        try {
+            let animeItem = null;
+            let mappings = [];
+
+            if (aniId) {
+                const mRes = await fetch(`https://kitsu.io/api/edge/mappings?filter[externalSite]=anilist/anime&filter[externalId]=${aniId}`);
+                if (mRes.ok) {
+                    const mJson = await mRes.json();
+                    const mapId = mJson?.data?.[0]?.id;
+                    if (mapId) {
+                        const itemRes = await fetch(`https://kitsu.io/api/edge/mappings/${mapId}/item`);
+                        if (itemRes.ok) {
+                            const itemJson = await itemRes.json();
+                            const animeId = itemJson?.data?.id;
+                            if (animeId) {
+                                const aRes = await fetch(`https://kitsu.io/api/edge/anime/${animeId}?include=mappings`);
+                                if (aRes.ok) {
+                                    const aJson = await aRes.json();
+                                    animeItem = aJson.data;
+                                    mappings = aJson.included?.filter(x => x.type === 'mappings') || [];
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (!animeItem && title) {
+                const tRes = await fetch(`https://kitsu.io/api/edge/anime?filter[text]=${encodeURIComponent(title)}&include=mappings&page[limit]=1`);
+                if (tRes.ok) {
+                    const tJson = await tRes.json();
+                    animeItem = tJson.data?.[0];
+                    mappings = tJson.included?.filter(x => x.type === 'mappings') || [];
+                }
+            }
+
+            if (!animeItem) return null;
+            return normalizeKitsuAnime(animeItem, mappings);
+        } catch (e) {
+            console.error('fetchKitsuAnimeDetails error:', e);
+            return null;
+        }
+    }
+
+    async function searchKitsu(q) {
+        try {
+            const res = await fetch(`https://kitsu.io/api/edge/anime?filter[text]=${encodeURIComponent(q)}&page[limit]=6&include=mappings`);
+            if (!res.ok) return [];
+            const json = await res.json();
+            const mappings = json.included?.filter(x => x.type === 'mappings') || [];
+            return (json.data || []).map(item => normalizeKitsuAnime(item, mappings)).filter(Boolean);
+        } catch (e) {
+            return [];
+        }
+    }
+
     function getAnimeTitle(item) {
         if (!item) return 'Unknown Title';
         if (typeof item.title === 'string') return item.title;
@@ -259,7 +426,15 @@
             }
             `;
 
-            const data = await queryAniList(homeQuery);
+            let data = null;
+            try {
+                data = await queryAniList(homeQuery);
+            } catch (aniErr) {
+                console.warn('AniList home query failed, seamlessly falling back to Kitsu:', aniErr.message);
+                data = await fetchKitsuHomePage();
+            }
+
+            if (!data) throw new Error('Catalog service temporarily unavailable');
 
             // 1. Render Spotlight Hero
             if (data.hero?.media && data.hero.media.length > 0) {
@@ -446,10 +621,24 @@
             if (state.browse.genre && state.browse.genre !== 'All') variables.genre = [state.browse.genre];
             if (state.browse.format && state.browse.format !== 'All') variables.format = state.browse.format;
 
-            const data = await queryAniList(browseQuery, variables);
+            let media = [];
+            let pageInfo = {};
 
-            const media = data?.Page?.media || [];
-            const pageInfo = data?.Page?.pageInfo || {};
+            try {
+                const data = await queryAniList(browseQuery, variables);
+                media = data?.Page?.media || [];
+                pageInfo = data?.Page?.pageInfo || {};
+            } catch (aniErr) {
+                console.warn('AniList browse query failed, falling back to Kitsu:', aniErr.message);
+                const kData = await fetchKitsuBrowse({
+                    page: state.browse.page,
+                    query: state.browse.query,
+                    sort: state.browse.sort
+                });
+                media = kData.media || [];
+                pageInfo = kData.pageInfo || {};
+            }
+
             state.browse.totalPages = pageInfo.lastPage || 1;
 
             dom.browseCount.innerText = pageInfo.total ? `${pageInfo.total.toLocaleString()} anime found` : `${media.length} results`;
@@ -632,7 +821,11 @@
             const data = await queryAniList(animeDetailsQuery, vars);
             meta = data?.Media;
         } catch (err) {
-            console.error('AniList meta fetch error:', err);
+            console.warn('AniList meta fetch error, falling back to Kitsu:', err.message);
+        }
+
+        if (!meta) {
+            meta = await fetchKitsuAnimeDetails(state.watch.anilistId, state.watch.title);
         }
 
         if (meta) {
@@ -811,7 +1004,8 @@
         try {
             // CALL BACKEND SCRAPER API (ONLY FOR STREAMING)
             const malIdParam = state.watch.malId ? `&malId=${state.watch.malId}` : '';
-            const streamUrl = `/api/stream?id=${state.watch.anilistId}${malIdParam}&ep=${ep.episode_number}&track=${state.watch.audioMode}`;
+            const titleParam = state.watch.title ? `&title=${encodeURIComponent(state.watch.title)}` : '';
+            const streamUrl = `/api/stream?id=${state.watch.anilistId || ''}${malIdParam}${titleParam}&ep=${ep.episode_number}&track=${state.watch.audioMode}`;
             const streamData = await fetchJson(streamUrl);
             state.watch.streamData = streamData;
 
@@ -1068,18 +1262,23 @@
 
         searchDebounceTimer = setTimeout(async () => {
             try {
-                const searchQuery = `
-                query ($search: String) {
-                  Page(page: 1, perPage: 6) {
-                    media(search: $search, type: ANIME, isAdult: false) {
-                      id idMal title { romaji english native } coverImage { medium large }
-                      format seasonYear averageScore
+                let results = [];
+                try {
+                    const searchQuery = `
+                    query ($search: String) {
+                      Page(page: 1, perPage: 6) {
+                        media(search: $search, type: ANIME, isAdult: false) {
+                          id idMal title { romaji english native } coverImage { medium large }
+                          format seasonYear averageScore
+                        }
+                      }
                     }
-                  }
+                    `;
+                    const data = await queryAniList(searchQuery, { search: q });
+                    results = data?.Page?.media || [];
+                } catch (aniErr) {
+                    results = await searchKitsu(q);
                 }
-                `;
-                const data = await queryAniList(searchQuery, { search: q });
-                const results = data?.Page?.media || [];
 
                 if (results.length === 0) {
                     dom.searchDropdown.innerHTML = `<div style="padding:12px; font-size:0.82rem; color:var(--text-muted); text-align:center;">No anime found matching "${q}"</div>`;
