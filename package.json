@@ -1,24 +1,25 @@
 {
   "name": "zoko",
-  "version": "3.0.0",
+  "version": "4.1.0",
   "description": "High-Performance Pure Express.js Native Anime Streaming Engine & Scraper",
   "main": "server.js",
+  "engines": {
+    "node": ">=22.5.0"
+  },
   "scripts": {
     "start": "node server.js",
     "dev": "node --watch server.js",
-    "test": "node test_express.js",
-    "deploy:vps": "node scratch/deploy_to_vps.js",
-    "pm2:start": "pm2 start ecosystem.config.js",
-    "pm2:stop": "pm2 stop ecosystem.config.js"
+    "test": "node test_express.js"
   },
   "keywords": [
     "anime",
     "streaming",
     "hls",
     "express",
-    "reverse-engineering"
+    "scraper",
+    "api"
   ],
-  "author": "",
+  "author": "Zayrix",
   "license": "MIT",
   "dependencies": {
     "cors": "^2.8.5",
@@ -26,8 +27,5 @@
     "express": "^5.2.1",
     "swagger-ui-express": "^5.0.1",
     "undici": "^6.28.1"
-  },
-  "devDependencies": {
-    "ssh2": "^1.17.0"
   }
 }

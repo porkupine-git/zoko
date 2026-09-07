@@ -11,6 +11,7 @@ const swaggerUi = require('swagger-ui-express');
 const scraper = require('./scraper');
 
 const app = express();
+app.set('trust proxy', 1);
 
 // --- Configuration ---
 const PORT = parseInt(process.env.PORT) || 3000;
@@ -130,7 +131,8 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 function getBaseUrl(req) {
     const proto = req.headers['x-forwarded-proto'] || req.protocol;
-    return `${proto}://${req.get('host')}`;
+    const host = req.headers['x-forwarded-host'] || req.get('host');
+    return `${proto}://${host}`;
 }
 
 // Universal API Discovery & Index Endpoint

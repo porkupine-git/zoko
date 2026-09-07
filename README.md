@@ -1,127 +1,117 @@
----
-title: Zoko Pure Express Anime Engine
-emoji: ⚡
-colorFrom: indigo
-colorTo: purple
-sdk: docker
-app_port: 3000
-pinned: false
-license: mit
----
+# ⚡ Zoko - Universal Anime Scraper & Streaming Engine
 
-# ⚡ Zoko - Pure Express Anime Streaming & Scraping Engine
+A high-performance reverse-engineered anime streaming and scraping engine built with **100% Pure Node.js & Express.js** (zero Python, zero external scraper dependencies).
 
-A state-of-the-art, high-performance reverse-engineered anime streaming and scraping engine built with **100% Pure Node.js & Express.js** (zero Python, zero FastAPI, zero external scraper dependencies).
+Ready for 1-click cloud deployment on **Render, Railway, Koyeb, Docker, or any PaaS**.
 
 ---
 
-## 🏛️ System Architecture
+## 🚀 Deploy to Render in 1 Click
 
-```mermaid
-graph TD
-    Client[Web Browser / Mobile App / VLC] -->|HTTP / CORS Request| Gateway[Express Server :3000]
-    
-    subgraph Data Plane [High Throughput Video Streaming]
-        Gateway -->|/api/proxy/ts| KernelPipe[Kernel Zero-Buffer Video Pipe]
-        Gateway -->|/api/proxy/m3u8| M3U8Rewrite[HLS Master Playlist Rewriter]
-        Gateway -->|/api/proxy/vtt| SubtitleProxy[CORS VTT Subtitle Proxy]
-        KernelPipe -->|Undici Keep-Alive Socket| CDN[(Upstream HLS CDN)]
-    end
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/Zayrix-bit/zoko)
 
-    subgraph Control Plane [Native Scraper & Resolver]
-        Gateway -->|/api/search, /info, /episodes| AniList[AniList GraphQL v2]
-        Gateway -->|/api/stream, /embed| ZokoEngine[Zoko Stream Extractor]
-        ZokoEngine -->|XOR otaku-embed-v1 Deobfuscation| ZokoWeb[zokoanime.video]
-    end
-
-    Gateway -->|Cache Hit <1ms| MemCache[(LRU In-Memory Cache)]
-    Gateway -->|/| WebUI[ArtPlayer Web Application]
-    Gateway -->|/embed| EmbedPlayer[Embeddable Responsive Player]
-    Gateway -->|/docs| Swagger[OpenAPI 3.0 Interactive Specs]
-```
+### Manual Render Setup:
+1. Go to [Render Dashboard](https://dashboard.render.com/) -> **New Web Service**.
+2. Connect your GitHub repository: `https://github.com/Zayrix-bit/zoko`.
+3. Configure service:
+   - **Runtime**: `Node`
+   - **Build Command**: `npm install --omit=dev`
+   - **Start Command**: `npm start`
+   - **Health Check Path**: `/health`
+4. Add Environment Variables:
+   - `NODE_VERSION`: `22.12.0`
+   - `HOST`: `0.0.0.0`
+   - `RATE_LIMIT_MAX`: `300`
+   - `CACHE_TTL_MS`: `300000`
+5. Click **Create Web Service**! Render will automatically build and provide your free HTTPS API URL (e.g. `https://zoko-anime-api.onrender.com`).
 
 ---
 
 ## 🌟 Key Features
 
-- ⚡ **Pure Node.js / Express:** Zero Python, zero external scraper daemons. Ultra-lightweight memory footprint (~40 MB).
-- 🔓 **Reverse-Engineered Zoko Stream Decryption:** XOR cipher deobfuscation (`otaku-embed-v1`) extracting master HLS playlists, multi-language subtitles (`.vtt`), and auto-skip intro/outro timestamps.
-- 🚀 **High-Concurrency Undici Pipeline:** Optimized connection pool (`pipelining: 0`, `connections: 128`) preventing Cloudflare edge socket stalls and DNS timeouts.
-- 🛡️ **Zero-Error HLS Proxy:** Rewrites master & variant playlists on the fly to bypass upstream CORS and 403 Forbidden hotlink blocks.
-- ⚡ **Zero-Copy Kernel Video Piping:** Video TS chunks stream directly from upstream network socket to browser with `Readable.fromWeb().pipe(res)` and HTTP Range 206 partial content support.
-- 🎬 **Integrated Responsive ArtPlayer:** Full-featured dark-mode player with Sub/Dub audio switcher, episode navigator, auto-skip intro/outro, and theater mode.
-- 📦 **Embed Route (`/embed`):** Drop-in iframe support for embedding into any external website or mobile webview.
-- 📖 **Interactive Swagger UI:** OpenAPI 3.0 specs available at `/docs`.
+- ⚡ **Pure Node.js / Express 5:** Zero Python, zero external scraper daemons. Lightweight memory footprint (~40 MB).
+- 🔓 **Reverse-Engineered Stream Decryption:** XOR cipher deobfuscation (`otaku-embed-v1`) extracting master HLS playlists, multi-language subtitles (`.vtt`), and auto-skip intro/outro timestamps.
+- 🛡️ **Zero-CORS HLS Proxy:** Rewrites master & variant playlists on the fly with `Access-Control-Allow-Origin: *` to bypass upstream CORS and 403 hotlink blocks.
+- ⚡ **Zero-Copy Video Piping:** Video TS chunks stream directly from upstream CDN to browser with HTTP Range 206 partial content support.
+- 📦 **Pure Streaming API for Any Frontend:** Works seamlessly with custom frontends powered by AniList or MyAnimeList (MAL).
+- 🎬 **Drop-in Embed Route (`/embed`):** Iframe support for embedding directly into any external website or mobile webview.
+- 📖 **Interactive Swagger UI & Playground:** OpenAPI 3.0 specs available at `/docs` and interactive playground at `/api-demo.html`.
 
 ---
 
-## ⚙️ Environment Variables (.env / .env.example)
+## 📋 Pure Streaming API Reference
+
+Use these endpoints in your custom frontend (React, Next.js, Vue, Flutter, React Native, iOS, Android):
+
+| Method | Endpoint | Description |
+| :--- | :--- | :--- |
+| `GET` | `/api/stream?id={id}&ep={ep}&track={sub\|dub}` | Universal stream link (AniList ID or MAL ID) |
+| `GET` | `/api/stream/:id/:ep` | Clean REST route (e.g. `/api/stream/21/1`) |
+| `GET` | `/embed?id={id}&ep={ep}&track={sub\|dub}` | Drop-in responsive ArtPlayer iframe |
+| `GET` | `/api/search?q={query}` | Search 11,449+ anime titles (0ms SQLite cache) |
+| `GET` | `/api/anime/{id}` | Full metadata, synopsis, and all episodes |
+| `GET` | `/health` | Server status and healthcheck |
+| `GET` | `/api` | Interactive API Directory (JSON) |
+| `GET` | `/docs` | Interactive Swagger OpenAPI Specs |
+
+### 💡 Example: Stream Extraction from an AniList Frontend
+```javascript
+// Example in React / Next.js / Vanilla JS:
+const res = await fetch('https://your-app.onrender.com/api/stream?id=21&ep=1&track=sub');
+const data = await res.json();
+
+console.log(data.stream_url); // Pass directly to Hls.js / Video.js / ArtPlayer
+console.log(data.subtitles);  // VTT English Subtitles
+console.log(data.skip.intro); // { start: 31, end: 111 }
+```
+
+---
+
+## ⚙️ Environment Variables
 
 | Variable | Default | Description |
 | :--- | :--- | :--- |
-| `PORT` | `3000` | Port for the Express server |
-| `HOST` | `127.0.0.1` | Network interface (`127.0.0.1` for local, `0.0.0.0` for Docker) |
-| `RATE_LIMIT_MAX` | `120` | Max requests per minute per IP |
-| `CACHE_TTL_MS` | `180000` | Cache time-to-live in milliseconds (default 3 minutes) |
-| `CACHE_MAX_ITEMS` | `3000` | Max entries in memory cache before eviction |
+| `PORT` | `3000` (or dynamic in Render) | Server listen port |
+| `HOST` | `0.0.0.0` | Network binding interface |
+| `RATE_LIMIT_MAX` | `300` | Max requests per minute per IP |
+| `CACHE_TTL_MS` | `300000` | In-memory cache TTL in milliseconds (5 min) |
+| `CACHE_MAX_ITEMS` | `5000` | Max entries in memory cache |
 | `ZOKO_BASE_URL` | `https://zokoanime.video` | Upstream streaming target base URL |
 | `ANILIST_GRAPHQL_ENDPOINT` | `https://graphql.anilist.co` | AniList metadata GraphQL API endpoint |
 
 ---
 
-## 🚀 Quick Start
+## 💻 Local Development
 
-### 1. Install Dependencies
 ```bash
+# 1. Install dependencies
 npm install
-```
 
-### 2. Configure Environment
-```bash
-cp .env.example .env
-```
-
-### 3. Run Server
-```bash
-# Start server
-npm start
-
-# Development mode with auto-reload
+# 2. Run locally
 npm run dev
 
-# Run full automated test suite
+# 3. Run automated test suite
 npm test
 ```
 
-- 🌐 **Web Player:** [http://127.0.0.1:3000/](http://127.0.0.1:3000/)
-- 📖 **Swagger API Docs:** [http://127.0.0.1:3000/docs](http://127.0.0.1:3000/docs)
-- 📊 **Health Check:** [http://127.0.0.1:3000/health](http://127.0.0.1:3000/health)
+- 🌐 **Web Player:** `http://localhost:3000/`
+- 🧪 **API Playground:** `http://localhost:3000/api-demo.html`
+- 📖 **Swagger API Docs:** `http://localhost:3000/docs`
 
 ---
 
-## 📋 API Endpoints Reference
-
-| Method | Route | Description |
-| :--- | :--- | :--- |
-| `GET` | `/` | Responsive ArtPlayer Video Streaming Web App |
-| `GET` | `/embed?id={id}&ep={ep}&track={sub\|dub}` | Standalone embeddable iframe player |
-| `GET` | `/docs` | Interactive Swagger API Documentation |
-| `GET` | `/health` | Server status and telemetry metrics |
-| `GET` | `/api/home` | Trending, popular, and seasonal anime catalog |
-| `GET` | `/api/search?q={query}&page=1` | Search anime by title |
-| `GET` | `/api/anime/{id}` | Detailed anime metadata (AniList ID or MAL ID) |
-| `GET` | `/api/episodes/{id}?page=1&size=50` | Paginated episode listings |
-| `GET` | `/api/stream?malId={id}&ep={ep}&track={sub\|dub}` | Extracted master HLS stream with proxy URLs |
-| `GET` | `/api/stream/{id}-{ep}` | Multi-audio source stream resolver |
-| `GET` | `/api/watch/resolve?id={id}&title={title}` | Automatic season & episode mapping resolver |
-| `GET` | `/api/proxy/m3u8?url={url}` | CORS-safe HLS playlist proxy and rewriter |
-| `GET` | `/api/proxy/ts?url={url}` | Kernel-piped video segment streamer |
-| `GET` | `/api/proxy/vtt?url={url}` | Subtitle file proxy |
-
----
-
-## 🐳 Docker Deployment
+## 🐳 Docker & Container Deployment
 
 ```bash
 docker compose up -d --build
 ```
+Or run directly:
+```bash
+docker build -t zoko-anime-api .
+docker run -p 3000:3000 zoko-anime-api
+```
+
+---
+
+## 📄 License
+MIT License.

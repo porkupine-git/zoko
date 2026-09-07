@@ -1,4 +1,4 @@
-FROM node:20-slim
+FROM node:22-slim
 
 # Set up non-root user for Hugging Face Spaces (UID 1000)
 RUN useradd -m -u 1000 user
