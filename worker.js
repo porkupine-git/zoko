@@ -22,9 +22,10 @@ const DEFAULT_HEADERS = {
 
 const CORS_HEADERS = {
     "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Methods": "GET, POST, OPTIONS, HEAD",
-    "Access-Control-Allow-Headers": "Origin, X-Requested-With, Content-Type, Accept, Range, Authorization",
-    "Access-Control-Expose-Headers": "Content-Range, Accept-Ranges, Content-Length, X-Cache, X-Colo"
+    "Access-Control-Allow-Methods": "GET, POST, OPTIONS, HEAD, PUT, DELETE",
+    "Access-Control-Allow-Headers": "Origin, X-Requested-With, Content-Type, Accept, Range, Authorization, X-Request-Signature, X-Request-Timestamp, x-request-signature, x-request-timestamp, *",
+    "Access-Control-Expose-Headers": "Content-Range, Accept-Ranges, Content-Length, X-Cache, X-Colo, *",
+    "Access-Control-Max-Age": "86400"
 };
 
 // -------------------------------------------------------------
@@ -438,7 +439,12 @@ export default {
 
         // Handle CORS Preflight
         if (request.method === "OPTIONS") {
-            return new Response(null, { headers: CORS_HEADERS });
+            const reqHeaders = request.headers.get("Access-Control-Request-Headers");
+            const headers = {
+                ...CORS_HEADERS,
+                "Access-Control-Allow-Headers": reqHeaders ? `${reqHeaders}, ${CORS_HEADERS["Access-Control-Allow-Headers"]}` : CORS_HEADERS["Access-Control-Allow-Headers"]
+            };
+            return new Response(null, { status: 204, headers });
         }
 
         // 1. Health Endpoint
