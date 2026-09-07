@@ -24,6 +24,26 @@ function sendError(res, statusCode, message) {
     sendJson(res, statusCode, { success: false, error: message });
 }
 
+function attachProxyUrls(data) {
+    if (!data || !data.success) return data;
+    if (data.stream_url) {
+        data.proxy_stream_url = `/api/proxy/m3u8?url=${encodeURIComponent(data.stream_url)}`;
+    }
+    if (Array.isArray(data.sources)) {
+        data.sources = data.sources.map(s => ({
+            ...s,
+            proxy_url: `/api/proxy/m3u8?url=${encodeURIComponent(s.url)}`
+        }));
+    }
+    if (Array.isArray(data.subtitles)) {
+        data.subtitles = data.subtitles.map(sub => ({
+            ...sub,
+            proxy_url: sub.url ? `/api/proxy/vtt?url=${encodeURIComponent(sub.url)}` : undefined
+        }));
+    }
+    return data;
+}
+
 const server = http.createServer(async (req, res) => {
     // Handle CORS preflight
     if (req.method === "OPTIONS") {
@@ -46,7 +66,6 @@ const server = http.createServer(async (req, res) => {
         }
 
         // 2. Stream by MAL ID: /api/stream/mal/:id/:ep/:track
-        // or /api/stream/mal?id=21&ep=1&track=sub
         if (pathname.startsWith("/api/stream/mal")) {
             const parts = pathname.replace('/api/stream/mal', '').split('/').filter(Boolean);
             const malId = parts[0] || query.id;
@@ -57,11 +76,10 @@ const server = http.createServer(async (req, res) => {
             if (!malId) return sendError(res, 400, "Missing MAL ID parameter");
 
             const data = await megaplay.resolveFromMal(malId, ep, track, serverOpt);
-            return sendJson(res, 200, data);
+            return sendJson(res, 200, attachProxyUrls(data));
         }
 
         // 3. Stream by AniList ID: /api/stream/ani/:id/:ep/:track
-        // or /api/stream/ani?id=21&ep=1&track=sub
         if (pathname.startsWith("/api/stream/ani")) {
             const parts = pathname.replace('/api/stream/ani', '').split('/').filter(Boolean);
             const aniId = parts[0] || query.id;
@@ -72,11 +90,10 @@ const server = http.createServer(async (req, res) => {
             if (!aniId) return sendError(res, 400, "Missing AniList ID parameter");
 
             const data = await megaplay.resolveFromAnilist(aniId, ep, track, serverOpt);
-            return sendJson(res, 200, data);
+            return sendJson(res, 200, attachProxyUrls(data));
         }
 
         // 4. Stream by Catalog ID: /api/stream/catalog/:epId/:track
-        // or /api/stream/catalog?id=2142&track=sub
         if (pathname.startsWith("/api/stream/catalog")) {
             const parts = pathname.replace('/api/stream/catalog', '').split('/').filter(Boolean);
             const epId = parts[0] || query.id || query.epId;
@@ -86,7 +103,7 @@ const server = http.createServer(async (req, res) => {
             if (!epId) return sendError(res, 400, "Missing Catalog Episode ID parameter");
 
             const data = await megaplay.resolveFromCatalogId(epId, track, serverOpt);
-            return sendJson(res, 200, data);
+            return sendJson(res, 200, attachProxyUrls(data));
         }
 
         // 5. Direct embed URL resolver: /api/stream/resolve?url=...
@@ -95,7 +112,7 @@ const server = http.createServer(async (req, res) => {
             if (!embedUrl) return sendError(res, 400, "Missing embed url query parameter");
             const serverOpt = query.s || query.server || "";
             const data = await megaplay.resolveFromEmbedUrl(embedUrl, serverOpt);
-            return sendJson(res, 200, data);
+            return sendJson(res, 200, attachProxyUrls(data));
         }
 
         // 6. Catalog Recent Anime: /api/catalog/recent?page=1&per_page=20
@@ -115,7 +132,95 @@ const server = http.createServer(async (req, res) => {
             return sendJson(res, 200, data);
         }
 
-        // 8. Serve Interactive Testbench UI on root (or JSON on /api)
+        // 8. HLS M3U8 Stream Proxy: /api/proxy/m3u8?url=...
+        if (pathname === "/api/proxy/m3u8") {
+            const target = query.url;
+            if (!target) return sendError(res, 400, "Missing url query parameter");
+
+            try {
+                const upstream = await fetch(target, {
+                    headers: {
+                        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+                        "Referer": "https://megaplay.buzz/",
+                        "Origin": "https://megaplay.buzz"
+                    }
+                });
+
+                if (!upstream.ok) {
+                    res.writeHead(upstream.status, { ...CORS_HEADERS, "Content-Type": "text/plain" });
+                    return res.end(`Upstream m3u8 error: ${upstream.status} ${upstream.statusText}`);
+                }
+
+                const text = await upstream.text();
+                const rewritten = text.split('\n').map(line => {
+                    const trimmed = line.trim();
+                    if (!trimmed) return line;
+                    if (trimmed.startsWith('#')) {
+                        return line.replace(/URI=["']([^"']+)["']/g, (m, u) => {
+                            const resolved = new URL(u, target).toString();
+                            return `URI="/api/proxy/m3u8?url=${encodeURIComponent(resolved)}"`;
+                        });
+                    }
+                    const resolved = new URL(trimmed, target).toString();
+                    if (resolved.includes('.m3u8') || resolved.includes('master') || resolved.includes('playlist')) {
+                        return `/api/proxy/m3u8?url=${encodeURIComponent(resolved)}`;
+                    }
+                    return resolved;
+                }).join('\n');
+
+                res.writeHead(200, {
+                    "Access-Control-Allow-Origin": "*",
+                    "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
+                    "Content-Type": "application/vnd.apple.mpegurl",
+                    "Cache-Control": "public, max-age=600"
+                });
+                return res.end(rewritten);
+            } catch (err) {
+                res.writeHead(502, { ...CORS_HEADERS, "Content-Type": "text/plain" });
+                return res.end(`Proxy m3u8 error: ${err.message}`);
+            }
+        }
+
+        // 9. VTT Subtitle Proxy: /api/proxy/vtt?url=...
+        if (pathname === "/api/proxy/vtt") {
+            const target = query.url;
+            if (!target) return sendError(res, 400, "Missing url query parameter");
+
+            try {
+                const upstream = await fetch(target, {
+                    headers: {
+                        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+                        "Referer": "https://megaplay.buzz/",
+                        "Origin": "https://megaplay.buzz"
+                    }
+                });
+
+                if (!upstream.ok) {
+                    res.writeHead(upstream.status, {
+                        "Access-Control-Allow-Origin": "*",
+                        "Content-Type": "text/plain"
+                    });
+                    return res.end(`Subtitle fetch error: ${upstream.status}`);
+                }
+
+                const vttText = await upstream.text();
+                res.writeHead(200, {
+                    "Access-Control-Allow-Origin": "*",
+                    "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
+                    "Content-Type": "text/vtt; charset=utf-8",
+                    "Cache-Control": "public, max-age=86400"
+                });
+                return res.end(vttText);
+            } catch (err) {
+                res.writeHead(502, {
+                    "Access-Control-Allow-Origin": "*",
+                    "Content-Type": "text/plain"
+                });
+                return res.end(`Proxy vtt error: ${err.message}`);
+            }
+        }
+
+        // 10. Serve Interactive Testbench UI on root (or JSON on /api)
         if (pathname === "/") {
             const indexPath = path.join(__dirname, 'public', 'index.html');
             if (fs.existsSync(indexPath)) {

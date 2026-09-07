@@ -762,8 +762,9 @@
                 statusBox.innerText = `Stream Ready (${dur}ms)`;
                 statusBox.style.color = '#10b981';
 
-                // Play in ArtPlayer
-                playStream(data.stream_url, data.subtitles, data.intro, data.outro);
+                // Play in ArtPlayer via zero-403 stream proxy
+                const streamUrlToPlay = data.proxy_stream_url || data.stream_url;
+                playStream(streamUrlToPlay, data.subtitles, data.intro, data.outro);
 
                 // Setup Skip buttons
                 const skipBar = document.getElementById('skip-bar');
@@ -825,7 +826,7 @@
                 subtitleSettings = subtitles.map((s, idx) => ({
                     default: s === defaultSub,
                     html: s.label || `Subtitle ${idx + 1}`,
-                    url: s.url
+                    url: s.proxy_url || s.url
                 }));
             }
 
@@ -938,7 +939,7 @@
                 hotkey: true,
                 lang: 'en',
                 subtitle: defaultSub ? {
-                    url: defaultSub.url,
+                    url: defaultSub.proxy_url || defaultSub.url,
                     type: 'vtt',
                     style: {
                         color: '#ffffff',
