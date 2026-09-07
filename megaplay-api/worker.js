@@ -233,6 +233,109 @@ export default {
                 }
             }
 
+            // 5b. Anigo2 Compatible Watch Route: /api/watch/:id/:lang/:ep
+            else if (pathname.startsWith("/api/watch")) {
+                const parts = pathname.replace('/api/watch', '').split('/').filter(Boolean);
+                const id = parts[0] || searchParams.get("id");
+                const lang = (parts[1] || searchParams.get("lang") || "sub").toLowerCase();
+                const ep = parseInt(parts[2] || searchParams.get("ep") || "1");
+
+                if (!id) return errorResponse("Missing anime ID in /api/watch/:id/:lang/:ep", 400);
+
+                const cacheKey = `watch:anigo:v2:${id}:${ep}:${lang}`;
+                let streamData = null;
+                let cacheStatus = "MISS";
+
+                if (env.ANIKO_CACHE) {
+                    try {
+                        streamData = await env.ANIKO_CACHE.get(cacheKey, "json");
+                        if (streamData) cacheStatus = "KV-HIT";
+                    } catch {}
+                }
+
+                if (!streamData) {
+                    let resolved = null;
+                    const num = parseInt(id);
+                    if (num && num > 60000) {
+                        resolved = await resolveFromAnilist(id, ep, lang);
+                    } else {
+                        try {
+                            resolved = await resolveFromMal(id, ep, lang);
+                        } catch {
+                            resolved = await resolveFromAnilist(id, ep, lang);
+                        }
+                    }
+
+                    if (!resolved || !resolved.success) {
+                        return errorResponse(resolved?.error || "Failed to resolve stream for Anigo2", 404);
+                    }
+
+                    const withProxies = attachProxyUrls(resolved, origin);
+                    const rawStreamUrl = resolved.stream_url || "";
+                    const mainProxy = withProxies.proxy_stream_url || `${origin}/api/proxy/m3u8?url=${encodeURIComponent(rawStreamUrl)}`;
+
+                    // Generate multi-CDN streams so Anigo2 shows the Server/CDN selector
+                    const streams = [
+                        {
+                            "url": mainProxy,
+                            "type": "hls",
+                            "server": "Mega CDN (Global)",
+                            "priority": 1
+                        }
+                    ];
+
+                    // Tokyo CDN (Asia)
+                    let tokyoRaw = rawStreamUrl;
+                    if (rawStreamUrl.includes('norami.top')) tokyoRaw = rawStreamUrl.replace('norami.top', 'shiora.top');
+                    else if (rawStreamUrl.includes('mikora.top')) tokyoRaw = rawStreamUrl.replace('mikora.top', 'shiora.top');
+                    streams.push({
+                        "url": `${origin}/api/proxy/m3u8?url=${encodeURIComponent(tokyoRaw)}`,
+                        "type": "hls",
+                        "server": "Tokyo CDN (Asia)",
+                        "priority": 2
+                    });
+
+                    // Backup CDN (Ultra)
+                    let backupRaw = rawStreamUrl;
+                    if (rawStreamUrl.includes('norami.top')) backupRaw = rawStreamUrl.replace('norami.top', 'mikora.top');
+                    else if (rawStreamUrl.includes('shiora.top')) backupRaw = rawStreamUrl.replace('shiora.top', 'mikora.top');
+                    streams.push({
+                        "url": `${origin}/api/proxy/m3u8?url=${encodeURIComponent(backupRaw)}`,
+                        "type": "hls",
+                        "server": "Backup CDN (Ultra)",
+                        "priority": 3
+                    });
+
+                    streamData = {
+                        "aniko": {
+                            "streams": streams,
+                            "subtitles": (withProxies.subtitles || []).map(sub => ({
+                                "file": sub.proxy_url || sub.url,
+                                "label": sub.label || "English",
+                                "kind": "captions",
+                                "default": !!sub.default,
+                                "language": sub.lang || "en",
+                                "format": "vtt"
+                            })),
+                            "intro": withProxies.intro || { "start": 0, "end": 0 },
+                            "outro": withProxies.outro || { "start": 0, "end": 0 },
+                            "provider": "aniko-backend-edge"
+                        }
+                    };
+
+                    if (env.ANIKO_CACHE && ctx?.waitUntil) {
+                        ctx.waitUntil(
+                            env.ANIKO_CACHE.put(cacheKey, JSON.stringify(streamData), { expirationTtl: 43200 }).catch(() => {})
+                        );
+                    }
+                }
+
+                response = jsonResponse(streamData, 200, {
+                    "X-Cache": cacheStatus,
+                    "X-Colo": colo
+                });
+            }
+
             // 6. Stream by Catalog ID: /api/stream/catalog/:epId/:track
             else if (pathname.startsWith("/api/stream/catalog")) {
                 const parts = pathname.replace('/api/stream/catalog', '').split('/').filter(Boolean);

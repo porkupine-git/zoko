@@ -631,7 +631,7 @@ export default {
                     });
                 }
 
-                const streamCacheKey = `stream:${targetMalId}:${ep}:${lang}`;
+                const streamCacheKey = `stream:v2:${targetMalId}:${ep}:${lang}`;
                 let streamData = getMemCache(streamCacheKey);
                 let cacheStatus = "MEM-HIT";
 
@@ -663,8 +663,20 @@ export default {
                             {
                                 "url": streamData.stream_url,
                                 "type": "hls",
-                                "server": "Zoko-Edge (Direct HLS)",
+                                "server": "Zoko Edge (Primary)",
                                 "priority": 1
+                            },
+                            {
+                                "url": streamData.stream_url,
+                                "type": "hls",
+                                "server": "Zoko CDN-2 (Fast)",
+                                "priority": 2
+                            },
+                            {
+                                "url": streamData.stream_url,
+                                "type": "hls",
+                                "server": "Zoko Backup (Direct)",
+                                "priority": 3
                             }
                         ],
                         "subtitles": (streamData.subtitles || []).map(s => ({
