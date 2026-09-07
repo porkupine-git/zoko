@@ -264,7 +264,8 @@ async function extractZokoStream({ malId, anilistId, title, episode = 1, track =
             }
         };
 
-        setCached(cacheKey, result, 180000);
+        // Cache stream payload for 1 hour to prevent unnecessary load on upstream
+        setCached(cacheKey, result, 3600000);
         return result;
     });
 }
