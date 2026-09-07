@@ -1,0 +1,11 @@
+version: '3.8'
+
+services:
+  zoko-engine:
+    build: .
+    container_name: zoko_anime_engine
+    restart: unless-stopped
+    ports:
+      - "${PORT:-3000}:${PORT:-3000}"
+    env_file:
+      - .env

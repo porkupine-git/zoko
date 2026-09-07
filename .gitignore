@@ -1,0 +1,26 @@
+# Dependencies
+node_modules/
+
+# Environment Variables
+.env
+.env.local
+.env.*.local
+
+# Internal Scratch & Deployment Scripts (contains credentials)
+scratch/
+
+# Database WAL & temporary lockfiles
+data/*.db-wal
+data/*.db-shm
+data/*.db-journal
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# OS & Editor files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

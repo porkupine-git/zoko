@@ -1,0 +1,605 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Zoko Universal Anime API - Developer Portal & Live Playground</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23e50914'><path d='M8 5v14l11-7z'/></svg>">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap">
+  <script src="https://cdn.jsdelivr.net/npm/artplayer@5.1.7/dist/artplayer.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
+  <script src="/zoko-api.js"></script>
+
+  <style>
+    :root {
+      --bg-base: #080a0f;
+      --bg-card: #0e1219;
+      --bg-hover: #141a24;
+      --border: #1c2433;
+      --text: #ffffff;
+      --text-muted: #8b9bb4;
+      --accent: #e50914;
+      --accent-hover: #f40612;
+      --blue: #3b82f6;
+      --green: #10b981;
+      --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      --font-mono: 'JetBrains Mono', monospace;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg-base);
+      color: var(--text);
+      font-family: var(--font-sans);
+      line-height: 1.6;
+      padding: 0;
+    }
+
+    /* Header */
+    header {
+      background: var(--bg-card);
+      border-bottom: 1px solid var(--border);
+      padding: 18px 32px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      text-decoration: none;
+      color: inherit;
+    }
+    .badge {
+      background: var(--accent);
+      color: #fff;
+      font-weight: 700;
+      font-size: 11px;
+      padding: 3px 8px;
+      border-radius: 3px;
+      letter-spacing: 0.5px;
+    }
+    .nav-links {
+      display: flex;
+      gap: 16px;
+    }
+    .nav-links a {
+      color: var(--text-muted);
+      text-decoration: none;
+      font-size: 14px;
+      font-weight: 500;
+      transition: color 0.15s;
+    }
+    .nav-links a:hover { color: #fff; }
+
+    /* Container */
+    .container {
+      max-width: 1300px;
+      margin: 0 auto;
+      padding: 36px 24px;
+    }
+
+    .hero {
+      margin-bottom: 40px;
+      text-align: center;
+    }
+    .hero h1 {
+      font-size: 38px;
+      font-weight: 800;
+      margin-bottom: 12px;
+      letter-spacing: -0.5px;
+    }
+    .hero p {
+      color: var(--text-muted);
+      font-size: 16px;
+      max-width: 780px;
+      margin: 0 auto;
+    }
+
+    /* Grid Layout */
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+      margin-bottom: 40px;
+    }
+    @media (max-width: 960px) {
+      .grid { grid-template-columns: 1fr; }
+    }
+
+    .card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 24px;
+    }
+    .card-title {
+      font-size: 18px;
+      font-weight: 700;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    /* Form Inputs */
+    .input-group {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 16px;
+    }
+    input, select {
+      flex: 1;
+      background: var(--bg-hover);
+      border: 1px solid var(--border);
+      color: #fff;
+      padding: 12px 14px;
+      border-radius: 4px;
+      font-size: 14px;
+      font-family: inherit;
+      outline: none;
+      transition: border 0.15s;
+    }
+    input:focus, select:focus {
+      border-color: var(--blue);
+    }
+    button {
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      padding: 12px 20px;
+      border-radius: 4px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    button:hover { background: var(--accent-hover); }
+    button.secondary {
+      background: var(--bg-hover);
+      border: 1px solid var(--border);
+      color: var(--text);
+    }
+    button.secondary:hover { background: var(--border); }
+
+    /* Code Block */
+    .code-container {
+      position: relative;
+      margin-top: 14px;
+    }
+    pre {
+      background: #05070a;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 16px;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      color: #7dd3fc;
+      overflow-x: auto;
+      max-height: 280px;
+    }
+    .copy-btn {
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      font-size: 11px;
+      padding: 4px 10px;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+    }
+
+    /* Video Player Container */
+    #artplayer-container {
+      width: 100%;
+      height: 380px;
+      background: #000;
+      border-radius: 4px;
+      overflow: hidden;
+      margin-top: 16px;
+    }
+
+    /* Tabs */
+    .tab-bar {
+      display: flex;
+      gap: 8px;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 12px;
+      margin-bottom: 16px;
+    }
+    .tab-btn {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      font-size: 13px;
+      font-weight: 600;
+      padding: 6px 12px;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    .tab-btn.active {
+      background: var(--bg-hover);
+      color: #fff;
+    }
+
+    /* Endpoint Table */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 16px;
+      font-size: 13px;
+    }
+    th, td {
+      padding: 12px 14px;
+      text-align: left;
+      border-bottom: 1px solid var(--border);
+    }
+    th {
+      background: var(--bg-hover);
+      color: var(--text-muted);
+      font-weight: 600;
+    }
+    .method-badge {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: 700;
+      padding: 3px 6px;
+      border-radius: 3px;
+      background: rgba(16, 185, 129, 0.15);
+      color: var(--green);
+      border: 1px solid rgba(16, 185, 129, 0.3);
+    }
+    .path-mono {
+      font-family: var(--font-mono);
+      color: #e2e8f0;
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <a href="/" class="brand">
+      <span style="font-weight: 800; font-size: 20px; letter-spacing: -0.5px;">ZOKO<span style="color:var(--accent);">ANIME</span></span>
+      <span class="badge">API v4.1</span>
+    </a>
+    <div class="nav-links">
+      <a href="/api" target="_blank">JSON Index</a>
+      <a href="/docs" target="_blank">Swagger Specs</a>
+      <a href="/zoko-api.js" target="_blank">Client SDK</a>
+      <a href="/">Main Web App</a>
+    </div>
+  </header>
+
+  <div class="container">
+    <div class="hero">
+      <h1>Universal Anime Scraper & Streaming API</h1>
+      <p>A plug-and-play REST API built with zero CORS limitations. Stream anime in <strong>React, Next.js, Vue, Svelte, Flutter, React Native, iOS, or Android</strong> with 1 line of code.</p>
+    </div>
+
+    <!-- Playground Section -->
+    <div class="grid">
+      
+      <!-- Left: Interactive API Tester -->
+      <div class="card">
+        <div class="card-title">
+          <span>🧪 Live Interactive API Tester</span>
+          <span style="font-size:12px; font-weight:normal; color:var(--green);">● Live & Ready</span>
+        </div>
+
+        <label style="font-size:12px; color:var(--text-muted); display:block; margin-bottom:6px;">Search Anime or Enter ID:</label>
+        <div class="input-group">
+          <input type="text" id="test-query" value="One Piece" placeholder="Anime title or ID (e.g. 21, Naruto)...">
+          <button id="btn-search">Search</button>
+        </div>
+
+        <div class="input-group">
+          <select id="select-anime" style="flex: 2;">
+            <option value="21">One Piece (ID: 21)</option>
+            <option value="16498">Attack on Titan (ID: 16498)</option>
+            <option value="20">Naruto (ID: 20)</option>
+            <option value="151807">Solo Leveling (ID: 151807)</option>
+          </select>
+          <input type="number" id="test-ep" value="1" min="1" max="2000" style="flex:1;" placeholder="Ep">
+          <select id="test-track" style="flex: 1;">
+            <option value="sub">SUB</option>
+            <option value="dub">DUB</option>
+          </select>
+          <button id="btn-stream">Fetch Stream</button>
+        </div>
+
+        <!-- Video Player -->
+        <div id="artplayer-container"></div>
+
+        <!-- Live Response JSON -->
+        <div class="code-container">
+          <button class="copy-btn" onclick="copyJson()">Copy JSON</button>
+          <pre id="json-output">// Click "Fetch Stream" or "Search" to view live JSON response here...</pre>
+        </div>
+      </div>
+
+      <!-- Right: Code Snippets & Drop-in Examples -->
+      <div class="card">
+        <div class="card-title">
+          <span>⚡ 1-Click Code Snippets for Any Frontend</span>
+        </div>
+
+        <div class="tab-bar">
+          <button class="tab-btn active" onclick="switchSnippet('fetch')">Vanilla JS</button>
+          <button class="tab-btn" onclick="switchSnippet('react')">React / Next.js</button>
+          <button class="tab-btn" onclick="switchSnippet('sdk')">Zoko SDK</button>
+          <button class="tab-btn" onclick="switchSnippet('iframe')">Iframe Embed</button>
+          <button class="tab-btn" onclick="switchSnippet('curl')">cURL</button>
+        </div>
+
+        <div class="code-container" style="margin-top:0;">
+          <button class="copy-btn" onclick="copySnippet()">Copy Code</button>
+          <pre id="snippet-code" style="max-height: 440px;"></pre>
+        </div>
+
+        <div style="margin-top:20px; padding:14px; background:var(--bg-hover); border-radius:4px; border:1px solid var(--border);">
+          <div style="font-size:13px; font-weight:700; margin-bottom:4px; color:#fff;">💡 Universal CORS Support</div>
+          <p style="font-size:12px; color:var(--text-muted); line-height:1.5;">
+            Every endpoint automatically serves <code style="color:#e2e8f0; font-family:var(--font-mono);">Access-Control-Allow-Origin: *</code> with HTTP Range (206) video chunk piping. Your frontends running on <code style="color:#e2e8f0; font-family:var(--font-mono);">localhost:3000</code>, <code style="color:#e2e8f0; font-family:var(--font-mono);">vercel.app</code>, or native mobile apps will never face CORS blocks.
+          </p>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- API Reference Table -->
+    <div class="card">
+      <div class="card-title">
+        <span>📋 Complete REST API Endpoint Directory</span>
+      </div>
+
+      <table>
+        <thead>
+          <tr>
+            <th style="width: 90px;">Method</th>
+            <th>Route</th>
+            <th>Description</th>
+            <th>Sample Request</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><span class="method-badge">GET</span></td>
+            <td class="path-mono">/api/search?q={title}</td>
+            <td>Search 11,449+ anime titles (0ms SQLite NVMe cache)</td>
+            <td><a href="/api/search?q=naruto" target="_blank" style="color:var(--blue);">/api/search?q=naruto</a></td>
+          </tr>
+          <tr>
+            <td><span class="method-badge">GET</span></td>
+            <td class="path-mono">/api/anime/{id}</td>
+            <td>Full metadata, synopsis, rating, banner, and episodes list</td>
+            <td><a href="/api/anime/21" target="_blank" style="color:var(--blue);">/api/anime/21</a></td>
+          </tr>
+          <tr>
+            <td><span class="method-badge">GET</span></td>
+            <td class="path-mono">/api/episodes/{id}?all=true</td>
+            <td>Complete episode catalog with individual titles & thumbnails</td>
+            <td><a href="/api/episodes/21?all=true" target="_blank" style="color:var(--blue);">/api/episodes/21?all=true</a></td>
+          </tr>
+          <tr>
+            <td><span class="method-badge">GET</span></td>
+            <td class="path-mono">/api/stream?id={id}&ep={ep}&track={sub|dub}</td>
+            <td>Universal HLS master stream, VTT subtitles, and skip markers</td>
+            <td><a href="/api/stream?id=21&ep=1&track=sub" target="_blank" style="color:var(--blue);">/api/stream?id=21&ep=1&track=sub</a></td>
+          </tr>
+          <tr>
+            <td><span class="method-badge">GET</span></td>
+            <td class="path-mono">/api/stream/{id}-{ep}</td>
+            <td>Shorthand stream route returning dual sub & dub server sources</td>
+            <td><a href="/api/stream/21-1" target="_blank" style="color:var(--blue);">/api/stream/21-1</a></td>
+          </tr>
+          <tr>
+            <td><span class="method-badge">GET</span></td>
+            <td class="path-mono">/embed?id={id}&ep={ep}</td>
+            <td>Responsive ArtPlayer HTML player for iframe embeds</td>
+            <td><a href="/embed?id=21&ep=1" target="_blank" style="color:var(--blue);">/embed?id=21&ep=1</a></td>
+          </tr>
+          <tr>
+            <td><span class="method-badge">GET</span></td>
+            <td class="path-mono">/api/home</td>
+            <td>Spotlight Hero, Trending Now, Popular This Season, Top Rated</td>
+            <td><a href="/api/home" target="_blank" style="color:var(--blue);">/api/home</a></td>
+          </tr>
+          <tr>
+            <td><span class="method-badge">GET</span></td>
+            <td class="path-mono">/api/system/status</td>
+            <td>Live VPS hardware specs, CPU/RAM telemetry, and SQLite metrics</td>
+            <td><a href="/api/system/status" target="_blank" style="color:var(--blue);">/api/system/status</a></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+  </div>
+
+  <script>
+    const origin = window.location.origin;
+    const client = new ZokoClient(origin);
+    let player = null;
+
+    const snippets = {
+      fetch: `// 1. Search Anime
+const searchRes = await fetch('${origin}/api/search?q=Naruto');
+const { results } = await searchRes.json();
+console.log(results[0].title); // "Naruto"
+
+// 2. Fetch Video Stream for Hls.js / Video.js / ArtPlayer
+const streamRes = await fetch('${origin}/api/stream?id=' + results[0].id + '&ep=1&track=sub');
+const streamData = await streamRes.json();
+
+console.log('Master HLS Playlist:', streamData.stream_url);
+console.log('Subtitles:', streamData.subtitles);
+console.log('Skip Intro:', streamData.skip.intro);`,
+
+      react: `import { useEffect, useState } from 'react';
+import Hls from 'hls.js';
+
+export function AnimePlayer({ animeId = 21, episode = 1 }) {
+  const [stream, setStream] = useState(null);
+
+  useEffect(() => {
+    async function loadStream() {
+      const res = await fetch(\`${origin}/api/stream?id=\${animeId}&ep=\${episode}&track=sub\`);
+      const data = await res.json();
+      setStream(data);
+
+      const video = document.getElementById('my-video');
+      if (Hls.isSupported()) {
+        const hls = new Hls();
+        hls.loadSource(data.stream_url);
+        hls.attachMedia(video);
+      } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+        video.src = data.stream_url;
+      }
+    }
+    loadStream();
+  }, [animeId, episode]);
+
+  return (
+    <div>
+      <video id="my-video" controls style={{ width: '100%', borderRadius: '8px' }} />
+      {stream?.skip?.intro && (
+        <p>Intro Skip: {stream.skip.intro.start}s - {stream.skip.intro.end}s</p>
+      )}
+    </div>
+  );
+}`,
+
+      sdk: `<!-- Include SDK in your HTML or import ZokoClient -->
+<script src="${origin}/zoko-api.js"><\\/script>
+
+<script>
+  const zoko = new ZokoClient('${origin}');
+
+  async function start() {
+    // 1. Search
+    const search = await zoko.search('Solo Leveling');
+    
+    // 2. Details & 1,180 Episodes
+    const anime = await zoko.getAnime(search.results[0].id);
+
+    // 3. Stream
+    const stream = await zoko.getStream({ id: anime.id, ep: 1, track: 'sub' });
+    
+    // 4. Play with native video element
+    const video = document.querySelector('video');
+    zoko.attachVideo(video, stream.stream_url);
+  }
+  start();
+<\\/script>`,
+
+      iframe: `<!-- Drop-in zero-code iframe player for any website or blog -->
+<iframe
+  src="${origin}/embed?id=21&ep=1&track=sub&autoplay=0&color=e50914"
+  width="100%"
+  height="500"
+  frameborder="0"
+  allow="autoplay; fullscreen; picture-in-picture"
+  allowfullscreen
+  style="border-radius: 8px; border: 1px solid #1c2433;"
+></iframe>`,
+
+      curl: `# 1. Search anime catalog
+curl "${origin}/api/search?q=attack%20on%20titan"
+
+# 2. Get full details and episodes
+curl "${origin}/api/anime/16498"
+
+# 3. Extract direct HLS stream link & subtitles
+curl "${origin}/api/stream?id=16498&ep=1&track=sub"
+
+# 4. Check live VPS hardware & SQLite stats
+curl "${origin}/api/system/status"`
+    };
+
+    function switchSnippet(type) {
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      event.target.classList.add('active');
+      document.getElementById('snippet-code').textContent = snippets[type];
+    }
+    document.getElementById('snippet-code').textContent = snippets.fetch;
+
+    function copySnippet() {
+      const code = document.getElementById('snippet-code').textContent;
+      navigator.clipboard.writeText(code);
+      alert('Code snippet copied to clipboard!');
+    }
+
+    function copyJson() {
+      const code = document.getElementById('json-output').textContent;
+      navigator.clipboard.writeText(code);
+      alert('JSON response copied to clipboard!');
+    }
+
+    // Interactive Stream Testing
+    document.getElementById('btn-stream').addEventListener('click', async () => {
+      const id = document.getElementById('select-anime').value;
+      const ep = document.getElementById('test-ep').value || 1;
+      const track = document.getElementById('test-track').value || 'sub';
+
+      document.getElementById('json-output').textContent = 'Loading stream from Zoko Engine...';
+      try {
+        const streamData = await client.getStream({ id, ep, track });
+        document.getElementById('json-output').textContent = JSON.stringify(streamData, null, 2);
+
+        // Mount Artplayer
+        if (player) player.destroy();
+        player = new Artplayer({
+          container: '#artplayer-container',
+          url: streamData.stream_url,
+          type: 'm3u8',
+          autoplay: false,
+          fullscreen: true,
+          theme: '#e50914',
+          customType: {
+            m3u8: function (video, url, art) {
+              if (Hls.isSupported()) {
+                const hls = new Hls();
+                hls.loadSource(url);
+                hls.attachMedia(video);
+                art.hls = hls;
+                art.on('destroy', () => hls.destroy());
+              } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+                video.src = url;
+              }
+            }
+          }
+        });
+      } catch (err) {
+        document.getElementById('json-output').textContent = JSON.stringify({ error: err.message }, null, 2);
+      }
+    });
+
+    // Search button
+    document.getElementById('btn-search').addEventListener('click', async () => {
+      const q = document.getElementById('test-query').value.trim();
+      if (!q) return;
+      document.getElementById('json-output').textContent = `Searching "${q}"...`;
+      try {
+        const search = await client.search(q);
+        document.getElementById('json-output').textContent = JSON.stringify(search, null, 2);
+
+        if (search.results && search.results.length > 0) {
+          const select = document.getElementById('select-anime');
+          select.innerHTML = '';
+          search.results.forEach(r => {
+            const opt = document.createElement('option');
+            opt.value = r.id;
+            opt.textContent = `${r.title} (ID: ${r.id})`;
+            select.appendChild(opt);
+          });
+        }
+      } catch (err) {
+        document.getElementById('json-output').textContent = JSON.stringify({ error: err.message }, null, 2);
+      }
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ZOKO ANIME - Enterprise Anime Streaming & Catalog</title>
+    <meta name="description" content="Sharp, high-throughput anime streaming application powered by AniList metadata and reverse-engineered kernel-piped HLS video playback with ArtPlayer.">
+    
+    <!-- Typography & Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    
+    <!-- Video Engine: Hls.js & Artplayer v5 -->
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/artplayer@5.1.7/dist/artplayer.js"></script>
+    
+    <!-- Sharp Enterprise Stylesheet (ZERO GLOW) -->
+    <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+
+    <!-- Global Header -->
+    <header class="site-header">
+        <div class="header-left">
+            <a href="#home" class="brand-logo" id="logo-home-link">
+                <span class="brand-badge">Z</span>
+                <span>ZOKO</span>
+                <span class="brand-sub">ENGINE</span>
+            </a>
+            <nav class="nav-links">
+                <button class="nav-btn active" id="nav-home">Home</button>
+                <button class="nav-btn" id="nav-browse">Browse</button>
+                <button class="nav-btn" id="nav-watch">Watch</button>
+                <button class="nav-btn" id="nav-system">VPS Telemetry</button>
+            </nav>
+        </div>
+
+        <!-- Global Fast Autocomplete Search -->
+        <div class="header-center">
+            <div class="search-wrapper">
+                <svg class="search-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                <input type="text" class="search-input" id="global-search-input" placeholder="Search anime catalog..." autocomplete="off">
+                <span class="search-shortcut">/</span>
+                
+                <div class="search-dropdown" id="search-dropdown"></div>
+            </div>
+        </div>
+
+        <div class="header-right">
+            <button class="system-status-pill clickable" id="btn-system-telemetry" title="View Detailed VPS & Database Telemetry">
+                <span class="status-dot"></span>
+                <span>VPS TELEMETRY</span>
+                <span class="pill-badge" id="header-db-badge">11,449 DB</span>
+            </button>
+            <a href="/docs" target="_blank" class="docs-link">API Docs</a>
+        </div>
+    </header>
+
+    <!-- Main Application Views -->
+    <main class="app-content">
+
+        <!-- ================= VIEW 1: HOME PAGE ================= -->
+        <section id="view-home" class="app-view active">
+            <!-- Spotlight Hero Carousel -->
+            <div class="hero-spotlight">
+                <div id="hero-carousel" style="width: 100%; height: 100%; position: relative;"></div>
+                
+                <!-- Controls -->
+                <div class="hero-controls">
+                    <button class="hero-nav-btn" onclick="window.heroNav(-1)">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg>
+                    </button>
+                    <div class="hero-indicators" id="hero-indicators"></div>
+                    <button class="hero-nav-btn" onclick="window.heroNav(1)">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Home Content Rows -->
+            <div class="container">
+                <!-- Row 1: Trending Now -->
+                <section class="home-section">
+                    <div class="section-header">
+                        <div>
+                            <h2 class="section-title">TRENDING NOW</h2>
+                            <p class="section-sub">Highest engagement anime right now</p>
+                        </div>
+                        <button class="view-all-btn" onclick="window.ZokoApp.navigateTo('browse', {sort: 'TRENDING_DESC'})">View Catalog</button>
+                    </div>
+                    <div class="anime-grid" id="trending-grid"></div>
+                </section>
+
+                <!-- Row 2: Popular This Season -->
+                <section class="home-section">
+                    <div class="section-header">
+                        <div>
+                            <h2 class="section-title">POPULAR THIS SEASON</h2>
+                            <p class="section-sub">Fan favorites airing this anime season</p>
+                        </div>
+                        <button class="view-all-btn" onclick="window.ZokoApp.navigateTo('browse', {sort: 'POPULARITY_DESC'})">View All</button>
+                    </div>
+                    <div class="anime-grid" id="popular-grid"></div>
+                </section>
+
+                <!-- Row 3: Top Rated Masterpieces -->
+                <section class="home-section" style="padding-bottom: 4rem;">
+                    <div class="section-header">
+                        <div>
+                            <h2 class="section-title">ALL-TIME TOP RATED</h2>
+                            <p class="section-sub">Masterpiece anime critically acclaimed across AniList</p>
+                        </div>
+                        <button class="view-all-btn" onclick="window.ZokoApp.navigateTo('browse', {sort: 'SCORE_DESC'})">View All</button>
+                    </div>
+                    <div class="anime-grid" id="toprated-grid"></div>
+                </section>
+            </div>
+        </section>
+
+        <!-- ================= VIEW 2: BROWSE PAGE ================= -->
+        <section id="view-browse" class="app-view">
+            <div class="container browse-container">
+                <!-- Filter Toolbar -->
+                <div class="browse-toolbar">
+                    <div class="filter-row">
+                        <div class="filter-group" style="flex: 1; min-width: 240px;">
+                            <input type="text" class="search-input" id="browse-search-input" placeholder="Search by title, character, or studio...">
+                        </div>
+                        <div class="filter-group">
+                            <span class="filter-label">Format:</span>
+                            <select class="filter-select" id="filter-format">
+                                <option value="All">All Formats</option>
+                                <option value="TV">TV Series</option>
+                                <option value="MOVIE">Movie</option>
+                                <option value="OVA">OVA</option>
+                                <option value="SPECIAL">Special</option>
+                            </select>
+                        </div>
+                        <div class="filter-group">
+                            <span class="filter-label">Sort By:</span>
+                            <select class="filter-select" id="filter-sort">
+                                <option value="TRENDING_DESC">Trending</option>
+                                <option value="SCORE_DESC">Highest Score</option>
+                                <option value="POPULARITY_DESC">Most Popular</option>
+                                <option value="START_DATE_DESC">Newest Added</option>
+                                <option value="TITLE_ROMAJI">Title (A-Z)</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Genre Chips -->
+                    <div class="genre-chips-wrap" id="genre-chips-container"></div>
+                </div>
+
+                <!-- Results Counter -->
+                <div class="browse-results-bar">
+                    <div class="results-count" id="browse-count">Loading catalog...</div>
+                </div>
+
+                <!-- Catalog Grid -->
+                <div class="anime-grid" id="browse-grid"></div>
+
+                <!-- Pagination Bar -->
+                <div class="pagination-wrap">
+                    <button class="page-btn" id="btn-prev-page" disabled>Previous</button>
+                    <span class="page-info" id="page-info-display">Page 1 of 1</span>
+                    <button class="page-btn" id="btn-next-page">Next</button>
+                </div>
+            </div>
+        </section>
+
+        <!-- ================= VIEW 3: WATCH CINEMA PAGE ================= -->
+        <section id="view-watch" class="app-view">
+            <div class="container watch-container">
+                <div class="watch-cinema-layout">
+                    
+                    <!-- Left: Player & Episode Control Bar -->
+                    <div class="player-column">
+                        <div class="player-wrapper">
+                            <div id="artplayer-container"></div>
+                        </div>
+
+                        <!-- Active Episode Control Bar -->
+                        <div class="stream-control-bar">
+                            <div class="current-ep-info">
+                                <h2 class="current-anime-title" id="current-anime-title">Select Anime</h2>
+                                <div class="current-ep-badge">
+                                    <span id="current-ep-title">Episode 1</span>
+                                </div>
+                            </div>
+
+                            <div class="ep-nav-controls">
+                                <button class="ep-step-btn" id="btn-prev-ep">
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="19 20 9 12 19 4 19 20"/><line x1="5" y1="19" x2="5" y2="5"/></svg>
+                                    Prev Ep
+                                </button>
+                                <button class="ep-step-btn" id="btn-next-ep">
+                                    Next Ep
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 4 15 12 5 20 5 4"/><line x1="19" y1="5" x2="19" y2="19"/></svg>
+                                </button>
+
+                                <div class="audio-toggle-wrap">
+                                    <button class="audio-toggle-btn active" id="btn-audio-sub">SUB</button>
+                                    <button class="audio-toggle-btn" id="btn-audio-dub">DUB</button>
+                                </div>
+
+                                <div class="skip-toggle-wrap active" id="skip-intro-toggle" title="Auto skip intro and outro using stream jump timestamps">
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="13 17 18 12 13 7"/><polyline points="6 17 11 12 6 7"/></svg>
+                                    Auto Skip
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Anime Metadata & Details Panel -->
+                        <div class="watch-details-section">
+                            <img class="watch-poster-thumb" id="watch-poster-thumb" src="" alt="Poster" onerror="this.style.display='none'">
+                            <div class="watch-details-content">
+                                <h1 class="watch-anime-title" id="watch-details-title">Anime Details</h1>
+                                <div class="watch-meta-row" id="watch-meta-row"></div>
+                                <p class="watch-synopsis" id="watch-synopsis-text">Loading details...</p>
+
+                                <!-- Relations & Seasons Switcher -->
+                                <div class="relations-section" id="relations-section" style="display: none;">
+                                    <div class="relations-title">Relations & Seasons</div>
+                                    <div class="relations-chips" id="relations-chips-wrap"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Right: Segmented Episode Drawer -->
+                    <div class="episodes-column">
+                        <div class="episode-drawer">
+                            <div class="drawer-header">
+                                <div class="drawer-title">Episodes</div>
+                                <span class="ep-count-pill" id="ep-count-pill">0 Episodes</span>
+                            </div>
+
+                            <!-- Range Segments (e.g. 1-50, 51-100) -->
+                            <div class="range-selector" id="ep-range-selector"></div>
+
+                            <!-- Quick Episode Filter -->
+                            <div class="ep-search-wrap">
+                                <input type="text" class="ep-search-input" id="ep-search-input" placeholder="Quick find episode # (e.g. 12)...">
+                            </div>
+
+                            <!-- Episode Scroll List -->
+                            <div class="episode-list" id="ep-list-container"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Recommendations Section ("You May Also Like") -->
+                <div class="recommendations-section" id="recommendations-section" style="display: none;">
+                    <div class="section-header">
+                        <div>
+                            <h2 class="section-title">YOU MAY ALSO LIKE</h2>
+                            <p class="section-sub">Recommendations curated based on this anime</p>
+                        </div>
+                    </div>
+                    <div class="anime-grid" id="recommendations-grid"></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ================= VIEW 4: VPS & DATABASE TELEMETRY ================= -->
+        <section id="view-system" class="app-view">
+            <div class="container telemetry-container">
+                
+                <!-- Telemetry Header Banner -->
+                <div class="telemetry-hero">
+                    <div class="telemetry-hero-left">
+                        <div class="telemetry-badge-row">
+                            <span class="pulse-indicator"></span>
+                            <span class="telemetry-tag">LIVE TELEMETRY NODE</span>
+                            <span class="telemetry-pill" id="vps-ip-pill">IP: 103.190.93.199</span>
+                            <span class="telemetry-pill" id="vps-os-pill">Ubuntu Linux</span>
+                            <span class="telemetry-pill" id="vps-node-pill">Node v22</span>
+                        </div>
+                        <h1 class="telemetry-title">VPS INFRASTRUCTURE & METADATA INTELLIGENCE</h1>
+                        <p class="telemetry-subtitle">Real-time hardware monitoring, SQLite catalog stats, and streaming proxy analytics.</p>
+                    </div>
+                    <div class="telemetry-hero-right">
+                        <div class="telemetry-refresh-controls">
+                            <span class="refresh-status" id="telemetry-refresh-indicator">Auto-refreshing (3s)</span>
+                            <button class="btn btn-secondary" id="btn-manual-refresh">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+                                <span>Refresh Now</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 4 Core Metrics Grid -->
+                <div class="telemetry-grid">
+                    
+                    <!-- 1. VPS Host & Hardware -->
+                    <div class="telemetry-card">
+                        <div class="telemetry-card-header">
+                            <div class="card-header-icon">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"></rect><rect x="2" y="14" width="20" height="8" rx="2" ry="2"></rect><line x1="6" y1="6" x2="6.01" y2="6"></line><line x1="6" y1="18" x2="6.01" y2="18"></line></svg>
+                            </div>
+                            <div>
+                                <h3 class="card-heading">VPS Host & CPU</h3>
+                                <p class="card-subheading" id="card-vps-host">y4m9tof6.clubhosty.com</p>
+                            </div>
+                        </div>
+                        <div class="telemetry-card-body">
+                            <div class="stat-row">
+                                <span class="stat-label">Processor</span>
+                                <span class="stat-value mono" id="tele-cpu-model">Loading...</span>
+                            </div>
+                            <div class="stat-row">
+                                <span class="stat-label">Cores & Architecture</span>
+                                <span class="stat-value mono" id="tele-cpu-cores">Loading...</span>
+                            </div>
+                            <div class="stat-row">
+                                <span class="stat-label">Load Average (1m, 5m, 15m)</span>
+                                <span class="stat-value mono" id="tele-load-avg">0.00, 0.00, 0.00</span>
+                            </div>
+                            <div class="stat-row">
+                                <span class="stat-label">Host System Uptime</span>
+                                <span class="stat-value mono text-green" id="tele-host-uptime">0d 0h 0m</span>
+                            </div>
+                            <div class="meter-group">
+                                <div class="meter-header">
+                                    <span>System RAM (Used / Total)</span>
+                                    <span class="mono" id="tele-ram-text">0 GB / 0 GB (0%)</span>
+                                </div>
+                                <div class="meter-track">
+                                    <div class="meter-bar" id="tele-ram-bar" style="width: 0%;"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 2. SQLite Database Intelligence -->
+                    <div class="telemetry-card highlight-card">
+                        <div class="telemetry-card-header">
+                            <div class="card-header-icon db-icon">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"></ellipse><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path></svg>
+                            </div>
+                            <div>
+                                <h3 class="card-heading">SQLite Anime Database</h3>
+                                <p class="card-subheading" id="card-db-file">zoko_meta.db (NVMe WAL Mode)</p>
+                            </div>
+                        </div>
+                        <div class="telemetry-card-body">
+                            <div class="stat-row">
+                                <span class="stat-label">Indexed Anime Stored</span>
+                                <span class="stat-value stat-giant text-accent mono" id="tele-db-anime">11,449</span>
+                            </div>
+                            <div class="stat-row">
+                                <span class="stat-label">Episodes Cached</span>
+                                <span class="stat-value mono" id="tele-db-episodes">1,315</span>
+                            </div>
+                            <div class="stat-row">
+                                <span class="stat-label">Database Disk Size</span>
+                                <span class="stat-value mono text-blue" id="tele-db-size">13.94 MB</span>
+                            </div>
+                            <div class="stat-row">
+                                <span class="stat-label">Query Latency</span>
+                                <span class="stat-value mono text-green" id="tele-db-latency">&lt; 0.1 ms (Instant)</span>
+                            </div>
+                            <div class="stat-row">
+                                <span class="stat-label">Journal Mode</span>
+                                <span class="stat-value mono" id="tele-db-journal">WAL (Write-Ahead Logging)</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 3. Express & PM2 Process Cluster -->
+                    <div class="telemetry-card">
+                        <div class="telemetry-card-header">
+                            <div class="card-header-icon">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>
+                            </div>
+                            <div>
+                                <h3 class="card-heading">Express Engine & PM2</h3>
+                                <p class="card-subheading" id="card-cluster-info">Node.js Libuv Native</p>
+                            </div>
+                        </div>
+                        <div class="telemetry-card-body">
+                            <div class="stat-row">
+                                <span class="stat-label">Worker Instance</span>
+                                <span class="stat-value mono" id="tele-process-instance">PM2 Worker #0</span>
+                            </div>
+                            <div class="stat-row">
+                                <span class="stat-label">Process Memory (RSS)</span>
+                                <span class="stat-value mono" id="tele-process-rss">0.0 MB</span>
+                            </div>
+                            <div class="stat-row">
+                                <span class="stat-label">V8 Heap Allocation</span>
+                                <span class="stat-value mono" id="tele-process-heap">0 MB / 0 MB</span>
+                            </div>
+                            <div class="stat-row">
+                                <span class="stat-label">App Process Uptime</span>
+                                <span class="stat-value mono text-green" id="tele-process-uptime">0d 0h 0m</span>
+                            </div>
+                            <div class="stat-row">
+                                <span class="stat-label">Total HTTP Requests</span>
+                                <span class="stat-value mono text-accent" id="tele-requests-total">0</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 4. Scraper & Streaming Proxy -->
+                    <div class="telemetry-card">
+                        <div class="telemetry-card-header">
+                            <div class="card-header-icon">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+                            </div>
+                            <div>
+                                <h3 class="card-heading">Streaming & Network</h3>
+                                <p class="card-subheading">Kernel Chunk Pipe</p>
+                            </div>
+                        </div>
+                        <div class="telemetry-card-body">
+                            <div class="stat-row">
+                                <span class="stat-label">Routing Priority</span>
+                                <span class="stat-value mono text-green" id="tele-routing-priority">IPv6 First (13x Fast)</span>
+                            </div>
+                            <div class="stat-row">
+                                <span class="stat-label">Upstream Scraper</span>
+                                <span class="stat-value mono text-green" id="tele-upstream-scraper">zokoanime.video</span>
+                            </div>
+                            <div class="stat-row">
+                                <span class="stat-label">AniList GraphQL API</span>
+                                <span class="stat-value mono text-green" id="tele-upstream-anilist">Connected</span>
+                            </div>
+                            <div class="stat-row">
+                                <span class="stat-label">Cache Hit Ratio</span>
+                                <span class="stat-value mono text-blue" id="tele-cache-hitrate">0%</span>
+                            </div>
+                            <div class="stat-row">
+                                <span class="stat-label">Active HLS Streams</span>
+                                <span class="stat-value mono text-accent" id="tele-active-streams">0</span>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+
+                <!-- Database Breakdown Section: Formats & Status Distribution -->
+                <div class="telemetry-breakdown-section">
+                    <div class="telemetry-split-grid">
+                        
+                        <!-- Formats Distribution -->
+                        <div class="breakdown-card">
+                            <div class="breakdown-card-header">
+                                <h3 class="breakdown-title">ANIME FORMATS STORED IN DB</h3>
+                                <span class="breakdown-total" id="tele-formats-total">11,449 Records</span>
+                            </div>
+                            <div class="breakdown-list" id="tele-formats-list">
+                                <!-- Generated by JS -->
+                            </div>
+                        </div>
+
+                        <!-- Status Distribution -->
+                        <div class="breakdown-card">
+                            <div class="breakdown-card-header">
+                                <h3 class="breakdown-title">AIRING STATUS BREAKDOWN</h3>
+                                <span class="breakdown-total">Catalog Lifecycle</span>
+                            </div>
+                            <div class="breakdown-list" id="tele-statuses-list">
+                                <!-- Generated by JS -->
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+
+                <!-- Live Direct SQLite Diagnostic Query Tester -->
+                <div class="telemetry-query-box">
+                    <div class="query-box-header">
+                        <div class="query-box-title">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="4 17 10 11 4 5"></polyline><line x1="12" y1="19" x2="20" y2="19"></line></svg>
+                            <span>INSTANT SQLITE QUERY BENCHMARK TEST</span>
+                        </div>
+                        <span class="mono text-green">0ms IN-MEMORY NVMe PIPELINE</span>
+                    </div>
+                    <div class="query-input-row">
+                        <input type="text" class="query-input" id="db-test-input" placeholder="Type anime title to query local SQLite DB (e.g. Naruto, Bleach, Attack on Titan)...">
+                        <button class="btn btn-primary" id="btn-run-db-query">Execute Query</button>
+                    </div>
+                    <div class="query-result-console" id="db-query-result" style="display: none;"></div>
+                </div>
+
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Global Toast Notifications -->
+    <div class="toast-container" id="toast-container"></div>
+
+    <!-- Footer -->
+    <footer class="site-footer">
+        <div class="container footer-content">
+            <div>
+                <span style="font-weight: 800; color: #fff;">ZOKO</span> Anime Engine &copy; 2026. Metadata synced with AniList. High-throughput video proxy via Node.js kernel stream.
+            </div>
+            <div>
+                Strict Zero-Glow Enterprise Aesthetic.
+            </div>
+        </div>
+    </footer>
+
+    <!-- Main Client Script -->
+    <script src="/app.js"></script>
+</body>
+</html>
