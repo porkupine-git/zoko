@@ -7,6 +7,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/artplayer/dist/artplayer.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
     <style>
         :root {
@@ -286,10 +287,41 @@
             box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
         }
 
-        video {
+        #artplayer-container {
             width: 100%;
             height: 100%;
-            object-fit: contain;
+            position: absolute;
+            top: 0;
+            left: 0;
+        }
+
+        .art-video-player {
+            border-radius: 12px;
+        }
+
+        .art-skip-btn {
+            background: rgba(139, 92, 246, 0.9);
+            backdrop-filter: blur(10px);
+            color: #fff;
+            border: 1px solid rgba(255, 255, 255, 0.25);
+            padding: 8px 18px;
+            border-radius: 30px;
+            font-size: 13px;
+            font-weight: 600;
+            font-family: inherit;
+            cursor: pointer;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5), 0 0 15px rgba(139, 92, 246, 0.4);
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            pointer-events: auto;
+        }
+
+        .art-skip-btn:hover {
+            background: #7c3aed;
+            transform: scale(1.05);
+            box-shadow: 0 6px 20px rgba(139, 92, 246, 0.6);
         }
 
         .player-overlay-status {
@@ -303,7 +335,9 @@
             font-size: 12px;
             font-family: 'JetBrains Mono', monospace;
             border: 1px solid var(--border-glass);
-            z-index: 10;
+            z-index: 25;
+            pointer-events: none;
+            transition: opacity 0.4s ease;
         }
 
         /* Skip Buttons Bar */
@@ -601,7 +635,7 @@
 
                 <div class="player-wrapper">
                     <div class="player-overlay-status" id="player-status">Player Standby</div>
-                    <video id="video-player" controls playsinline></video>
+                    <div id="artplayer-container"></div>
                 </div>
 
                 <!-- Intro / Outro Skip Markers -->
@@ -647,7 +681,7 @@
     </div>
 
     <script>
-        let currentHls = null;
+        let art = null;
         let lastStreamData = null;
 
         function updateIdPlaceholder() {
@@ -696,6 +730,7 @@
             btn.disabled = true;
             btn.innerText = 'Extracting Stream...';
             statusBox.innerText = 'Decrypting Stream Payload...';
+            statusBox.style.opacity = '1';
             statusBox.style.color = '#38bdf8';
 
             let endpoint = '';
@@ -727,8 +762,8 @@
                 statusBox.innerText = `Stream Ready (${dur}ms)`;
                 statusBox.style.color = '#10b981';
 
-                // Play in Hls.js
-                playStream(data.stream_url, data.subtitles);
+                // Play in ArtPlayer
+                playStream(data.stream_url, data.subtitles, data.intro, data.outro);
 
                 // Setup Skip buttons
                 const skipBar = document.getElementById('skip-bar');
@@ -747,57 +782,261 @@
             }
         }
 
-        function playStream(m3u8Url, subtitles = []) {
-            const video = document.getElementById('video-player');
+        function playStream(m3u8Url, subtitles = [], intro = null, outro = null) {
+            const statusBox = document.getElementById('player-status');
 
-            if (currentHls) {
-                currentHls.destroy();
-                currentHls = null;
+            if (art) {
+                try {
+                    art.destroy(true);
+                } catch (e) {}
+                art = null;
             }
 
-            // Remove existing subtitle tracks
-            while (video.firstChild) {
-                video.removeChild(video.firstChild);
+            // Setup highlight markers for Intro and Outro if available
+            const highlights = [];
+            if (intro && intro.end > 0) {
+                highlights.push({
+                    time: intro.start || 0,
+                    text: 'Intro / OP Start'
+                });
+                highlights.push({
+                    time: intro.end,
+                    text: 'Intro / OP End'
+                });
             }
-
-            // Add subtitle tracks
-            if (Array.isArray(subtitles)) {
-                subtitles.forEach((sub, idx) => {
-                    const track = document.createElement('track');
-                    track.kind = 'subtitles';
-                    track.label = sub.label || `Track ${idx + 1}`;
-                    track.srclang = 'en';
-                    track.src = sub.url;
-                    if (sub.default || idx === 0) track.default = true;
-                    video.appendChild(track);
+            if (outro && outro.end > 0) {
+                highlights.push({
+                    time: outro.start || 0,
+                    text: 'Outro / ED Start'
+                });
+                highlights.push({
+                    time: outro.end,
+                    text: 'Outro / ED End'
                 });
             }
 
-            if (Hls.isSupported()) {
-                currentHls = new Hls({
-                    enableWorker: true,
-                    lowLatencyMode: true
-                });
-                currentHls.loadSource(m3u8Url);
-                currentHls.attachMedia(video);
-                currentHls.on(Hls.Events.MANIFEST_PARSED, function () {
-                    video.play().catch(() => {});
-                });
-            } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-                video.src = m3u8Url;
-                video.addEventListener('loadedmetadata', function () {
-                    video.play().catch(() => {});
+            // Subtitles parsing
+            let defaultSub = null;
+            let subtitleSettings = [];
+            if (Array.isArray(subtitles) && subtitles.length > 0) {
+                defaultSub = subtitles.find(s => s.default) || 
+                             subtitles.find(s => (s.label || '').toLowerCase().includes('english')) || 
+                             subtitles[0];
+                subtitleSettings = subtitles.map((s, idx) => ({
+                    default: s === defaultSub,
+                    html: s.label || `Subtitle ${idx + 1}`,
+                    url: s.url
+                }));
+            }
+
+            // Custom player settings
+            const settings = [];
+            if (subtitleSettings.length > 0) {
+                settings.push({
+                    width: 220,
+                    html: 'Subtitles',
+                    tooltip: defaultSub ? defaultSub.label : 'Off',
+                    selector: [
+                        { html: 'Off', url: '' },
+                        ...subtitleSettings
+                    ],
+                    onSelect: function (item) {
+                        if (!item.url) {
+                            art.subtitle.show = false;
+                            return 'Off';
+                        }
+                        art.subtitle.show = true;
+                        art.subtitle.switch(item.url, { name: item.html });
+                        return item.html;
+                    }
                 });
             }
+
+            // Server / CDN switcher in player settings
+            const cdnSelect = document.getElementById('cdn-server');
+            const currentCdn = cdnSelect ? cdnSelect.value : 'mega';
+            settings.push({
+                html: 'CDN Server',
+                tooltip: currentCdn.toUpperCase(),
+                selector: [
+                    { default: currentCdn === 'mega', html: 'MEGA (Primary)', value: 'mega' },
+                    { default: currentCdn === 'alpha', html: 'ALPHA (High Speed)', value: 'alpha' },
+                    { default: currentCdn === 'beta', html: 'BETA (Backup)', value: 'beta' }
+                ],
+                onSelect: function (item) {
+                    if (cdnSelect) {
+                        cdnSelect.value = item.value;
+                        resolveAndPlay();
+                    }
+                    return item.value.toUpperCase();
+                }
+            });
+
+            art = new Artplayer({
+                container: '#artplayer-container',
+                url: m3u8Url,
+                type: 'm3u8',
+                customType: {
+                    m3u8: function (video, url, artInstance) {
+                        if (Hls.isSupported()) {
+                            if (artInstance.hls) artInstance.hls.destroy();
+                            const hls = new Hls({
+                                enableWorker: true,
+                                lowLatencyMode: true,
+                                backBufferLength: 90
+                            });
+                            hls.loadSource(url);
+                            hls.attachMedia(video);
+                            artInstance.hls = hls;
+                            artInstance.on('destroy', () => hls.destroy());
+                            hls.on(Hls.Events.ERROR, function (event, data) {
+                                if (data.fatal) {
+                                    switch (data.type) {
+                                        case Hls.ErrorTypes.NETWORK_ERROR:
+                                            console.warn('HLS Network Error, recovering...', data);
+                                            hls.startLoad();
+                                            break;
+                                        case Hls.ErrorTypes.MEDIA_ERROR:
+                                            console.warn('HLS Media Error, recovering...', data);
+                                            hls.recoverMediaError();
+                                            break;
+                                        default:
+                                            artInstance.notice.show = 'Stream playback error: ' + data.details;
+                                            break;
+                                    }
+                                }
+                            });
+                        } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+                            video.src = url;
+                        } else {
+                            artInstance.notice.show = 'Unsupported video format';
+                        }
+                    }
+                },
+                theme: '#8b5cf6',
+                volume: 0.85,
+                isLive: false,
+                autoplay: true,
+                pip: true,
+                autoSize: false,
+                autoMini: true,
+                screenshot: true,
+                setting: true,
+                loop: false,
+                flip: true,
+                playbackRate: true,
+                aspectRatio: true,
+                fullscreen: true,
+                fullscreenWeb: true,
+                subtitleOffset: true,
+                miniProgressBar: true,
+                mutex: true,
+                backdrop: true,
+                playsInline: true,
+                autoPlayback: true,
+                airplay: true,
+                hotkey: true,
+                lang: 'en',
+                subtitle: defaultSub ? {
+                    url: defaultSub.url,
+                    type: 'vtt',
+                    style: {
+                        color: '#ffffff',
+                        fontSize: '22px',
+                        textShadow: '0 2px 4px rgba(0,0,0,0.9), 0 0 2px #000'
+                    },
+                    encoding: 'utf-8'
+                } : undefined,
+                highlight: highlights,
+                settings: settings,
+                layers: [
+                    {
+                        name: 'skipIntroLayer',
+                        html: '<button class="art-skip-btn" id="art-skip-intro-btn">⏩ Skip Intro</button>',
+                        style: {
+                            position: 'absolute',
+                            bottom: '70px',
+                            right: '25px',
+                            display: 'none',
+                            zIndex: 20
+                        },
+                        click: function () {
+                            if (lastStreamData?.intro?.end) {
+                                art.currentTime = lastStreamData.intro.end;
+                                art.notice.show = 'Skipped Intro';
+                                this.style.display = 'none';
+                            }
+                        }
+                    },
+                    {
+                        name: 'skipOutroLayer',
+                        html: '<button class="art-skip-btn" id="art-skip-outro-btn">⏩ Skip Outro</button>',
+                        style: {
+                            position: 'absolute',
+                            bottom: '70px',
+                            right: '25px',
+                            display: 'none',
+                            zIndex: 20
+                        },
+                        click: function () {
+                            if (lastStreamData?.outro?.end) {
+                                art.currentTime = lastStreamData.outro.end;
+                                art.notice.show = 'Skipped Outro';
+                                this.style.display = 'none';
+                            }
+                        }
+                    }
+                ]
+            });
+
+            // Dynamic in-player Skip Intro/Outro layer toggle
+            art.on('video:timeupdate', () => {
+                const cur = art.currentTime;
+                const introLayer = art.layers['skipIntroLayer'];
+                const outroLayer = art.layers['skipOutroLayer'];
+
+                if (intro && intro.end > 0 && cur >= (intro.start || 0) && cur < (intro.end - 1)) {
+                    if (introLayer) introLayer.style.display = 'block';
+                } else {
+                    if (introLayer) introLayer.style.display = 'none';
+                }
+
+                if (outro && outro.end > 0 && cur >= (outro.start || 0) && cur < (outro.end - 1)) {
+                    if (outroLayer) outroLayer.style.display = 'block';
+                } else {
+                    if (outroLayer) outroLayer.style.display = 'none';
+                }
+            });
+
+            art.on('ready', () => {
+                statusBox.innerText = 'Playing (ArtPlayer 1080p)';
+                statusBox.style.color = '#10b981';
+                setTimeout(() => {
+                    statusBox.style.opacity = '0';
+                }, 3000);
+            });
+
+            art.on('play', () => {
+                statusBox.style.opacity = '0';
+            });
+
+            art.on('pause', () => {
+                statusBox.innerText = 'Paused';
+                statusBox.style.opacity = '1';
+                statusBox.style.color = '#94a3b8';
+            });
         }
 
         function skipTo(type) {
-            const video = document.getElementById('video-player');
-            if (!lastStreamData) return;
+            if (!art || !lastStreamData) return;
             if (type === 'intro' && lastStreamData.intro?.end) {
-                video.currentTime = lastStreamData.intro.end;
+                art.currentTime = lastStreamData.intro.end;
+                art.notice.show = 'Skipped Intro';
+                art.play();
             } else if (type === 'outro' && lastStreamData.outro?.end) {
-                video.currentTime = lastStreamData.outro.end;
+                art.currentTime = lastStreamData.outro.end;
+                art.notice.show = 'Skipped Outro';
+                art.play();
             }
         }
 
