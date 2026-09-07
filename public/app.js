@@ -87,6 +87,7 @@
         btnSub: document.getElementById('btn-audio-sub'),
         btnDub: document.getElementById('btn-audio-dub'),
         skipToggle: document.getElementById('skip-intro-toggle'),
+        btnDownloadEp: document.getElementById('btn-download-ep'),
         rangeSelector: document.getElementById('ep-range-selector'),
         epSearchInput: document.getElementById('ep-search-input'),
         epListContainer: document.getElementById('ep-list-container'),
@@ -954,6 +955,7 @@
         }
         dom.btnSub.style.display = 'none';
         dom.btnDub.style.display = 'none';
+        if (dom.btnDownloadEp) dom.btnDownloadEp.style.display = 'none';
 
         const meta = state.watch.meta;
         const isNotYetReleased = meta?.status === 'NOT_YET_RELEASED';
@@ -1019,6 +1021,12 @@
             dom.btnDub.style.display = 'inline-block';
             dom.btnSub.classList.toggle('active', state.watch.audioMode === 'sub');
             dom.btnDub.classList.toggle('active', state.watch.audioMode === 'dub');
+
+            if (dom.btnDownloadEp) {
+                const dlUrl = streamData.download_url || `/api/download/${state.watch.malId || state.watch.anilistId}/${ep.episode_number}?track=${state.watch.audioMode}`;
+                dom.btnDownloadEp.href = dlUrl;
+                dom.btnDownloadEp.style.display = 'inline-flex';
+            }
 
             mountArtPlayer({
                 proxy_m3u8_url: streamData.stream_url,
@@ -1143,7 +1151,19 @@
             pip: true,
             autoOrientation: true,
             subtitle: subtitleOption,
-            settings: settings
+            settings: settings,
+            controls: [
+                {
+                    name: 'download',
+                    position: 'right',
+                    html: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-top:7px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>',
+                    tooltip: 'Download Episode (Pahe / NekoStream)',
+                    click: function () {
+                        const dlUrl = state.watch.streamData?.download_url || `/api/download/${state.watch.malId || state.watch.anilistId}/${state.watch.activeEpisodeIndex}?track=${state.watch.audioMode}`;
+                        window.open(dlUrl, '_blank');
+                    }
+                }
+            ]
         });
 
         // Intro / Outro Skip Markers

@@ -443,6 +443,50 @@ app.get('/api/stream', async (req, res) => {
     }
 });
 
+// 6. Direct Anime Download Portal Resolver (AnimePahe / NekoStream CDN)
+app.get(['/api/download/:id/:ep', '/api/download'], async (req, res) => {
+    try {
+        let id = req.params.id || req.query.id || req.query.malId;
+        let ep = parseInt(req.params.ep || req.query.ep || req.query.episode) || 1;
+        const track = (req.query.track || 'sub').toLowerCase() === 'dub' ? 'dub' : 'sub';
+
+        if (!id) {
+            return res.status(400).json({ success: false, error: 'Missing anime ID. Provide "id" or "malId".' });
+        }
+
+        let resolvedMalId = id;
+        const numId = parseInt(id);
+        if (numId) {
+            resolvedMalId = await scraper.getMalIdFromAniList(numId);
+        } else if (req.query.title) {
+            // resolve by title if available
+            try {
+                const s = await scraper.extractZokoStream({ title: req.query.title, episode: ep, track });
+                resolvedMalId = s.malId || id;
+            } catch {}
+        }
+
+        const downloadPortalUrl = `https://zokoanime.video/download/mal/${resolvedMalId}/${ep}/${track}`;
+
+        if (req.query.json === 'true' || req.headers.accept?.includes('application/json')) {
+            return res.json({
+                success: true,
+                id,
+                malId: resolvedMalId,
+                episode: ep,
+                track,
+                download_url: downloadPortalUrl,
+                note: "External high-speed download mirror powered by AnimePahe / NekoStream CDN."
+            });
+        }
+
+        // Direct browser redirect to the download portal
+        res.redirect(downloadPortalUrl);
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
 
 // ==========================================
 // HIGH PERFORMANCE HLS STREAMING PROXY

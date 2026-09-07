@@ -1103,6 +1103,37 @@ main.app-content {
     color: var(--accent-green);
 }
 
+/* Download Button (AnimePahe / NekoStream CDN) */
+.download-btn-wrap {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: #38bdf8;
+    background: rgba(56, 189, 248, 0.08);
+    border: 1px solid rgba(56, 189, 248, 0.28);
+    padding: 5px 12px;
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    text-decoration: none;
+    transition: all var(--transition-fast);
+}
+
+.download-btn-wrap:hover {
+    background: rgba(56, 189, 248, 0.2);
+    border-color: #38bdf8;
+    color: #ffffff;
+}
+
+.download-btn-wrap svg {
+    transition: transform var(--transition-fast);
+}
+
+.download-btn-wrap:hover svg {
+    transform: translateY(1px);
+}
+
 /* Sidebar: Episode Drawer */
 .episodes-column {
     display: flex;
