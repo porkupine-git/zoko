@@ -1,4 +1,3 @@
-require('dotenv').config();
 if (process.env.IPV6_FIRST === 'true') {
     try { require('node:dns').setDefaultResultOrder('ipv6first'); } catch {}
 }
@@ -15,12 +14,12 @@ const scraper = require('./scraper');
 const app = express();
 app.set('trust proxy', 1);
 
-// --- Configuration ---
+// --- Configuration (Zero .env Required - Sensible Built-in Defaults) ---
 const PORT = parseInt(process.env.PORT) || 3000;
 const HOST = process.env.HOST || '0.0.0.0';
 const CACHE_TTL_MS = parseInt(process.env.CACHE_TTL_MS) || 180000;
 const CACHE_MAX_ITEMS = parseInt(process.env.CACHE_MAX_ITEMS) || 3000;
-const RATE_LIMIT_MAX = parseInt(process.env.RATE_LIMIT_MAX) || 120;
+const RATE_LIMIT_MAX = parseInt(process.env.RATE_LIMIT_MAX) || 1000;
 
 // --- High Performance Cache & Metrics Tracker ---
 class MetricsTracker {

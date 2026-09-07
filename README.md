@@ -35,7 +35,7 @@ Ready for 1-click cloud deployment on **Render, Railway, Koyeb, Docker, or any P
 - ⚡ **Zero-Copy Video Piping:** Video TS chunks stream directly from upstream CDN to browser with HTTP Range 206 partial content support.
 - 📦 **Pure Streaming API for Any Frontend:** Works seamlessly with custom frontends powered by AniList or MyAnimeList (MAL).
 - 🎬 **Drop-in Embed Route (`/embed`):** Iframe support for embedding directly into any external website or mobile webview.
-- 📖 **Interactive Swagger UI & Playground:** OpenAPI 3.0 specs available at `/docs` and interactive playground at `/api-demo.html`.
+- 📖 **Interactive Swagger UI:** OpenAPI specs available at `/docs`.
 
 ---
 
@@ -95,7 +95,6 @@ npm test
 ```
 
 - 🌐 **Web Player:** `http://localhost:3000/`
-- 🧪 **API Playground:** `http://localhost:3000/api-demo.html`
 - 📖 **Swagger API Docs:** `http://localhost:3000/docs`
 
 
