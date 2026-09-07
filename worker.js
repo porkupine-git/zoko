@@ -556,7 +556,109 @@ export default {
             }
         }
 
-        // 3. M3U8 Playlist Proxy: /api/proxy/m3u8
+        // 2b. Anigo2 Compatible Watch Route: /api/watch/:id/:lang/:ep
+        if (url.pathname.startsWith("/api/watch")) {
+            try {
+                const parts = url.pathname.replace('/api/watch', '').split('/').filter(Boolean);
+                let id = parts[0] || url.searchParams.get("id");
+                let lang = (parts[1] || url.searchParams.get("lang") || "sub").toLowerCase();
+                let ep = parseInt(parts[2] || url.searchParams.get("ep")) || 1;
+
+                if (!id) {
+                    return new Response(JSON.stringify({ error: "Missing anime id in /api/watch/:id/:lang/:ep" }), {
+                        status: 400,
+                        headers: { ...CORS_HEADERS, "Content-Type": "application/json" }
+                    });
+                }
+
+                let targetMalId = parseInt(id);
+                if (!targetMalId || targetMalId > 60000) {
+                    targetMalId = await resolveMalId(id, url.searchParams.get("title"), env, ctx);
+                }
+
+                if (!targetMalId) {
+                    return new Response(JSON.stringify({ error: "Unable to map anime ID to MAL ID" }), {
+                        status: 404,
+                        headers: { ...CORS_HEADERS, "Content-Type": "application/json" }
+                    });
+                }
+
+                const streamCacheKey = `stream:${targetMalId}:${ep}:${lang}`;
+                let streamData = getMemCache(streamCacheKey);
+                let cacheStatus = "MEM-HIT";
+
+                if (!streamData && env.ZOKO_CACHE) {
+                    try {
+                        const kvDataStr = await env.ZOKO_CACHE.get(streamCacheKey);
+                        if (kvDataStr) {
+                            streamData = JSON.parse(kvDataStr);
+                            cacheStatus = "KV-HIT";
+                        }
+                    } catch {}
+                }
+
+                if (!streamData) {
+                    streamData = await extractStream(targetMalId, ep, lang, baseUrl);
+                    cacheStatus = "MISS";
+                    setMemCache(streamCacheKey, streamData, 1800);
+                    if (env.ZOKO_CACHE && ctx?.waitUntil) {
+                        ctx.waitUntil(
+                            env.ZOKO_CACHE.put(streamCacheKey, JSON.stringify(streamData), { expirationTtl: 10800 }).catch(() => {})
+                        );
+                    }
+                }
+
+                // Format expected by Anigo2 useStreamFetch hook
+                const anigoFormatted = {
+                    "zoko": {
+                        "streams": [
+                            {
+                                "url": streamData.stream_url,
+                                "type": "hls",
+                                "server": "Zoko-Edge (Direct HLS)",
+                                "priority": 1
+                            }
+                        ],
+                        "subtitles": (streamData.subtitles || []).map(s => ({
+                            "file": s.proxied_src,
+                            "label": s.label || "English",
+                            "kind": "captions",
+                            "default": !!s.default,
+                            "language": s.lang || "en",
+                            "format": "vtt"
+                        })),
+                        "intro": streamData.skip?.intro || { "start": 0, "end": 0 },
+                        "outro": streamData.skip?.outro || { "start": 0, "end": 0 },
+                        "provider": "zoko-stream-edge"
+                    }
+                };
+
+                return new Response(JSON.stringify(anigoFormatted), {
+                    headers: {
+                        ...CORS_HEADERS,
+                        "Content-Type": "application/json",
+                        "X-Cache": cacheStatus,
+                        "X-Colo": colo
+                    }
+                });
+            } catch (err) {
+                return new Response(JSON.stringify({ error: err.message }), {
+                    status: 500,
+                    headers: { ...CORS_HEADERS, "Content-Type": "application/json" }
+                });
+            }
+        }
+
+        // 3. Generic Proxy: /api/proxy (Auto-detects m3u8, vtt, ts for Anigo2)
+        if (url.pathname === "/api/proxy") {
+            const target = url.searchParams.get("url");
+            if (!target) return new Response("Missing target url", { status: 400, headers: CORS_HEADERS });
+            if (target.includes(".m3u8")) return handleM3U8Proxy(target, baseUrl, request, ctx);
+            if (target.includes(".vtt")) return handleVttProxy(target, request, ctx);
+            return handleTsProxy(target, request, ctx);
+        }
+
+        // 4. M3U8 Playlist Proxy: /api/proxy/m3u8
         if (url.pathname === "/api/proxy/m3u8") {
             const target = url.searchParams.get("url");
             if (!target) return new Response("Missing target url", { status: 400, headers: CORS_HEADERS });
