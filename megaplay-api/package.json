@@ -1,0 +1,22 @@
+{
+  "name": "megaplay-api",
+  "version": "1.0.0",
+  "description": "Reverse-engineered API and Scraper Engine for MegaPlay.buzz and Anikoto Video Catalog",
+  "main": "megaplay.js",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node test.js"
+  },
+  "keywords": [
+    "megaplay",
+    "anikoto",
+    "hianime",
+    "scraper",
+    "hls",
+    "stream-extractor"
+  ],
+  "author": "Antigravity",
+  "license": "MIT",
+  "dependencies": {}
+}
