@@ -48,7 +48,7 @@ Use these endpoints in your custom frontend (React, Next.js, Vue, Flutter, React
 | `GET` | `/api/stream?id={id}&ep={ep}&track={sub\|dub}` | Universal stream link (AniList ID or MAL ID) |
 | `GET` | `/api/stream/:id/:ep` | Clean REST route (e.g. `/api/stream/21/1`) |
 | `GET` | `/embed?id={id}&ep={ep}&track={sub\|dub}` | Drop-in responsive ArtPlayer iframe |
-| `GET` | `/api/search?q={query}` | Search 11,449+ anime titles (0ms SQLite cache) |
+| `GET` | `/api/search?q={query}` | Search anime titles via AniList GraphQL with LRU memory cache |
 | `GET` | `/api/anime/{id}` | Full metadata, synopsis, and all episodes |
 | `GET` | `/health` | Server status and healthcheck |
 | `GET` | `/api` | Interactive API Directory (JSON) |
@@ -98,18 +98,6 @@ npm test
 - 🧪 **API Playground:** `http://localhost:3000/api-demo.html`
 - 📖 **Swagger API Docs:** `http://localhost:3000/docs`
 
----
-
-## 🐳 Docker & Container Deployment
-
-```bash
-docker compose up -d --build
-```
-Or run directly:
-```bash
-docker build -t zoko-anime-api .
-docker run -p 3000:3000 zoko-anime-api
-```
 
 ---
 

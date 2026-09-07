@@ -1131,16 +1131,16 @@
 
         // Header and pills
         const vpsIp = document.getElementById('vps-ip-pill');
-        if (vpsIp) vpsIp.textContent = `IP: ${data.vps?.ip || '103.190.93.199'}`;
+        if (vpsIp) vpsIp.textContent = `Host: ${data.system?.host || data.vps?.ip || 'Cloud Instance'}`;
 
         const vpsOs = document.getElementById('vps-os-pill');
-        if (vpsOs) vpsOs.textContent = `${data.vps?.type || 'Linux'} (${data.vps?.release || 'Kernel'})`;
+        if (vpsOs) vpsOs.textContent = `${data.system?.type || data.vps?.type || 'Linux'} (${data.system?.release || data.vps?.release || 'Kernel'})`;
 
         const vpsNode = document.getElementById('vps-node-pill');
         if (vpsNode) vpsNode.textContent = `${data.process?.nodeVersion || 'Node v22'}`;
 
         const hostCard = document.getElementById('card-vps-host');
-        if (hostCard) hostCard.textContent = `${data.vps?.hostname || 'y4m9tof6.clubhosty.com'}`;
+        if (hostCard) hostCard.textContent = `${data.system?.hostname || data.vps?.hostname || 'Cloud Host'}`;
 
         // CPU & Host
         const cpuModel = document.getElementById('tele-cpu-model');

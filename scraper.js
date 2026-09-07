@@ -5,8 +5,10 @@
  * Ultra-fast connection pooling, zero external Python or third-party scraper dependencies.
  */
 
-// Optimize DNS resolution order to eliminate Cloudflare IPv4 transit latency
-try { require('dns').setDefaultResultOrder('ipv6first'); } catch {}
+// DNS resolution order (opt-in for environments with native IPv6)
+if (process.env.IPV6_FIRST === 'true') {
+    try { require('node:dns').setDefaultResultOrder('ipv6first'); } catch {}
+}
 
 // --- Persistent Connection Pooling & Keep-Alive ---
 try {
@@ -122,16 +124,10 @@ async function queryAniListSafe(query, variables = {}) {
     });
 }
 
-const db = require('./db');
-
 // --- Convert AniList ID to MyAnimeList (MAL) ID ---
 async function getMalIdFromAniList(aniId) {
     const numericId = parseInt(aniId);
     if (!numericId) return null;
-
-    // 1. Check local SQLite DB first (0ms)
-    const dbMalId = db.getMalId(numericId);
-    if (dbMalId) return dbMalId;
 
     const cacheKey = `mal_map:${numericId}`;
     const cached = getCached(cacheKey);
@@ -263,14 +259,6 @@ async function searchCatalog(query, page = 1, perPage = 20) {
     const cached = getCached(cacheKey);
     if (cached) return cached;
 
-    // 1. Instant local SQLite lookup (0ms)
-    const localDb = db.searchAnime(q, perPage, page);
-    if (localDb && localDb.results && localDb.results.length > 0) {
-        setCached(cacheKey, localDb, 300000);
-        return localDb;
-    }
-
-    // 2. Fallback to AniList GraphQL if not yet indexed in SQLite
     const searchQuery = `
     query ($search: String, $page: Int, $perPage: Int) {
       Page(page: $page, perPage: $perPage) {
@@ -297,9 +285,6 @@ async function searchCatalog(query, page = 1, perPage = 20) {
     if (!data?.Page?.media) return { results: [] };
 
     const results = data.Page.media.map(m => {
-        // Auto-save discovered anime to SQLite database
-        try { db.saveAnime(m); } catch {}
-
         return {
             id: m.id,
             mal_id: m.idMal || m.id,
@@ -339,13 +324,6 @@ async function getAnimeInfo(identifier) {
     const cacheKey = `anime_info:${numId}`;
     const cached = getCached(cacheKey);
     if (cached) return cached;
-
-    // 1. Instant local SQLite lookup (0ms)
-    const localAnime = db.getAnimeById(numId);
-    if (localAnime && localAnime.title && (localAnime.title.english || localAnime.title.romaji)) {
-        setCached(cacheKey, localAnime, 600000);
-        return localAnime;
-    }
 
     const detailsQuery = `
     query ($id: Int) {
@@ -478,7 +456,6 @@ async function getAnimeInfo(identifier) {
         recommendations
     };
 
-    try { db.saveAnime(m); } catch {}
     setCached(cacheKey, result, 600000);
     return result;
 }
@@ -789,6 +766,5 @@ module.exports = {
     getHomepageCatalog,
     browseCatalog,
     queryAniListSafe,
-    getMalIdFromAniList,
-    db
+    getMalIdFromAniList
 };

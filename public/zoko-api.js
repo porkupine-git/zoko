@@ -21,7 +21,7 @@
 
     class ZokoClient {
         /**
-         * @param {string} [baseUrl] - Base API URL (e.g. 'http://103.190.93.199' or '' for relative)
+         * @param {string} [baseUrl] - Base API URL (e.g. 'https://zoko-anime-api.onrender.com' or '' for relative)
          */
         constructor(baseUrl) {
             if (baseUrl) {
@@ -29,7 +29,7 @@
             } else if (typeof window !== 'undefined' && window.location) {
                 this.baseUrl = window.location.origin;
             } else {
-                this.baseUrl = 'http://103.190.93.199';
+                this.baseUrl = (typeof process !== 'undefined' && process.env.API_BASE_URL) || 'http://localhost:3000';
             }
         }
 

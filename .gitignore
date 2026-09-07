@@ -9,11 +9,6 @@ node_modules/
 # Internal Scratch & Deployment Scripts (contains credentials)
 scratch/
 
-# Database WAL & temporary lockfiles
-data/*.db-wal
-data/*.db-shm
-data/*.db-journal
-
 # Logs
 logs/
 *.log

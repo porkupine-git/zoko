@@ -4,12 +4,12 @@
   "description": "High-Performance Pure Express.js Native Anime Streaming Engine & Scraper",
   "main": "server.js",
   "engines": {
-    "node": ">=22.5.0"
+    "node": ">=18.0.0"
   },
   "scripts": {
     "start": "node server.js",
     "dev": "node --watch server.js",
-    "test": "node test_express.js"
+    "test": "node --check server.js && node --check scraper.js"
   },
   "keywords": [
     "anime",

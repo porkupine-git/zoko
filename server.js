@@ -1,5 +1,7 @@
 require('dotenv').config();
-try { require('dns').setDefaultResultOrder('ipv6first'); } catch {}
+if (process.env.IPV6_FIRST === 'true') {
+    try { require('node:dns').setDefaultResultOrder('ipv6first'); } catch {}
+}
 const express = require('express');
 const cors = require('cors');
 const crypto = require('crypto');
@@ -290,9 +292,9 @@ app.get('/api/system/status', (req, res) => {
         mode: 'pure-express-native',
         version: '4.0.0',
         timestamp: new Date().toISOString(),
-        vps: {
+        system: {
             hostname: os.hostname(),
-            ip: '103.190.93.199',
+            host: req.get('host') || os.hostname(),
             platform: os.platform(),
             type: os.type(),
             release: os.release(),
@@ -317,7 +319,6 @@ app.get('/api/system/status', (req, res) => {
             pid: process.pid,
             nodeVersion: process.version,
             uptimeSeconds: Math.floor(process.uptime()),
-            instanceId: process.env.NODE_APP_INSTANCE !== undefined ? `PM2 Worker #${process.env.NODE_APP_INSTANCE}` : 'Cluster Instance',
             memoryRSS_MB: (memUsage.rss / (1024 * 1024)).toFixed(1),
             heapUsedMB: (memUsage.heapUsed / (1024 * 1024)).toFixed(1),
             heapTotalMB: (memUsage.heapTotal / (1024 * 1024)).toFixed(1),
@@ -325,8 +326,8 @@ app.get('/api/system/status', (req, res) => {
         },
         gateway: {
             port: PORT,
-            engine: '100% Pure Express Native Pipeline (Zero Python)',
-            ipv6First: true,
+            engine: '100% Pure Express Native Pipeline',
+            ipv6First: process.env.IPV6_FIRST === 'true',
             memoryMB: (memUsage.rss / (1024 * 1024)).toFixed(1),
             heapUsedMB: (memUsage.heapUsed / (1024 * 1024)).toFixed(1),
             ...metrics.getStats()
@@ -335,8 +336,7 @@ app.get('/api/system/status', (req, res) => {
             upstreamBase: process.env.ZOKO_BASE_URL || 'https://zokoanime.video',
             upstreamStatus: 'ONLINE (CORS De-obfuscated)',
             anilistEndpoint: process.env.ANILIST_GRAPHQL_ENDPOINT || 'https://graphql.anilist.co'
-        },
-        database: scraper.db ? scraper.db.getStats() : null
+        }
     });
 });
 
