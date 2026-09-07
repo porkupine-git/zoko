@@ -249,15 +249,17 @@ async function extractStream(malId, episode, track, baseUrl) {
 // Edge M3U8 Playlist Rewriter (Cached at Edge for 60s)
 // -------------------------------------------------------------
 async function handleM3U8Proxy(targetUrl, baseUrl, request, ctx) {
-    const cache = caches.default;
-    const cacheUrl = new URL(request.url);
-
-    // 1. Check Cloudflare Edge Cache
-    const cached = await cache.match(cacheUrl);
-    if (cached) {
-        const h = new Headers(cached.headers);
-        h.set("X-Cache", "EDGE-HIT");
-        return new Response(cached.body, { status: cached.status, headers: h });
+    const memKey = `m3u8:${targetUrl}`;
+    const memMatch = getMemCache(memKey);
+    if (memMatch) {
+        return new Response(memMatch, {
+            headers: {
+                ...CORS_HEADERS,
+                "Content-Type": "application/vnd.apple.mpegurl",
+                "Cache-Control": "public, max-age=60, s-maxage=60",
+                "X-Cache": "MEM-HIT"
+            }
+        });
     }
 
     const upstreamRes = await fetch(targetUrl, {
@@ -307,7 +309,9 @@ async function handleM3U8Proxy(targetUrl, baseUrl, request, ctx) {
         return `${baseUrl}/api/proxy/ts?url=${encodeURIComponent(absUrl)}`;
     }).join('\n');
 
-    const response = new Response(rewritten, {
+    setMemCache(memKey, rewritten, 60);
+
+    return new Response(rewritten, {
         headers: {
             ...CORS_HEADERS,
             "Content-Type": "application/vnd.apple.mpegurl",
@@ -315,32 +319,13 @@ async function handleM3U8Proxy(targetUrl, baseUrl, request, ctx) {
             "X-Cache": "MISS"
         }
     });
-
-    if (ctx?.waitUntil) {
-        ctx.waitUntil(cache.put(cacheUrl, response.clone()));
-    }
-
-    return response;
 }
 
 // -------------------------------------------------------------
-// Edge TS Video Chunk Streamer (Cloudflare CDN Edge Cached for 24h)
+// Edge TS Video Chunk Streamer (Ultra-Low CPU Zero-Copy Pipe)
 // -------------------------------------------------------------
-async function handleTsProxy(targetUrl, request, ctx) {
+async function handleTsProxy(targetUrl, request) {
     const rangeHeader = request.headers.get("Range");
-    const cache = caches.default;
-    const cacheUrl = new URL(request.url);
-
-    // If no range header, check Cloudflare Edge CDN cache
-    if (!rangeHeader) {
-        const cachedRes = await cache.match(cacheUrl);
-        if (cachedRes) {
-            const h = new Headers(cachedRes.headers);
-            h.set("X-Cache", "EDGE-HIT");
-            return new Response(cachedRes.body, { status: cachedRes.status, headers: h });
-        }
-    }
-
     const fetchHeaders = {
         "User-Agent": DEFAULT_HEADERS["User-Agent"],
         "Referer": "https://zokoanime.video/",
@@ -348,12 +333,12 @@ async function handleTsProxy(targetUrl, request, ctx) {
     };
     if (rangeHeader) fetchHeaders["Range"] = rangeHeader;
 
-    // Use Cloudflare CDN Edge Cache features
+    // Use Cloudflare Edge CDN C++ socket cache (0ms V8 CPU)
     const upstreamRes = await fetch(targetUrl, {
         headers: fetchHeaders,
         cf: {
             cacheEverything: true,
-            cacheTtl: 86400, // 24 hours edge cache
+            cacheTtl: 86400,
             cacheKey: targetUrl
         }
     });
@@ -361,7 +346,6 @@ async function handleTsProxy(targetUrl, request, ctx) {
     const responseHeaders = new Headers(CORS_HEADERS);
     responseHeaders.set("Content-Type", upstreamRes.headers.get("Content-Type") || "video/mp2t");
     responseHeaders.set("Cache-Control", "public, max-age=86400, s-maxage=86400, immutable");
-    responseHeaders.set("X-Cache", "MISS");
 
     if (upstreamRes.headers.has("Content-Length")) {
         responseHeaders.set("Content-Length", upstreamRes.headers.get("Content-Length"));
@@ -373,31 +357,28 @@ async function handleTsProxy(targetUrl, request, ctx) {
         responseHeaders.set("Accept-Ranges", upstreamRes.headers.get("Accept-Ranges"));
     }
 
-    const response = new Response(upstreamRes.body, {
+    // Direct zero-copy stream pipe (NO stream cloning in JavaScript!)
+    return new Response(upstreamRes.body, {
         status: upstreamRes.status,
         headers: responseHeaders
     });
-
-    // Cache immutable 200 chunks in Cloudflare Edge Cache
-    if (!rangeHeader && upstreamRes.status === 200 && ctx?.waitUntil) {
-        ctx.waitUntil(cache.put(cacheUrl, response.clone()));
-    }
-
-    return response;
 }
 
 // -------------------------------------------------------------
-// Edge VTT Subtitle Streamer (Edge Cached for 7 Days)
+// Edge VTT Subtitle Streamer (Edge & Memory Cached)
 // -------------------------------------------------------------
-async function handleVttProxy(targetUrl, request, ctx) {
-    const cache = caches.default;
-    const cacheUrl = new URL(request.url);
-
-    const cachedRes = await cache.match(cacheUrl);
-    if (cachedRes) {
-        const h = new Headers(cachedRes.headers);
-        h.set("X-Cache", "EDGE-HIT");
-        return new Response(cachedRes.body, { status: cachedRes.status, headers: h });
+async function handleVttProxy(targetUrl) {
+    const memKey = `vtt:${targetUrl}`;
+    const memMatch = getMemCache(memKey);
+    if (memMatch) {
+        return new Response(memMatch, {
+            headers: {
+                ...CORS_HEADERS,
+                "Content-Type": "text/vtt; charset=utf-8",
+                "Cache-Control": "public, max-age=604800, s-maxage=604800, immutable",
+                "X-Cache": "MEM-HIT"
+            }
+        });
     }
 
     const upstreamRes = await fetch(targetUrl, {
@@ -407,11 +388,14 @@ async function handleVttProxy(targetUrl, request, ctx) {
         },
         cf: {
             cacheEverything: true,
-            cacheTtl: 604800 // 7 days
+            cacheTtl: 604800
         }
     });
 
-    const response = new Response(upstreamRes.body, {
+    const vttText = await upstreamRes.text();
+    setMemCache(memKey, vttText, 86400);
+
+    return new Response(vttText, {
         status: upstreamRes.status,
         headers: {
             ...CORS_HEADERS,
@@ -420,12 +404,6 @@ async function handleVttProxy(targetUrl, request, ctx) {
             "X-Cache": "MISS"
         }
     });
-
-    if (upstreamRes.status === 200 && ctx?.waitUntil) {
-        ctx.waitUntil(cache.put(cacheUrl, response.clone()));
-    }
-
-    return response;
 }
 
 // -------------------------------------------------------------
