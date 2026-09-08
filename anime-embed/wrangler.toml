@@ -1,0 +1,23 @@
+name = "anime-embed"
+main = "worker.js"
+compatibility_date = "2024-11-01"
+compatibility_flags = ["nodejs_compat"]
+
+[placement]
+mode = "smart"
+
+[observability]
+enabled = true
+
+# Direct 0ms in-memory Edge Service Bindings to the 3 Engines
+[[services]]
+binding = "MEGAPLAY_SERVICE"
+service = "aniko-backend"
+
+[[services]]
+binding = "ANINEKO_SERVICE"
+service = "anineko-api"
+
+[[services]]
+binding = "ZOKO_SERVICE"
+service = "zoko-stream"

@@ -138,12 +138,12 @@ async function resolveOtakuVid(input, options = {}) {
         try {
             const parsedLinks = JSON.parse(linksMatch[1]);
             
-            // HLS2 (Direct Open-CORS 1080p Master Stream on acek-cdn)
-            if (parsedLinks.hls2) {
+            // HLS3 (SolutionPortal CDN - 100% reliable 1080p, no ASN/IP token lock)
+            if (parsedLinks.hls3) {
                 streams.push({
-                    server: 'OtakuVid Direct (1080p / HLS2)',
-                    url: proxyBase ? `${proxyBase}/api/proxy?url=${encodeURIComponent(parsedLinks.hls2)}` : parsedLinks.hls2,
-                    rawUrl: parsedLinks.hls2,
+                    server: 'OtakuVid SolutionPortal (1080p / HLS3)',
+                    url: proxyBase ? `${proxyBase}/api/proxy?url=${encodeURIComponent(parsedLinks.hls3)}` : parsedLinks.hls3,
+                    rawUrl: parsedLinks.hls3,
                     type: 'hls',
                     quality: '1080p Multi-Quality',
                     priority: 1
@@ -163,14 +163,14 @@ async function resolveOtakuVid(input, options = {}) {
                 });
             }
 
-            // HLS3 (SolutionPortal CDN)
-            if (parsedLinks.hls3) {
+            // HLS2 (Fallback only if not dramiyos-cdn)
+            if (parsedLinks.hls2 && !parsedLinks.hls2.includes('dramiyos-cdn')) {
                 streams.push({
-                    server: 'SolutionPortal CDN (Backup / HLS3)',
-                    url: proxyBase ? `${proxyBase}/api/proxy?url=${encodeURIComponent(parsedLinks.hls3)}` : parsedLinks.hls3,
-                    rawUrl: parsedLinks.hls3,
+                    server: 'OtakuVid Direct (Backup / HLS2)',
+                    url: proxyBase ? `${proxyBase}/api/proxy?url=${encodeURIComponent(parsedLinks.hls2)}` : parsedLinks.hls2,
+                    rawUrl: parsedLinks.hls2,
                     type: 'hls',
-                    quality: 'auto',
+                    quality: '1080p Multi-Quality',
                     priority: 3
                 });
             }

@@ -391,16 +391,18 @@ async function resolveOtakuVid(input, baseUrl) {
     if (linksMatch) {
         try {
             const parsedLinks = JSON.parse(linksMatch[1]);
-            if (parsedLinks.hls2) {
+            // HLS3 (SolutionPortal CDN) has NO IP/ASN token lock, reliable 1080p, and never returns 403!
+            if (parsedLinks.hls3) {
                 streams.push({
-                    server: 'OtakuVid Direct (1080p / HLS2)',
-                    url: baseUrl ? `${baseUrl}/api/proxy?url=${encodeURIComponent(parsedLinks.hls2)}` : parsedLinks.hls2,
-                    rawUrl: parsedLinks.hls2,
+                    server: 'OtakuVid SolutionPortal (1080p / HLS3)',
+                    url: baseUrl ? `${baseUrl}/api/proxy?url=${encodeURIComponent(parsedLinks.hls3)}` : parsedLinks.hls3,
+                    rawUrl: parsedLinks.hls3,
                     type: 'hls',
                     quality: '1080p Multi-Quality',
                     priority: 1
                 });
             }
+            // HLS4 (Direct / TikTok CDN)
             if (parsedLinks.hls4) {
                 const absHls4 = parsedLinks.hls4.startsWith('/') ? `https://otakuvid.online${parsedLinks.hls4}` : parsedLinks.hls4;
                 streams.push({
@@ -412,13 +414,14 @@ async function resolveOtakuVid(input, baseUrl) {
                     priority: 2
                 });
             }
-            if (parsedLinks.hls3) {
+            // HLS2 (Fallback only, as dramiyos-cdn has ASN token restrictions)
+            if (parsedLinks.hls2 && !parsedLinks.hls2.includes('dramiyos-cdn')) {
                 streams.push({
-                    server: 'SolutionPortal CDN (Backup / HLS3)',
-                    url: baseUrl ? `${baseUrl}/api/proxy?url=${encodeURIComponent(parsedLinks.hls3)}` : parsedLinks.hls3,
-                    rawUrl: parsedLinks.hls3,
+                    server: 'OtakuVid Direct (Backup / HLS2)',
+                    url: baseUrl ? `${baseUrl}/api/proxy?url=${encodeURIComponent(parsedLinks.hls2)}` : parsedLinks.hls2,
+                    rawUrl: parsedLinks.hls2,
                     type: 'hls',
-                    quality: 'auto',
+                    quality: '1080p',
                     priority: 3
                 });
             }
@@ -435,9 +438,9 @@ async function resolveOtakuVid(input, baseUrl) {
                 if (lm) {
                     try {
                         const pl = JSON.parse(lm[1]);
-                        if (pl.hls2) streams.push({ server: 'OtakuVid Direct (1080p / HLS2)', url: `${baseUrl}/api/proxy?url=${encodeURIComponent(pl.hls2)}`, rawUrl: pl.hls2, type: 'hls', quality: '1080p', priority: 1 });
+                        if (pl.hls3) streams.push({ server: 'OtakuVid SolutionPortal (1080p / HLS3)', url: `${baseUrl}/api/proxy?url=${encodeURIComponent(pl.hls3)}`, rawUrl: pl.hls3, type: 'hls', quality: '1080p', priority: 1 });
                         if (pl.hls4) streams.push({ server: 'OtakuVid Edge (Backup / HLS4)', url: `${baseUrl}/api/proxy?url=${encodeURIComponent(pl.hls4)}`, rawUrl: pl.hls4, type: 'hls', quality: 'auto', priority: 2 });
-                        if (pl.hls3) streams.push({ server: 'SolutionPortal CDN (Backup / HLS3)', url: `${baseUrl}/api/proxy?url=${encodeURIComponent(pl.hls3)}`, rawUrl: pl.hls3, type: 'hls', quality: 'auto', priority: 3 });
+                        if (pl.hls2 && !pl.hls2.includes('dramiyos-cdn')) streams.push({ server: 'OtakuVid Direct (Backup / HLS2)', url: `${baseUrl}/api/proxy?url=${encodeURIComponent(pl.hls2)}`, rawUrl: pl.hls2, type: 'hls', quality: '1080p', priority: 3 });
                     } catch (e) {}
                     break;
                 }
