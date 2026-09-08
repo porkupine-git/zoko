@@ -1,5 +1,5 @@
 {
-  "name": "embed-resolvers",
+  "name": "anineko-api",
   "version": "1.0.0",
   "description": "Reverse-engineered stream extractors for bibiemb.xyz (VibePlayer) and otakuhg.site (StreamHG / XFS)",
   "main": "server.js",
