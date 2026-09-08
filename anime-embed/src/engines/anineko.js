@@ -39,7 +39,7 @@ export async function resolveAniNekoStream({ anilistId, malId, title, episode = 
 
     return {
         success: true,
-        server: `Server 2 (AniNeko / ${primaryStream.server || "StreamHG"})`,
+        server: "Server 2 (Neko CDN)",
         serverId: 2,
         streamUrl: primaryStream.url,
         rawStreamUrl: primaryStream.rawUrl || primaryStream.url,

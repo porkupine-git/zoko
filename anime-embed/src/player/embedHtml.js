@@ -100,7 +100,7 @@ ${PLAYER_CSS}
         </button>
 
         <!-- Video Element -->
-        <video id="cp-video" class="cp-video" playsinline crossorigin="anonymous"></video>
+        <video id="cp-video" class="cp-video" playsinline crossorigin="anonymous" oncontextmenu="if (('ontouchstart' in window) || navigator.maxTouchPoints > 0 || /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || (window.matchMedia && window.matchMedia('(pointer: coarse)').matches)) { event.preventDefault(); return false; }"></video>
 
         <!-- Subtitle Overlay -->
         <div class="cp-subtitle-overlay cp-hidden" id="cp-subtitle-overlay"></div>
@@ -159,8 +159,12 @@ ${PLAYER_CSS}
 
             <!-- Controls Bar -->
             <div class="cp-controls">
-                <!-- Left: Volume + Time -->
+                <!-- Left: Play/Pause + Volume + Time -->
                 <div class="cp-controls-left">
+                    <button class="cp-btn-play-pause" type="button" aria-label="Play" title="Play">
+                        <span class="cp-icon-play">${CONTROL_ICONS.play}</span>
+                        <span class="cp-icon-pause">${CONTROL_ICONS.pause}</span>
+                    </button>
                     <button class="cp-btn-volume" type="button" aria-label="Mute" title="Mute">
                         <span class="cp-icon-volume-on">${CONTROL_ICONS.volume}</span>
                         <span class="cp-icon-volume-off">${CONTROL_ICONS.volumeClose}</span>

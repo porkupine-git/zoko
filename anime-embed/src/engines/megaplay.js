@@ -36,7 +36,7 @@ export async function resolveMegaPlayStream({ anilistId, malId, episode = 1, tra
 
     return {
         success: true,
-        server: "Server 1 (MegaPlay Edge)",
+        server: "Server 1 (Sora Edge)",
         serverId: 1,
         streamUrl: data.proxy_stream_url || data.stream_url,
         rawStreamUrl: data.stream_url,

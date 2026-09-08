@@ -36,7 +36,7 @@ export async function resolveZokoStream({ anilistId, malId, title, episode = 1, 
 
     return {
         success: true,
-        server: "Server 3 (Zoko Edge)",
+        server: "Server 3 (Zozo Edge)",
         serverId: 3,
         streamUrl: data.stream_url,
         rawStreamUrl: data.stream_url,

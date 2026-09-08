@@ -53,6 +53,9 @@ export const PLAYER_CSS = `
             background: #000000;
             outline: none;
             z-index: 1;
+            -webkit-touch-callout: none;
+            -webkit-user-select: none;
+            user-select: none;
         }
 
         .cp-video::cue {
@@ -218,6 +221,35 @@ export const PLAYER_CSS = `
             background-color: rgba(255, 255, 255, 0.35);
             border-radius: 2px;
             pointer-events: none;
+            z-index: 1;
+        }
+
+        /* ── Intro / Outro Timeline Highlight Segments (Yellow) ── */
+        .cp-progress-segment {
+            position: absolute;
+            top: 0;
+            height: 100%;
+            background-color: #f59e0b;
+            background: linear-gradient(90deg, #eab308, #facc15);
+            border-radius: 2px;
+            pointer-events: none;
+            z-index: 2;
+            opacity: 0.95;
+            box-shadow: 0 0 6px rgba(234, 179, 8, 0.5);
+            transition: opacity 0.15s ease, height 0.15s ease;
+        }
+
+        .cp-progress:hover .cp-progress-segment {
+            opacity: 1;
+            box-shadow: 0 0 9px rgba(250, 204, 21, 0.8);
+        }
+
+        .cp-progress-segment.cp-segment-intro {
+            background: linear-gradient(90deg, #eab308, #facc15);
+        }
+
+        .cp-progress-segment.cp-segment-outro {
+            background: linear-gradient(90deg, #eab308, #facc15);
         }
 
         .cp-progress-played {
@@ -229,6 +261,7 @@ export const PLAYER_CSS = `
             border-radius: 2px;
             box-shadow: none;
             pointer-events: none;
+            z-index: 3;
         }
 
         .cp-progress-indicator {
@@ -302,7 +335,8 @@ export const PLAYER_CSS = `
             height: 36px;
         }
 
-        /* ── Circular Volume Button ── */
+        /* ── Circular Play/Pause & Volume Buttons ── */
+        .cp-btn-play-pause,
         .cp-btn-volume {
             width: 36px;
             height: 36px;
@@ -331,6 +365,7 @@ export const PLAYER_CSS = `
             transition: background 0.15s ease, border-color 0.15s ease, transform 0.15s ease, color 0.15s ease;
         }
 
+        .cp-btn-play-pause:hover,
         .cp-btn-volume:hover {
             background: rgba(255, 255, 255, 0.18);
             border-color: rgba(255, 255, 255, 0.35);
@@ -338,20 +373,30 @@ export const PLAYER_CSS = `
             transform: scale(1.04);
         }
 
+        .cp-btn-play-pause:active,
         .cp-btn-volume:active {
             transform: scale(0.95);
         }
 
+        .cp-btn-play-pause svg,
         .cp-btn-volume svg {
             width: 17px;
             height: 17px;
+            display: block;
+            pointer-events: none;
+        }
+
+        .cp-btn-play-pause .cp-icon-play { display: inline-flex; }
+        .cp-btn-play-pause .cp-icon-pause { display: none; }
+        .cp-btn-play-pause.is-playing .cp-icon-play { display: none; }
+        .cp-btn-play-pause.is-playing .cp-icon-pause { display: inline-flex; }
+
+        .cp-btn-volume svg {
             fill: none;
             stroke: currentColor;
             stroke-width: 1.8px;
             stroke-linecap: round;
             stroke-linejoin: round;
-            display: block;
-            pointer-events: none;
         }
 
         .cp-btn-volume.is-muted {
@@ -1198,6 +1243,7 @@ export const PLAYER_CSS = `
                 font-size: 10px;
             }
 
+            .cp-btn-play-pause,
             .cp-btn-volume {
                 width: 24px;
                 height: 24px;
@@ -1208,6 +1254,7 @@ export const PLAYER_CSS = `
                 flex: 0 0 24px;
             }
 
+            .cp-btn-play-pause svg,
             .cp-btn-volume svg {
                 width: 13px;
                 height: 13px;
@@ -1235,6 +1282,7 @@ export const PLAYER_CSS = `
             }
 
             .cp-controls-right .cp-ctrl-btn::before,
+            .cp-btn-play-pause::before,
             .cp-btn-volume::before {
                 content: '';
                 position: absolute;

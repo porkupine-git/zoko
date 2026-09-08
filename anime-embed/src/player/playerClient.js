@@ -60,12 +60,14 @@ export function renderPlayerClientScript({
         };
 
         /* ── Touch & Mobile Interaction Configuration ── */
+        const MOBILE_CONTROLS_HIDE_DELAY = 3000;
         const TOUCH_CONFIG = {
             seekSeconds: 10,        // configurable seek step in seconds
             doubleTapDelay: 300,     // window for second tap detection (ms)
             longPressDelay: 500,     // hold duration to activate 2x speed (ms)
             longPressSpeed: 2.0,     // temporary playback rate during hold
-            moveThreshold: 10        // movement tolerance in pixels before cancelling gesture
+            moveThreshold: 10,       // movement tolerance in pixels before cancelling gesture
+            controlsHideDelay: MOBILE_CONTROLS_HIDE_DELAY
         };
 
         const ICONS = {
@@ -135,6 +137,9 @@ export function renderPlayerClientScript({
         /* ── Stream Loader ── */
         async function initStream() {
             showToast('Connecting to Server ' + STATE.server + '...', 'yellow', 2500);
+            try {
+                console.log('%c[Anixo Notice] This is a scraper relay for megaplay.buzz and anikototv. There is no benefit in scraping this proxy — scrape the original sources (megaplay.buzz / anikototv) directly, they will be much faster.', 'color: #facc15; font-weight: bold;');
+            } catch (ce) {}
 
             const url = new URL('/api/stream/resolve', window.location.origin);
             if (STATE.idType === 'mal' || STATE.malId) {
@@ -147,6 +152,11 @@ export function renderPlayerClientScript({
             url.searchParams.set('episode', STATE.currentEp);
             url.searchParams.set('track', STATE.track);
             url.searchParams.set('server', STATE.server);
+
+            // Client-side automated scraper / bot detection
+            if (typeof window !== 'undefined' && (window.navigator?.webdriver || window.__playwright || window.__puppeteer || window._phantom)) {
+                url.searchParams.set('_bot', '1');
+            }
 
             try {
                 const res = await fetch(url.toString());
@@ -204,6 +214,10 @@ export function renderPlayerClientScript({
 
             const video = document.getElementById('cp-video');
             STATE.video = video;
+            if (video && !video.dataset.ctxWired) {
+                video.dataset.ctxWired = 'true';
+                video.addEventListener('contextmenu', suppressMobileVideoContextMenu, { capture: true });
+            }
 
             // Clean up previous blob track
             if (STATE.activeSubtitleBlobUrl) {
@@ -368,16 +382,41 @@ export function renderPlayerClientScript({
             // Play/pause state
             video.addEventListener('play', () => {
                 document.querySelector('.cp-center-play').classList.add('cp-playing');
-                triggerControlHideTimer(1500);
+                const ppBtn = document.querySelector('.cp-btn-play-pause');
+                if (ppBtn) {
+                    ppBtn.classList.add('is-playing');
+                    ppBtn.setAttribute('aria-label', 'Pause');
+                    ppBtn.setAttribute('title', 'Pause');
+                }
+                const mobile = (Date.now() - lastTouchTime < 5000) || isMobile();
+                triggerControlHideTimer(mobile ? MOBILE_CONTROLS_HIDE_DELAY : 1500, mobile);
                 postToParent('aniembed:play', { currentTime: video.currentTime });
             });
             video.addEventListener('pause', () => {
                 document.querySelector('.cp-center-play').classList.remove('cp-playing');
+                const ppBtn = document.querySelector('.cp-btn-play-pause');
+                if (ppBtn) {
+                    ppBtn.classList.remove('is-playing');
+                    ppBtn.setAttribute('aria-label', 'Play');
+                    ppBtn.setAttribute('title', 'Play');
+                }
+                const root = document.getElementById('player-root');
+                if (root) root.classList.add('cp-controls-visible');
+                const mobile = (Date.now() - lastTouchTime < 5000) || isMobile();
+                if (mobile) {
+                    triggerControlHideTimer(MOBILE_CONTROLS_HIDE_DELAY, true);
+                }
                 postToParent('aniembed:pause', { currentTime: video.currentTime });
             });
 
             // Ended
             video.addEventListener('ended', () => {
+                const ppBtn = document.querySelector('.cp-btn-play-pause');
+                if (ppBtn) {
+                    ppBtn.classList.remove('is-playing');
+                    ppBtn.setAttribute('aria-label', 'Play');
+                    ppBtn.setAttribute('title', 'Play');
+                }
                 postToParent('aniembed:ended', { episode: STATE.currentEp });
                 if (STATE.autoNext) {
                     const nextEp = STATE.currentEp + 1;
@@ -420,6 +459,11 @@ export function renderPlayerClientScript({
 
             // Render active subtitles in real-time
             renderActiveSubtitles(cur);
+
+            // Ensure intro/outro yellow segments are painted on timeline
+            if (dur > 0 && !document.querySelector('.cp-progress-segment') && STATE.streamData && ((STATE.streamData.intro && STATE.streamData.intro.end > 0) || (STATE.streamData.outro && STATE.streamData.outro.end > 0))) {
+                renderProgressSegments();
+            }
 
             // Update progress
             const played = document.querySelector('.cp-progress-played');
@@ -477,49 +521,69 @@ export function renderPlayerClientScript({
             if (el) el.style.width = pct + '%';
         }
 
-        /* ── Progress Bar Highlights ── */
-        function setupHighlights(data) {
+        /* ── Progress Bar Highlights (Yellow Intro & Outro Segments) ── */
+        function renderProgressSegments() {
             const bar = document.querySelector('.cp-progress-bar');
-            if (!bar) return;
-            // Remove old highlights
-            bar.querySelectorAll('.cp-progress-highlight').forEach(h => h.remove());
+            const video = STATE.video;
+            const streamData = STATE.streamData;
+            if (!bar || !video || !streamData) return;
 
-            const dur = STATE.video ? STATE.video.duration : 0;
-            const markers = [];
-            if (data.intro && data.intro.end > 0) {
-                markers.push(data.intro.start || 0);
-                markers.push(data.intro.end);
+            const dur = video.duration || 0;
+            if (!dur || !isFinite(dur) || dur <= 0) return;
+
+            // Remove previous segments
+            bar.querySelectorAll('.cp-progress-segment, .cp-progress-highlight').forEach(el => el.remove());
+
+            const segments = [];
+            if (streamData.intro && streamData.intro.end > 0) {
+                const start = Math.max(0, streamData.intro.start || 0);
+                const end = Math.min(dur, streamData.intro.end);
+                if (end > start) {
+                    segments.push({ type: 'intro', start, end, label: 'Intro' });
+                }
             }
-            if (data.outro && data.outro.end > 0) {
-                markers.push(data.outro.start || 0);
-                markers.push(data.outro.end);
+            if (streamData.outro && streamData.outro.end > 0) {
+                const start = Math.max(0, streamData.outro.start || 0);
+                const end = Math.min(dur, streamData.outro.end);
+                if (end > start) {
+                    segments.push({ type: 'outro', start, end, label: 'Outro' });
+                }
             }
 
-            // We'll set these after duration is known
-            if (dur > 0) {
-                markers.forEach(time => {
-                    const pct = (time / dur) * 100;
-                    const el = document.createElement('div');
-                    el.className = 'cp-progress-highlight';
-                    el.style.left = pct + '%';
+            const playedBar = bar.querySelector('.cp-progress-played');
+            segments.forEach(seg => {
+                const leftPct = (seg.start / dur) * 100;
+                const widthPct = Math.max(0.5, ((seg.end - seg.start) / dur) * 100);
+
+                const el = document.createElement('div');
+                el.className = 'cp-progress-segment cp-segment-' + seg.type;
+                el.style.left = leftPct + '%';
+                el.style.width = widthPct + '%';
+                el.setAttribute('data-type', seg.type);
+                el.setAttribute('title', seg.label + ' (' + formatTime(seg.start) + ' - ' + formatTime(seg.end) + ')');
+
+                if (playedBar) {
+                    bar.insertBefore(el, playedBar);
+                } else {
                     bar.appendChild(el);
-                });
-            } else {
-                // Wait for loadedmetadata
-                STATE.video.addEventListener('loadedmetadata', function onMeta() {
-                    STATE.video.removeEventListener('loadedmetadata', onMeta);
-                    const d = STATE.video.duration || 0;
-                    if (d > 0) {
-                        markers.forEach(time => {
-                            const pct = (time / d) * 100;
-                            const el = document.createElement('div');
-                            el.className = 'cp-progress-highlight';
-                            el.style.left = pct + '%';
-                            bar.appendChild(el);
-                        });
-                    }
-                });
+                }
+            });
+        }
+
+        function setupHighlights(data) {
+            if (data) STATE.streamData = data;
+            renderProgressSegments();
+
+            const video = STATE.video;
+            if (!video) return;
+
+            function onDurationReady() {
+                renderProgressSegments();
             }
+
+            video.addEventListener('loadedmetadata', onDurationReady);
+            video.addEventListener('durationchange', onDurationReady);
+            video.addEventListener('canplay', onDurationReady);
         }
 
         /* ── Progress Bar Interaction ── */
@@ -545,7 +609,15 @@ export function renderPlayerClientScript({
                 const x = Math.max(0, Math.min(e.clientX - rect.left, rect.width));
                 const pct = x / rect.width;
                 const time = pct * (video.duration || 0);
-                tip.textContent = formatTime(time);
+                let label = formatTime(time);
+                const intro = STATE.streamData && STATE.streamData.intro;
+                const outro = STATE.streamData && STATE.streamData.outro;
+                if (intro && intro.end > 0 && time >= (intro.start || 0) && time <= intro.end) {
+                    label += ' • Skip Intro';
+                } else if (outro && outro.end > 0 && time >= (outro.start || 0) && time <= outro.end) {
+                    label += ' • Skip Outro';
+                }
+                tip.textContent = label;
                 tip.style.left = x + 'px';
             }
 
@@ -573,6 +645,9 @@ export function renderPlayerClientScript({
             // Touch seek
             progress.addEventListener('touchstart', (e) => {
                 isSeeking = true;
+                lastTouchTime = Date.now();
+                clearTimeout(STATE.controlTimer);
+                STATE.controlTimer = null;
                 const touch = e.touches[0];
                 const rect = progress.getBoundingClientRect();
                 const x = Math.max(0, Math.min(touch.clientX - rect.left, rect.width));
@@ -583,6 +658,9 @@ export function renderPlayerClientScript({
 
             progress.addEventListener('touchmove', (e) => {
                 if (!isSeeking) return;
+                lastTouchTime = Date.now();
+                clearTimeout(STATE.controlTimer);
+                STATE.controlTimer = null;
                 const touch = e.touches[0];
                 const rect = progress.getBoundingClientRect();
                 const x = Math.max(0, Math.min(touch.clientX - rect.left, rect.width));
@@ -591,7 +669,11 @@ export function renderPlayerClientScript({
                 if (video) video.currentTime = pct * (video.duration || 0);
             }, { passive: true });
 
-            progress.addEventListener('touchend', () => { isSeeking = false; });
+            progress.addEventListener('touchend', () => {
+                isSeeking = false;
+                lastTouchTime = Date.now();
+                resetMobileControlsTimer();
+            });
         }
 
         /* ── Volume UI ── */
@@ -1045,9 +1127,9 @@ export function renderPlayerClientScript({
 
             // Server submenu
             container.appendChild(buildSubmenu('server', 'Server Route', [
-                { label: 'Server 1 (MegaPlay)', value: 1 },
-                { label: 'Server 2 (AniNeko)', value: 2 },
-                { label: 'Server 3 (Zoko)', value: 3 }
+                { label: 'Server 1 (Sora)', value: 1 },
+                { label: 'Server 2 (Neko)', value: 2 },
+                { label: 'Server 3 (Zozo)', value: 3 }
             ], STATE.server, (item) => {
                 onUserSelectServer(item.value);
             }));
@@ -1200,10 +1282,11 @@ export function renderPlayerClientScript({
             root.classList.remove('cp-settings-open');
             const settBtns = document.querySelectorAll('.cp-btn-settings, .cp-mobile-settings-btn');
             settBtns.forEach(b => b.classList.remove('cp-active'));
-            triggerControlHideTimer(1500);
+            const mobile = (Date.now() - lastTouchTime < 5000) || isMobile();
+            triggerControlHideTimer(mobile ? MOBILE_CONTROLS_HIDE_DELAY : 1500, mobile);
         }
 
-        /* ── Controls Auto-Hide (1.5s) ── */
+        /* ── Controls Auto-Hide Logic ── */
         function isControlsHovered() {
             const hasHover = window.matchMedia && window.matchMedia('(hover: hover) and (pointer: fine)').matches;
             if (!hasHover) return false;
@@ -1216,21 +1299,66 @@ export function renderPlayerClientScript({
             return false;
         }
 
-        function triggerControlHideTimer(delay) {
-            delay = delay || 1500;
+        function hideControlsNow() {
             clearTimeout(STATE.controlTimer);
-            if (STATE.isSettingsOpen || isControlsHovered()) return;
-            STATE.controlTimer = setTimeout(() => {
-                if (STATE.isSettingsOpen || isControlsHovered()) return;
-                const root = document.getElementById('player-root');
-                root.classList.remove('cp-controls-visible');
-            }, delay);
+            STATE.controlTimer = null;
+            const root = document.getElementById('player-root');
+            if (root) root.classList.remove('cp-controls-visible');
         }
 
-        function wakeControls() {
+        function isMobile() {
             const root = document.getElementById('player-root');
-            root.classList.add('cp-controls-visible');
-            triggerControlHideTimer(1500);
+            if (root && root.classList.contains('is-mobile')) return true;
+            if (Date.now() - lastTouchTime < 15000) return true;
+            if (window.innerWidth <= 768 && (('ontouchstart' in window) || (navigator.maxTouchPoints > 0))) return true;
+            return false;
+        }
+
+        function triggerControlHideTimer(delay, isTouch = false) {
+            clearTimeout(STATE.controlTimer);
+            STATE.controlTimer = null;
+
+            if (STATE.isSettingsOpen) return;
+
+            const mobile = isTouch || isMobile();
+            const timeoutMs = (delay !== undefined && delay !== null)
+                ? delay
+                : (mobile ? MOBILE_CONTROLS_HIDE_DELAY : 1500);
+
+            // On desktop, keep controls visible while hovering or while video is paused
+            if (!mobile) {
+                if (isControlsHovered()) return;
+                if (STATE.video && STATE.video.paused) return;
+            }
+
+            STATE.controlTimer = setTimeout(() => {
+                if (STATE.isSettingsOpen) return;
+                if (!mobile) {
+                    if (isControlsHovered()) return;
+                    if (STATE.video && STATE.video.paused) return;
+                }
+                const root = document.getElementById('player-root');
+                if (root) root.classList.remove('cp-controls-visible');
+                STATE.controlTimer = null;
+            }, timeoutMs);
+        }
+
+        function wakeControls(delay, isTouch = false) {
+            const root = document.getElementById('player-root');
+            if (root) root.classList.add('cp-controls-visible');
+            const mobile = isTouch || isMobile();
+            const timeoutMs = (delay !== undefined && delay !== null)
+                ? delay
+                : (mobile ? MOBILE_CONTROLS_HIDE_DELAY : 1500);
+            triggerControlHideTimer(timeoutMs, mobile);
+        }
+
+        function resetMobileControlsTimer() {
+            lastTouchTime = Date.now();
+            const root = document.getElementById('player-root');
+            if (root && root.classList.contains('cp-controls-visible')) {
+                triggerControlHideTimer(MOBILE_CONTROLS_HIDE_DELAY, true);
+            }
         }
 
         /* ── Control Hover Listeners ── */
@@ -1239,8 +1367,14 @@ export function renderPlayerClientScript({
             elements.forEach(el => {
                 if (el.dataset.hoverWired) return;
                 el.dataset.hoverWired = 'true';
-                el.addEventListener('mouseenter', () => { clearTimeout(STATE.controlTimer); });
-                el.addEventListener('mouseleave', () => { triggerControlHideTimer(1500); });
+                el.addEventListener('mouseenter', () => {
+                    if (isMobile()) return;
+                    clearTimeout(STATE.controlTimer);
+                });
+                el.addEventListener('mouseleave', () => {
+                    if (isMobile()) return;
+                    triggerControlHideTimer(1500, false);
+                });
             });
         }
 
@@ -1353,7 +1487,8 @@ export function renderPlayerClientScript({
             if (!video || !video.duration) return;
             const newTime = Math.max(0, Math.min(video.duration, video.currentTime + seconds));
             video.currentTime = newTime;
-            wakeControls();
+            const mobile = (Date.now() - lastTouchTime < 5000) || isMobile();
+            wakeControls(mobile ? MOBILE_CONTROLS_HIDE_DELAY : 1500, mobile);
         }
 
         function showSeekIndicator(side, text) {
@@ -1401,8 +1536,19 @@ export function renderPlayerClientScript({
         playerRoot.addEventListener('pointerdown', (e) => {
             // Only primary pointer to ignore multi-touch / pinch gestures
             if (!e.isPrimary) return;
-            // Ignore touches that begin on controls or buttons
-            if (isControlElement(e.target)) return;
+
+            const isTouch = e.pointerType === 'touch' || e.pointerType === 'pen';
+            if (isTouch || isMobile()) {
+                lastTouchTime = Date.now();
+            }
+
+            // Ignore touches that begin on controls or buttons, but reset timer on mobile
+            if (isControlElement(e.target)) {
+                if (isTouch || isMobile()) {
+                    resetMobileControlsTimer();
+                }
+                return;
+            }
 
             // Reset any active gesture state
             if (gesture.activePointerId !== null) {
@@ -1416,8 +1562,8 @@ export function renderPlayerClientScript({
             gesture.hasMoved = false;
             gesture.isLongPressing = false;
 
-            // Long-press detection for touch / pen
-            if (e.pointerType === 'touch' || e.pointerType === 'pen') {
+            // Long-press detection for touch / pen / mobile
+            if (e.pointerType === 'touch' || e.pointerType === 'pen' || isMobile()) {
                 clearTimeout(gesture.longPressTimer);
                 gesture.longPressTimer = setTimeout(() => {
                     if (gesture.activePointerId === e.pointerId && !gesture.hasMoved && STATE.video && !STATE.video.paused) {
@@ -1474,13 +1620,15 @@ export function renderPlayerClientScript({
                 return;
             }
 
+            const mobile = isMobile() || e.pointerType === 'touch' || e.pointerType === 'pen';
+
             // Desktop mouse pointer: leave click handler to toggle play/pause immediately
-            if (e.pointerType === 'mouse') {
+            if (!mobile && e.pointerType === 'mouse') {
                 gesture.activePointerId = null;
                 return;
             }
 
-            // Touch or pen interaction:
+            // Mobile tap interaction (touch, pen, or mobile emulation):
             lastTouchTime = Date.now();
             const now = Date.now();
             const timeSinceLast = now - gesture.lastTapTime;
@@ -1511,8 +1659,9 @@ export function renderPlayerClientScript({
                 }
 
                 gesture.lastTapTime = 0;
+                wakeControls(MOBILE_CONTROLS_HIDE_DELAY, true);
             } else {
-                // First tap: delay by doubleTapDelay before executing single tap
+                // First tap: delay by doubleTapDelay before executing single tap to preserve double-tap detection
                 gesture.lastTapTime = now;
                 gesture.lastTapX = e.clientX;
                 gesture.lastTapY = e.clientY;
@@ -1521,11 +1670,15 @@ export function renderPlayerClientScript({
                 gesture.singleTapTimer = setTimeout(() => {
                     const root = document.getElementById('player-root');
                     if (root) {
-                        if (root.classList.contains('cp-controls-visible')) {
-                            root.classList.remove('cp-controls-visible');
-                            clearTimeout(STATE.controlTimer);
+                        if (STATE.isSettingsOpen) {
+                            closeSettings();
+                            resetMobileControlsTimer();
+                        } else if (root.classList.contains('cp-controls-visible')) {
+                            // When controls are visible: User taps anywhere on random/empty video area -> Hide controls immediately & cancel pending timer
+                            hideControlsNow();
                         } else {
-                            wakeControls();
+                            // When controls are hidden: User taps anywhere on video surface -> Show controls & start 3-second timer immediately
+                            wakeControls(MOBILE_CONTROLS_HIDE_DELAY, true);
                         }
                     }
                     gesture.singleTapTimer = null;
@@ -1542,6 +1695,51 @@ export function renderPlayerClientScript({
             }
         });
 
+        playerRoot.addEventListener('touchstart', () => {
+            lastTouchTime = Date.now();
+        }, { passive: true });
+
+        playerRoot.addEventListener('click', (e) => {
+            if (isMobile() && isControlElement(e.target)) {
+                resetMobileControlsTimer();
+            }
+        });
+
+        /* ── Mobile Video Surface Context Menu Suppression ── */
+        function isVideoSurfaceTarget(target) {
+            if (!target) return false;
+            if (target === STATE.video || target.id === 'cp-video' || (target.classList && target.classList.contains('cp-video'))) {
+                return true;
+            }
+            if (target === playerRoot) return true;
+            return playerRoot.contains(target) && !isControlElement(target);
+        }
+
+        function suppressMobileVideoContextMenu(e) {
+            const isTouchOrMobile = isMobile() || 
+                                    (Date.now() - lastTouchTime < 5000) || 
+                                    gesture.isLongPressing || 
+                                    (gesture.activePointerId !== null) ||
+                                    (e.pointerType === 'touch' || e.pointerType === 'pen');
+
+            if (isTouchOrMobile && isVideoSurfaceTarget(e.target)) {
+                e.preventDefault();
+                e.stopPropagation();
+                return false;
+            }
+        }
+
+        const videoEl = document.getElementById('cp-video');
+        if (videoEl) {
+            videoEl.addEventListener('contextmenu', suppressMobileVideoContextMenu, { capture: true });
+        }
+        playerRoot.addEventListener('contextmenu', suppressMobileVideoContextMenu, { capture: true });
+        document.addEventListener('contextmenu', (e) => {
+            if (isVideoSurfaceTarget(e.target)) {
+                suppressMobileVideoContextMenu(e);
+            }
+        }, { capture: true });
+
         /* ── Click Outside Settings ── */
         document.addEventListener('pointerdown', (e) => {
             if (!STATE.isSettingsOpen) return;
@@ -1554,14 +1752,17 @@ export function renderPlayerClientScript({
 
         /* ── Mouse Activity (Desktop) ── */
         playerRoot.addEventListener('mousemove', (e) => {
-            if (e.pointerType === 'touch') return;
-            wakeControls();
+            if (isMobile() || (Date.now() - lastTouchTime < 2000) || e.pointerType === 'touch' || e.pointerType === 'pen') return;
+            wakeControls(1500, false);
         });
-        playerRoot.addEventListener('mouseleave', () => { triggerControlHideTimer(1500); });
+        playerRoot.addEventListener('mouseleave', () => {
+            if (isMobile()) return;
+            triggerControlHideTimer(1500, false);
+        });
 
         /* ── Video Click → Play/Pause (Desktop Mouse Only) ── */
         document.getElementById('cp-video').addEventListener('click', (e) => {
-            if (Date.now() - lastTouchTime < 500) return; // Prevent synthetic click after touch tap
+            if (isMobile() || (Date.now() - lastTouchTime < 1000)) return; // Prevent mobile tap or synthetic click
             if (isControlElement(e.target)) return;
             togglePlayPause();
         });
@@ -1573,6 +1774,14 @@ export function renderPlayerClientScript({
         });
 
         /* ── Button Wiring ── */
+        const playPauseBtn = document.querySelector('.cp-btn-play-pause');
+        if (playPauseBtn) {
+            playPauseBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                togglePlayPause();
+            });
+        }
+
         document.querySelector('.cp-btn-volume').addEventListener('click', (e) => {
             e.stopPropagation();
             toggleMute();
@@ -1632,9 +1841,10 @@ export function renderPlayerClientScript({
         });
 
         /* ── Initialize ── */
-        document.addEventListener('DOMContentLoaded', () => {
+        function updateDeviceMode() {
             const isMob = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || 
-                          (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+                          (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1) ||
+                          (window.innerWidth <= 768 && (('ontouchstart' in window) || navigator.maxTouchPoints > 0));
             const root = document.getElementById('player-root');
             if (root) {
                 if (isMob) {
@@ -1645,6 +1855,12 @@ export function renderPlayerClientScript({
                     root.classList.remove('is-mobile');
                 }
             }
+        }
+        window.addEventListener('resize', updateDeviceMode);
+        window.addEventListener('orientationchange', updateDeviceMode);
+
+        document.addEventListener('DOMContentLoaded', () => {
+            updateDeviceMode();
             setupProgressInteraction();
             bindControlHoverListeners();
             wakeControls();

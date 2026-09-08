@@ -72,6 +72,64 @@ async function runTests() {
     const landingHtml = renderLandingHtml("http://localhost:3005");
     console.log(`   ✓ Landing HTML size: ${landingHtml.length} bytes (No glow effects: ${!landingHtml.includes("glow")})`);
 
+    // 9. Test Honeypot & Decoy Stream Poisoning System
+    console.log("\n9. Testing Honeypot & Decoy Stream Poisoning System...");
+    const { default: worker } = await import('./worker.js');
+
+    // 9a. Python Scraper Simulation
+    console.log("   -> Testing python-requests bot detection...");
+    const botReq = new Request("http://localhost:3005/api/stream/resolve?anilistId=21&episode=1&track=sub", {
+        headers: { "User-Agent": "python-requests/2.31.0" }
+    });
+    const botRes = await worker.fetch(botReq, {}, {});
+    const botJson = await botRes.json();
+    if (botJson._hp === 1 && botRes.headers.get("X-Honeypot-Engaged") === "1") {
+        console.log(`      ✓ Python scraper trapped! Received Decoy stream: ${botJson.streamUrl.slice(0, 60)}...`);
+        console.log(`      ✓ English Scraper Notice: "${botJson.notice.slice(0, 60)}..."`);
+    } else {
+        throw new Error("Honeypot failed to trap Python scraper!");
+    }
+
+    // 9b. Curl Bot Simulation
+    console.log("   -> Testing curl bot detection...");
+    const curlReq = new Request("http://localhost:3005/api/stream/resolve?anilistId=21&episode=1&track=sub", {
+        headers: { "User-Agent": "curl/8.4.0" }
+    });
+    const curlRes = await worker.fetch(curlReq, {}, {});
+    const curlJson = await curlRes.json();
+    if (curlJson._hp === 1) {
+        console.log("      ✓ Curl scraper trapped in honeypot decoy successfully.");
+    } else {
+        throw new Error("Honeypot failed to trap curl!");
+    }
+
+    // 9c. Decoy WebVTT Subtitle Warning
+    console.log("   -> Testing Decoy WebVTT subtitle delivery...");
+    const vttReq = new Request("http://localhost:3005/api/stream/vtt?h=1");
+    const vttRes = await worker.fetch(vttReq, {}, {});
+    const vttText = await vttRes.text();
+    if (vttText.includes("WEBVTT") && vttText.includes("NOTICE TO VIEWERS") && vttText.includes("megaplay.buzz")) {
+        console.log("      ✓ Decoy WebVTT subtitle generated with on-screen viewer notice!");
+    } else {
+        throw new Error("Decoy WebVTT content verification failed!");
+    }
+
+    // 9d. Legitimate Browser Request
+    console.log("   -> Testing legitimate human browser request...");
+    const legitReq = new Request("http://localhost:3005/api/stream/resolve?anilistId=21&episode=1&track=sub", {
+        headers: {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/124.0.0.0",
+            "Accept": "application/json"
+        }
+    });
+    const legitRes = await worker.fetch(legitReq, {}, {});
+    const legitJson = await legitRes.json();
+    if (legitJson._hp !== 1 && !legitRes.headers.get("X-Honeypot-Engaged")) {
+        console.log(`      ✓ Legitimate user bypassed honeypot and received real stream! Server: ${legitJson.server}`);
+    } else {
+        throw new Error("Honeypot falsely flagged a legitimate browser user!");
+    }
+
     console.log("\n==============================================");
     console.log("🎉 ALL TESTS COMPLETED SUCCESSFULLY!");
     console.log("==============================================");
