@@ -45,6 +45,15 @@ function attachProxyUrls(data) {
     return data;
 }
 
+function getUpstreamHeaders(targetUrl = "") {
+    const isVidtube = targetUrl.includes('akirax') || targetUrl.includes('vidtube') || targetUrl.includes('anizara');
+    return {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+        "Referer": isVidtube ? "https://vidtube.site/" : "https://megaplay.buzz/",
+        "Origin": isVidtube ? "https://vidtube.site" : "https://megaplay.buzz"
+    };
+}
+
 const server = http.createServer(async (req, res) => {
     // Handle CORS preflight
     if (req.method === "OPTIONS") {
@@ -140,11 +149,7 @@ const server = http.createServer(async (req, res) => {
 
             try {
                 const upstream = await fetch(target, {
-                    headers: {
-                        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-                        "Referer": "https://megaplay.buzz/",
-                        "Origin": "https://megaplay.buzz"
-                    }
+                    headers: getUpstreamHeaders(target)
                 });
 
                 if (!upstream.ok) {
@@ -192,11 +197,7 @@ const server = http.createServer(async (req, res) => {
 
             try {
                 const upstream = await fetch(target, {
-                    headers: {
-                        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-                        "Referer": "https://megaplay.buzz/",
-                        "Origin": "https://megaplay.buzz"
-                    }
+                    headers: getUpstreamHeaders(target)
                 });
 
                 if (!upstream.ok) {
@@ -235,9 +236,7 @@ const server = http.createServer(async (req, res) => {
 
             try {
                 const reqHeaders = {
-                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-                    "Referer": "https://megaplay.buzz/",
-                    "Origin": "https://megaplay.buzz"
+                    ...getUpstreamHeaders(target)
                 };
 
                 if (req.headers.range) {
