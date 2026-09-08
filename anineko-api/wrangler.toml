@@ -16,4 +16,4 @@ enabled = true
 # Stores persistent AniList/MAL mappings across all worldwide edge locations
 [[kv_namespaces]]
 binding = "ANINEKO_CACHE"
-id = "b77a4adff5014a8d89516a290add396a"
+id = "5a4a172d99c04cb286a1cacddcf6e5e6"

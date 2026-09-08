@@ -295,28 +295,71 @@ async function resolveOtakuhg(input, baseUrl) {
     if (!res.ok) throw new Error('OtakuHG returned HTTP ' + res.status);
     const html = await res.text();
 
-    let searchContext = html;
-    // Fast path: Only unpack if m3u8 is not directly in HTML
-    if (!html.includes('.m3u8')) {
+    const streams = [];
+
+    // FAST PATH: Check if var links = { ... } is in raw HTML (0ms unpacker bypass)
+    let linksMatch = html.match(/var\s+links\s*=\s*(\{[\s\S]*?\});/i);
+    if (!linksMatch) {
+        // Check packed scripts if needed
         const scriptMatches = html.match(/<script[\s\S]*?>([\s\S]*?)<\/script>/gi) || [];
         for (const s of scriptMatches) {
-            if (s.includes('eval(function(p,a,c,k,e,') && (s.includes('file') || s.includes('m3u8') || s.includes('sources'))) {
-                searchContext += '\n' + fastUnpack(s);
-                break; // Only unpack the player script!
+            if (s.includes('eval(function(p,a,c,k,e,') && (s.includes('links') || s.includes('hls') || s.includes('sources'))) {
+                const unpacked = fastUnpack(s);
+                linksMatch = unpacked.match(/var\s+links\s*=\s*(\{[\s\S]*?\});/i);
+                if (linksMatch) break;
             }
         }
     }
 
-    const streams = [];
-    const m3u8Matches = [...searchContext.matchAll(/(?:file|src)\s*:\s*["'](https?:\/\/[^"']+\.m3u8[^"']*)["']/gi)];
-    for (const m of m3u8Matches) {
-        streams.push({
-            server: 'StreamHG HLS',
-            url: baseUrl + '/api/proxy?url=' + encodeURIComponent(m[1]),
-            rawUrl: m[1],
-            type: 'hls',
-            priority: 1
-        });
+    if (linksMatch) {
+        try {
+            const parsedLinks = JSON.parse(linksMatch[1]);
+            if (parsedLinks.hls4) {
+                const absHls4 = parsedLinks.hls4.startsWith('/') ? `https://otakuhg.site${parsedLinks.hls4}` : parsedLinks.hls4;
+                streams.push({
+                    server: 'OtakuHG Edge (Primary / HLS4)',
+                    url: baseUrl ? `${baseUrl}/api/proxy?url=${encodeURIComponent(absHls4)}` : absHls4,
+                    rawUrl: absHls4,
+                    type: 'hls',
+                    quality: '1080p / Auto',
+                    priority: 1
+                });
+            }
+            if (parsedLinks.hls3) {
+                streams.push({
+                    server: 'SolutionPortal CDN (Backup / HLS3)',
+                    url: baseUrl ? `${baseUrl}/api/proxy?url=${encodeURIComponent(parsedLinks.hls3)}` : parsedLinks.hls3,
+                    rawUrl: parsedLinks.hls3,
+                    type: 'hls',
+                    quality: 'auto',
+                    priority: 2
+                });
+            }
+            if (parsedLinks.hls2) {
+                streams.push({
+                    server: 'Centaurus CDN (Backup / HLS2)',
+                    url: baseUrl ? `${baseUrl}/api/proxy?url=${encodeURIComponent(parsedLinks.hls2)}` : parsedLinks.hls2,
+                    rawUrl: parsedLinks.hls2,
+                    type: 'hls',
+                    quality: 'auto',
+                    priority: 3
+                });
+            }
+        } catch (e) {}
+    }
+
+    // Direct fallback for any .m3u8 URLs
+    if (streams.length === 0) {
+        const m3u8Matches = [...html.matchAll(/(?:file|src)\s*:\s*["'](https?:\/\/[^"']+\.m3u8[^"']*)["']/gi)];
+        for (const m of m3u8Matches) {
+            streams.push({
+                server: 'StreamHG HLS',
+                url: baseUrl ? `${baseUrl}/api/proxy?url=${encodeURIComponent(m[1])}` : m[1],
+                rawUrl: m[1],
+                type: 'hls',
+                priority: 1
+            });
+        }
     }
 
     return {
