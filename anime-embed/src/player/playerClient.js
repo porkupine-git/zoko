@@ -1,0 +1,1654 @@
+/**
+ * Client-Side Custom Video Player Runtime Script
+ * Initializes browser STATE, HLS.js direct integration, custom controls,
+ * settings panel, multi-server failover, mobile top bar, 1.5s auto-hide,
+ * keyboard hotkeys, and double-tap seek on mobile.
+ *
+ * ZERO dependency on ArtPlayer — fully custom player with complete freedom.
+ */
+
+import { escapeJs } from './utils.js';
+import { SETTING_ICONS, SUB_ICON_ON, SUB_ICON_OFF, CONTROL_ICONS } from './icons.js';
+
+export function renderPlayerClientScript({
+    id,
+    idType = 'ani',
+    anilistId = null,
+    malId = null,
+    title = '',
+    episode = 1,
+    totalEpisodes = 0,
+    track = 'sub',
+    server = 1,
+    autoPlay = 1,
+    autoNext = 1,
+    autoSkip = 1
+}) {
+    return `
+        /* ── STATE ── */
+        const STATE = {
+            id: "${escapeJs(id || '')}",
+            idType: "${escapeJs(idType || 'ani')}",
+            anilistId: ${anilistId ? anilistId : 'null'},
+            malId: ${malId ? malId : 'null'},
+            title: "${escapeJs(title || '')}",
+            currentEp: ${parseInt(episode, 10) || 1},
+            totalEpisodes: ${parseInt(totalEpisodes, 10) || 0},
+            track: "${escapeJs(track || 'sub')}",
+            server: ${parseInt(server, 10) || 1},
+            autoPlay: ${autoPlay ? 'true' : 'false'},
+            autoNext: ${autoNext ? 'true' : 'false'},
+            autoSkip: ${autoSkip ? 'true' : 'false'},
+            streamData: null,
+            hls: null,
+            video: null,
+            isMuted: false,
+            subtitleVisible: true,
+            subtitleCues: [],
+            subtitleCache: {},
+            activeSubtitleBlobUrl: null,
+            failoverAttempt: 0,
+            qualities: [{ label: 'Auto', level: -1 }],
+            currentQuality: -1,
+            autoLevelCurrent: -1,
+            playbackRate: 1.0,
+            subtitles: [],
+            currentSubIndex: 0,
+            controlTimer: null,
+            isSettingsOpen: false,
+            activePanel: 'main'
+        };
+
+        /* ── Touch & Mobile Interaction Configuration ── */
+        const TOUCH_CONFIG = {
+            seekSeconds: 10,        // configurable seek step in seconds
+            doubleTapDelay: 300,     // window for second tap detection (ms)
+            longPressDelay: 500,     // hold duration to activate 2x speed (ms)
+            longPressSpeed: 2.0,     // temporary playback rate during hold
+            moveThreshold: 10        // movement tolerance in pixels before cancelling gesture
+        };
+
+        const ICONS = {
+            SETTING: ${JSON.stringify(SETTING_ICONS)},
+            SUB_ON: ${JSON.stringify(SUB_ICON_ON)},
+            SUB_OFF: ${JSON.stringify(SUB_ICON_OFF)},
+            CONTROL: ${JSON.stringify(CONTROL_ICONS)}
+        };
+
+        /* ── PostMessage ── */
+        function postToParent(eventName, payload = {}) {
+            try {
+                if (window.parent && window.parent !== window) {
+                    window.parent.postMessage({
+                        source: 'aniembed',
+                        event: eventName,
+                        animeId: STATE.id,
+                        anilistId: STATE.anilistId,
+                        malId: STATE.malId,
+                        title: STATE.title,
+                        episode: STATE.currentEp,
+                        track: STATE.track,
+                        server: STATE.server,
+                        ...payload
+                    }, '*');
+                }
+            } catch (e) {}
+        }
+
+        /* ── Listen for parent postMessages ── */
+        window.addEventListener('message', (e) => {
+            if (!e.data || typeof e.data !== 'object') return;
+            const action = e.data.action;
+            if (action === 'play' && STATE.video) STATE.video.play();
+            else if (action === 'pause' && STATE.video) STATE.video.pause();
+            else if (action === 'changeEpisode' && e.data.episode) changeEpisode(parseInt(e.data.episode, 10));
+            else if (action === 'changeServer' && e.data.server) onUserSelectServer(parseInt(e.data.server, 10));
+            else if (action === 'changeTrack' && e.data.track) {
+                STATE.track = e.data.track.toLowerCase();
+                initStream();
+            }
+        });
+
+        /* ── Toast ── */
+        function showToast(text, type = 'info', duration = 3000) {
+            const toast = document.getElementById('toast');
+            const toastText = document.getElementById('toast-text');
+            const toastDot = document.getElementById('toast-dot');
+            toastText.innerText = text;
+            toastDot.className = 'toast-dot ' + (type === 'success' ? 'green' : (type === 'error' ? 'red' : 'yellow'));
+            toast.classList.add('show');
+            clearTimeout(window.__toastTimer);
+            window.__toastTimer = setTimeout(() => { toast.classList.remove('show'); }, duration);
+        }
+
+        /* ── Format Time ── */
+        function formatTime(secs) {
+            if (!secs || isNaN(secs)) return '0:00';
+            const s = Math.floor(secs);
+            const h = Math.floor(s / 3600);
+            const m = Math.floor((s % 3600) / 60);
+            const sec = s % 60;
+            if (h > 0) return h + ':' + String(m).padStart(2, '0') + ':' + String(sec).padStart(2, '0');
+            return m + ':' + String(sec).padStart(2, '0');
+        }
+
+        /* ── Stream Loader ── */
+        async function initStream() {
+            showToast('Connecting to Server ' + STATE.server + '...', 'yellow', 2500);
+
+            const url = new URL('/api/stream/resolve', window.location.origin);
+            if (STATE.idType === 'mal' || STATE.malId) {
+                url.searchParams.set('malId', STATE.malId || STATE.id);
+            }
+            if (STATE.idType === 'ani' || STATE.anilistId) {
+                url.searchParams.set('anilistId', STATE.anilistId || STATE.id);
+            }
+            if (STATE.title) url.searchParams.set('title', STATE.title);
+            url.searchParams.set('episode', STATE.currentEp);
+            url.searchParams.set('track', STATE.track);
+            url.searchParams.set('server', STATE.server);
+
+            try {
+                const res = await fetch(url.toString());
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+                const data = await res.json();
+                if (!data.streamUrl) throw new Error('No playable stream URL returned from resolver');
+
+                STATE.streamData = data;
+                STATE.failoverAttempt = 0;
+
+                if (data.resolvedTitle && !STATE.title) {
+                    STATE.title = data.resolvedTitle;
+                    document.title = STATE.title + ' - Episode ' + STATE.currentEp;
+                }
+                if (data.resolvedAniId && !STATE.anilistId) STATE.anilistId = data.resolvedAniId;
+                if (data.resolvedMalId && !STATE.malId) STATE.malId = data.resolvedMalId;
+                if (data.meta && data.meta.episodes && !STATE.totalEpisodes) {
+                    STATE.totalEpisodes = data.meta.episodes;
+                }
+                if (data.serverId && data.serverId !== STATE.server) {
+                    STATE.server = data.serverId;
+                }
+
+                mountPlayer(data);
+                showToast('Playing from ' + (data.server || 'Server ' + STATE.server), 'success', 2500);
+                postToParent('aniembed:ready');
+            } catch (err) {
+                console.warn('Stream failed on server', STATE.server, err);
+                attemptFailover(err.message);
+            }
+        }
+
+        /* ── Failover ── */
+        function attemptFailover(errorMsg) {
+            STATE.failoverAttempt++;
+            const serverCycle = [1, 2, 3];
+            const nextServer = serverCycle[STATE.server % 3];
+
+            if (STATE.failoverAttempt < 3) {
+                showToast('Server ' + STATE.server + ' unavailable. Trying Server ' + nextServer + '...', 'yellow', 3500);
+                STATE.server = nextServer;
+                setTimeout(initStream, 500);
+            } else {
+                showToast('All stream servers failed: ' + errorMsg, 'error', 6000);
+            }
+        }
+
+        /* ── Mount Player ── */
+        function mountPlayer(data) {
+            // Clean up old HLS instance
+            if (STATE.hls) {
+                try { STATE.hls.destroy(); } catch (e) {}
+                STATE.hls = null;
+            }
+
+            const video = document.getElementById('cp-video');
+            STATE.video = video;
+
+            // Clean up previous blob track
+            if (STATE.activeSubtitleBlobUrl) {
+                try { URL.revokeObjectURL(STATE.activeSubtitleBlobUrl); } catch (e) {}
+                STATE.activeSubtitleBlobUrl = null;
+            }
+
+            // Remove old subtitle tracks
+            const oldTracks = video.querySelectorAll('track');
+            oldTracks.forEach(t => t.remove());
+
+            // Setup subtitles
+            STATE.subtitles = [];
+            STATE.subtitleCues = [];
+            STATE.currentSubIndex = -1;
+            let defaultSubIdx = -1;
+
+            if (Array.isArray(data.subtitles) && data.subtitles.length > 0) {
+                const defaultSub = data.subtitles.find(s => s.default) ||
+                                   data.subtitles.find(s => (s.label || '').toLowerCase().includes('english')) ||
+                                   data.subtitles[0];
+
+                data.subtitles.forEach((s, idx) => {
+                    const isDef = s === defaultSub;
+                    STATE.subtitles.push({
+                        label: s.label || ('Subtitle ' + (idx + 1)),
+                        url: s.url,
+                        lang: s.lang || 'en',
+                        isDefault: isDef
+                    });
+                    if (isDef) defaultSubIdx = idx;
+                });
+
+                STATE.currentSubIndex = defaultSubIdx >= 0 ? defaultSubIdx : 0;
+                STATE.subtitleVisible = true;
+                loadSubtitleTrack(STATE.currentSubIndex);
+            } else {
+                STATE.subtitleVisible = false;
+                renderActiveSubtitles(0);
+            }
+
+            // Setup highlights on progress bar
+            setupHighlights(data);
+
+            // Attach HLS.js
+            if (Hls.isSupported()) {
+                const hls = new Hls({
+                    enableWorker: true,
+                    lowLatencyMode: true,
+                    backBufferLength: 90
+                });
+                hls.loadSource(data.streamUrl);
+                hls.attachMedia(video);
+                STATE.hls = hls;
+
+                hls.on(Hls.Events.MANIFEST_PARSED, (event, d) => {
+                    if (d.levels && d.levels.length > 0) {
+                        const parsed = d.levels.map((lvl, idx) => {
+                            let label = '';
+                            if (lvl.height) {
+                                label = lvl.height + 'p';
+                            } else if (lvl.name) {
+                                label = lvl.name;
+                            } else if (lvl.bitrate) {
+                                label = Math.round(lvl.bitrate / 1000) + 'k';
+                            } else {
+                                label = 'Stream ' + (idx + 1);
+                            }
+                            return {
+                                label: label,
+                                level: idx,
+                                height: lvl.height || 0,
+                                bitrate: lvl.bitrate || 0
+                            };
+                        });
+                        parsed.sort((a, b) => (b.height - a.height) || (b.bitrate - a.bitrate));
+                        STATE.qualities = [{ label: 'Auto', level: -1 }, ...parsed];
+                        STATE.currentQuality = -1;
+                    }
+                    if (STATE.autoPlay) {
+                        video.play().catch(err => {
+                            console.warn('Autoplay blocked, trying muted:', err);
+                            video.muted = true;
+                            STATE.isMuted = true;
+                            updateVolumeUI();
+                            video.play().catch(e => console.error('Muted play also failed:', e));
+                        });
+                    }
+                    buildSettingsPanel();
+                });
+
+                hls.on(Hls.Events.LEVEL_SWITCHED, (event, data) => {
+                    STATE.autoLevelCurrent = data.level;
+                    buildSettingsPanel();
+                });
+
+                hls.on(Hls.Events.ERROR, (event, d) => {
+                    if (d.fatal) {
+                        console.warn('Fatal HLS Error:', d.type);
+                        if (d.type === Hls.ErrorTypes.NETWORK_ERROR) {
+                            hls.startLoad();
+                        } else if (d.type === Hls.ErrorTypes.MEDIA_ERROR) {
+                            hls.recoverMediaError();
+                        } else {
+                            attemptFailover('Playback stream decoded fatal error');
+                        }
+                    }
+                });
+            } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+                video.src = data.streamUrl;
+                if (STATE.autoPlay) {
+                    video.play().catch(() => {});
+                }
+            }
+
+            // Enable active subtitle track
+            setTimeout(() => {
+                activateSubtitleTrack(STATE.currentSubIndex);
+            }, 200);
+
+            // Build settings panel
+            buildSettingsPanel();
+
+            // Update subtitle icon
+            updateSubtitleIcon(STATE.subtitleVisible && STATE.subtitles.length > 0);
+
+            // Wire events
+            wireVideoEvents();
+        }
+
+        /* ── Video Events ── */
+        function wireVideoEvents() {
+            const video = STATE.video;
+            if (!video || video.dataset.eventsWired) return;
+            video.dataset.eventsWired = 'true';
+
+            // Timeupdate → progress bar + time display + skip buttons + subtitles
+            video.addEventListener('timeupdate', onTimeUpdate);
+            video.addEventListener('seeked', () => {
+                if (STATE.video) renderActiveSubtitles(STATE.video.currentTime);
+            });
+            video.addEventListener('seeking', () => {
+                if (STATE.video) renderActiveSubtitles(STATE.video.currentTime);
+            });
+
+            // Progress → buffered bar
+            video.addEventListener('progress', updateBuffered);
+
+            // Metadata loaded → detect stream video resolution
+            video.addEventListener('loadedmetadata', () => {
+                if (video.videoHeight && STATE.qualities && STATE.qualities.length <= 1) {
+                    const h = video.videoHeight;
+                    const label = h >= 1000 ? '1080p' : h >= 700 ? '720p' : h >= 460 ? '480p' : h + 'p';
+                    const exists = STATE.qualities.some(q => q.label === label);
+                    if (!exists) {
+                        STATE.qualities.push({ label: label, level: 0, height: h });
+                        buildSettingsPanel();
+                    }
+                }
+            });
+
+            // Play/pause state
+            video.addEventListener('play', () => {
+                document.querySelector('.cp-center-play').classList.add('cp-playing');
+                triggerControlHideTimer(1500);
+                postToParent('aniembed:play', { currentTime: video.currentTime });
+            });
+            video.addEventListener('pause', () => {
+                document.querySelector('.cp-center-play').classList.remove('cp-playing');
+                postToParent('aniembed:pause', { currentTime: video.currentTime });
+            });
+
+            // Ended
+            video.addEventListener('ended', () => {
+                postToParent('aniembed:ended', { episode: STATE.currentEp });
+                if (STATE.autoNext) {
+                    const nextEp = STATE.currentEp + 1;
+                    if (!STATE.totalEpisodes || nextEp <= STATE.totalEpisodes) {
+                        showToast('Playing Episode ' + nextEp + ' in 3s...', 'info', 3000);
+                        setTimeout(() => changeEpisode(nextEp), 3000);
+                    }
+                }
+            });
+
+            // Loading state
+            video.addEventListener('waiting', () => {
+                document.querySelector('.cp-loading').classList.add('cp-show');
+            });
+            video.addEventListener('canplay', () => {
+                document.querySelector('.cp-loading').classList.remove('cp-show');
+            });
+
+            // Fullscreen tracking for iOS Safari
+            video.addEventListener('webkitbeginfullscreen', onFullscreenChange);
+            video.addEventListener('webkitendfullscreen', onFullscreenChange);
+            video.addEventListener('playing', () => {
+                document.querySelector('.cp-loading').classList.remove('cp-show');
+            });
+
+            // Volume change
+            video.addEventListener('volumechange', () => {
+                STATE.isMuted = video.muted || video.volume === 0;
+                updateVolumeUI();
+            });
+        }
+
+        /* ── Timeupdate Handler ── */
+        function onTimeUpdate() {
+            const video = STATE.video;
+            if (!video) return;
+            const cur = video.currentTime;
+            const dur = video.duration || 0;
+            const pct = dur > 0 ? (cur / dur) * 100 : 0;
+
+            // Render active subtitles in real-time
+            renderActiveSubtitles(cur);
+
+            // Update progress
+            const played = document.querySelector('.cp-progress-played');
+            if (played) played.style.width = pct + '%';
+
+            // Update time display
+            const timeCur = document.querySelector('.cp-time-current');
+            const timeDur = document.querySelector('.cp-time-duration');
+            if (timeCur) timeCur.textContent = formatTime(cur);
+            if (timeDur) timeDur.textContent = formatTime(dur);
+
+            // PostMessage
+            postToParent('aniembed:timeupdate', { currentTime: cur, duration: dur });
+
+            // Intro/Outro skip
+            const intro = STATE.streamData && STATE.streamData.intro;
+            const outro = STATE.streamData && STATE.streamData.outro;
+
+            const btnIntro = document.getElementById('btn-skip-intro');
+            if (intro && intro.end > 0 && cur >= (intro.start || 0) && cur < (intro.end - 1)) {
+                if (STATE.autoSkip && cur >= (intro.start || 0) && cur <= (intro.start + 2)) {
+                    video.currentTime = intro.end;
+                    showToast('Auto-Skipped Intro', 'info', 2000);
+                    btnIntro.style.display = 'none';
+                } else {
+                    btnIntro.style.display = 'inline-flex';
+                }
+            } else {
+                btnIntro.style.display = 'none';
+            }
+
+            const btnOutro = document.getElementById('btn-skip-outro');
+            if (outro && outro.end > 0 && cur >= (outro.start || 0) && cur < (outro.end - 1)) {
+                if (STATE.autoSkip && cur >= (outro.start || 0) && cur <= (outro.start + 2)) {
+                    video.currentTime = outro.end;
+                    showToast('Auto-Skipped Outro', 'info', 2000);
+                    btnOutro.style.display = 'none';
+                } else {
+                    btnOutro.style.display = 'inline-flex';
+                }
+            } else {
+                btnOutro.style.display = 'none';
+            }
+        }
+
+        /* ── Buffered Update ── */
+        function updateBuffered() {
+            const video = STATE.video;
+            if (!video || !video.buffered || video.buffered.length === 0) return;
+            const dur = video.duration || 0;
+            if (dur <= 0) return;
+            const buffEnd = video.buffered.end(video.buffered.length - 1);
+            const pct = (buffEnd / dur) * 100;
+            const el = document.querySelector('.cp-progress-buffered');
+            if (el) el.style.width = pct + '%';
+        }
+
+        /* ── Progress Bar Highlights ── */
+        function setupHighlights(data) {
+            const bar = document.querySelector('.cp-progress-bar');
+            if (!bar) return;
+            // Remove old highlights
+            bar.querySelectorAll('.cp-progress-highlight').forEach(h => h.remove());
+
+            const dur = STATE.video ? STATE.video.duration : 0;
+            const markers = [];
+            if (data.intro && data.intro.end > 0) {
+                markers.push(data.intro.start || 0);
+                markers.push(data.intro.end);
+            }
+            if (data.outro && data.outro.end > 0) {
+                markers.push(data.outro.start || 0);
+                markers.push(data.outro.end);
+            }
+
+            // We'll set these after duration is known
+            if (dur > 0) {
+                markers.forEach(time => {
+                    const pct = (time / dur) * 100;
+                    const el = document.createElement('div');
+                    el.className = 'cp-progress-highlight';
+                    el.style.left = pct + '%';
+                    bar.appendChild(el);
+                });
+            } else {
+                // Wait for loadedmetadata
+                STATE.video.addEventListener('loadedmetadata', function onMeta() {
+                    STATE.video.removeEventListener('loadedmetadata', onMeta);
+                    const d = STATE.video.duration || 0;
+                    if (d > 0) {
+                        markers.forEach(time => {
+                            const pct = (time / d) * 100;
+                            const el = document.createElement('div');
+                            el.className = 'cp-progress-highlight';
+                            el.style.left = pct + '%';
+                            bar.appendChild(el);
+                        });
+                    }
+                });
+            }
+        }
+
+        /* ── Progress Bar Interaction ── */
+        function setupProgressInteraction() {
+            const progress = document.querySelector('.cp-progress');
+            const tip = document.querySelector('.cp-progress-tip');
+            if (!progress) return;
+            let isSeeking = false;
+
+            function seekTo(e) {
+                const video = STATE.video;
+                if (!video) return;
+                const rect = progress.getBoundingClientRect();
+                const x = Math.max(0, Math.min(e.clientX - rect.left, rect.width));
+                const pct = x / rect.width;
+                video.currentTime = pct * (video.duration || 0);
+            }
+
+            function showTip(e) {
+                const video = STATE.video;
+                if (!video || !tip) return;
+                const rect = progress.getBoundingClientRect();
+                const x = Math.max(0, Math.min(e.clientX - rect.left, rect.width));
+                const pct = x / rect.width;
+                const time = pct * (video.duration || 0);
+                tip.textContent = formatTime(time);
+                tip.style.left = x + 'px';
+            }
+
+            progress.addEventListener('mousedown', (e) => {
+                isSeeking = true;
+                seekTo(e);
+            });
+
+            progress.addEventListener('mousemove', (e) => {
+                showTip(e);
+                if (isSeeking) seekTo(e);
+            });
+
+            document.addEventListener('mouseup', () => { isSeeking = false; });
+            document.addEventListener('mousemove', (e) => {
+                if (isSeeking) {
+                    const rect = progress.getBoundingClientRect();
+                    const x = Math.max(0, Math.min(e.clientX - rect.left, rect.width));
+                    const pct = x / rect.width;
+                    const video = STATE.video;
+                    if (video) video.currentTime = pct * (video.duration || 0);
+                }
+            });
+
+            // Touch seek
+            progress.addEventListener('touchstart', (e) => {
+                isSeeking = true;
+                const touch = e.touches[0];
+                const rect = progress.getBoundingClientRect();
+                const x = Math.max(0, Math.min(touch.clientX - rect.left, rect.width));
+                const pct = x / rect.width;
+                const video = STATE.video;
+                if (video) video.currentTime = pct * (video.duration || 0);
+            }, { passive: true });
+
+            progress.addEventListener('touchmove', (e) => {
+                if (!isSeeking) return;
+                const touch = e.touches[0];
+                const rect = progress.getBoundingClientRect();
+                const x = Math.max(0, Math.min(touch.clientX - rect.left, rect.width));
+                const pct = x / rect.width;
+                const video = STATE.video;
+                if (video) video.currentTime = pct * (video.duration || 0);
+            }, { passive: true });
+
+            progress.addEventListener('touchend', () => { isSeeking = false; });
+        }
+
+        /* ── Volume UI ── */
+        function updateVolumeUI() {
+            const btn = document.querySelector('.cp-btn-volume');
+            const mobileBtn = document.querySelector('.cp-mobile-btn.cp-mobile-sub-btn');
+            if (btn) btn.classList.toggle('is-muted', STATE.isMuted);
+        }
+
+        function toggleMute() {
+            const video = STATE.video;
+            if (!video) return;
+            STATE.isMuted = !STATE.isMuted;
+            video.muted = STATE.isMuted;
+            if (!STATE.isMuted && video.volume === 0) video.volume = 0.9;
+            updateVolumeUI();
+        }
+
+        /* ── WebVTT Subtitle Parser & Loader ── */
+        function parseTimestamp(timeStr) {
+            if (!timeStr) return 0;
+            const parts = timeStr.trim().split(':');
+            let h = 0, m = 0, s = 0;
+            if (parts.length === 3) {
+                h = parseFloat(parts[0]) || 0;
+                m = parseFloat(parts[1]) || 0;
+                s = parseFloat(parts[2].replace(',', '.')) || 0;
+            } else if (parts.length === 2) {
+                m = parseFloat(parts[0]) || 0;
+                s = parseFloat(parts[1].replace(',', '.')) || 0;
+            }
+            return (h * 3600) + (m * 60) + s;
+        }
+
+        function parseWebVTT(vttText) {
+            if (!vttText) return [];
+            const nl = String.fromCharCode(10);
+            const cr = String.fromCharCode(13);
+            const lines = vttText.split(nl);
+            const cues = [];
+            let i = 0;
+            const len = lines.length;
+
+            while (i < len) {
+                const line = lines[i].replace(cr, '').trim();
+                i++;
+                if (!line || line.startsWith('WEBVTT') || line.startsWith('NOTE') || line.startsWith('STYLE')) {
+                    if (line.startsWith('NOTE') || line.startsWith('STYLE')) {
+                        while (i < len && lines[i].replace(cr, '').trim() !== '') i++;
+                    }
+                    continue;
+                }
+
+                let timeLine = line;
+                if (!timeLine.includes('-->') && i < len) {
+                    const nextLine = lines[i].replace(cr, '').trim();
+                    if (nextLine.includes('-->')) {
+                        timeLine = nextLine;
+                        i++;
+                    }
+                }
+
+                if (timeLine.includes('-->')) {
+                    const parts = timeLine.split('-->');
+                    const startPart = parts[0];
+                    const rest = parts[1] || '';
+                    const endPart = rest.trim().split(' ')[0];
+                    const start = parseTimestamp(startPart);
+                    const end = parseTimestamp(endPart);
+
+                    const textLines = [];
+                    while (i < len && lines[i].replace(cr, '').trim() !== '') {
+                        textLines.push(lines[i].replace(cr, '').trim());
+                        i++;
+                    }
+
+                    const sanitizedLines = textLines.map(tl => {
+                        return tl.replace(/<[^>]+>/g, (tag) => {
+                            const l = tag.toLowerCase();
+                            if (l === '<i>' || l === '</i>' || l === '<b>' || l === '</b>' || l === '<u>' || l === '</u>') return tag;
+                            return '';
+                        });
+                    });
+
+                    const html = sanitizedLines.join('<br>');
+                    if (end > start && html) {
+                        cues.push({ start, end, html });
+                    }
+                }
+            }
+            return cues;
+        }
+
+        async function loadSubtitleTrack(idx) {
+            if (idx < 0 || !STATE.subtitles || !STATE.subtitles[idx]) {
+                STATE.subtitleCues = [];
+                renderActiveSubtitles(0);
+                return;
+            }
+
+            const sub = STATE.subtitles[idx];
+            if (STATE.subtitleCache && STATE.subtitleCache[sub.url]) {
+                STATE.subtitleCues = STATE.subtitleCache[sub.url];
+                if (STATE.video) renderActiveSubtitles(STATE.video.currentTime);
+                return;
+            }
+
+            try {
+                const res = await fetch(sub.url);
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+                const text = await res.text();
+                const cues = parseWebVTT(text);
+                if (!STATE.subtitleCache) STATE.subtitleCache = {};
+                STATE.subtitleCache[sub.url] = cues;
+
+                if (STATE.currentSubIndex === idx) {
+                    STATE.subtitleCues = cues;
+                    if (STATE.video) renderActiveSubtitles(STATE.video.currentTime);
+                }
+
+                // Attach same-origin blob track to satisfy native video.textTracks if needed
+                try {
+                    const video = STATE.video || document.getElementById('cp-video');
+                    if (video) {
+                        const blob = new Blob([text], { type: 'text/vtt' });
+                        const blobUrl = URL.createObjectURL(blob);
+                        if (STATE.activeSubtitleBlobUrl) {
+                            try { URL.revokeObjectURL(STATE.activeSubtitleBlobUrl); } catch (e) {}
+                        }
+                        STATE.activeSubtitleBlobUrl = blobUrl;
+
+                        const oldTracks = video.querySelectorAll('track');
+                        oldTracks.forEach(t => t.remove());
+
+                        const track = document.createElement('track');
+                        track.kind = 'subtitles';
+                        track.label = sub.label;
+                        track.src = blobUrl;
+                        track.srclang = sub.lang || 'en';
+                        track.default = true;
+                        video.appendChild(track);
+                        if (track.track) track.track.mode = 'hidden';
+                    }
+                } catch (be) {
+                    console.warn('Blob track creation warning:', be);
+                }
+            } catch (err) {
+                console.error('Failed to load subtitle track:', sub.url, err);
+                showToast('Failed to load ' + (sub.label || 'subtitles'), 'yellow', 2500);
+            }
+        }
+
+        function renderActiveSubtitles(curTime) {
+            const overlay = document.getElementById('cp-subtitle-overlay');
+            if (!overlay) return;
+
+            if (!STATE.subtitleVisible || !STATE.subtitleCues || STATE.subtitleCues.length === 0) {
+                if (!overlay.classList.contains('cp-hidden')) {
+                    overlay.classList.add('cp-hidden');
+                    overlay.innerHTML = '';
+                }
+                return;
+            }
+
+            const matching = STATE.subtitleCues.filter(c => curTime >= c.start && curTime <= c.end);
+            if (matching.length > 0) {
+                const html = matching.map(c => '<span class="cp-subtitle-line">' + c.html + '</span>').join('<br>');
+                if (overlay.innerHTML !== html) {
+                    overlay.innerHTML = html;
+                }
+                overlay.classList.remove('cp-hidden');
+            } else {
+                if (!overlay.classList.contains('cp-hidden')) {
+                    overlay.classList.add('cp-hidden');
+                }
+            }
+        }
+
+        /* ── Subtitle Controls ── */
+        function activateSubtitleTrack(idx) {
+            STATE.currentSubIndex = idx;
+            if (idx >= 0) {
+                STATE.subtitleVisible = true;
+                loadSubtitleTrack(idx);
+            } else {
+                STATE.subtitleVisible = false;
+                STATE.subtitleCues = [];
+                renderActiveSubtitles(0);
+            }
+            updateSubtitleIcon(STATE.subtitleVisible && STATE.subtitles.length > 0);
+        }
+
+        function updateSubtitleIcon(isOn) {
+            const subBtn = document.querySelector('.cp-btn-sub');
+            if (subBtn) subBtn.innerHTML = isOn ? ICONS.SUB_ON : ICONS.SUB_OFF;
+            const mobileSubBtn = document.querySelector('.cp-mobile-sub-btn');
+            if (mobileSubBtn) mobileSubBtn.innerHTML = isOn ? ICONS.SUB_ON : ICONS.SUB_OFF;
+        }
+
+        function toggleSubtitle() {
+            if (STATE.subtitles.length === 0) {
+                showToast('No subtitles available', 'info', 1500);
+                return;
+            }
+            STATE.subtitleVisible = !STATE.subtitleVisible;
+            if (STATE.subtitleVisible) {
+                if (STATE.currentSubIndex < 0) STATE.currentSubIndex = 0;
+                activateSubtitleTrack(STATE.currentSubIndex);
+            } else {
+                renderActiveSubtitles(0);
+                updateSubtitleIcon(false);
+            }
+            showToast(STATE.subtitleVisible ? 'Subtitles ON' : 'Subtitles OFF', 'info', 1500);
+            triggerControlHideTimer(1500);
+            buildSettingsPanel();
+        }
+
+        /* ── Play/Pause Toggle ── */
+        function togglePlayPause() {
+            const video = STATE.video;
+            if (!video) return;
+            if (video.paused) {
+                video.play().catch(err => {
+                    console.warn('Play error, fallback to muted:', err);
+                    video.muted = true;
+                    STATE.isMuted = true;
+                    updateVolumeUI();
+                    video.play().catch(e => console.error('Muted play failed:', e));
+                });
+            } else {
+                video.pause();
+            }
+        }
+
+        /* ── Fullscreen & Orientation Lock ── */
+        async function lockLandscapeOrientation() {
+            try {
+                if (screen.orientation && typeof screen.orientation.lock === 'function') {
+                    await screen.orientation.lock('landscape').catch(() => {});
+                } else if (screen.lockOrientation) {
+                    screen.lockOrientation('landscape');
+                } else if (screen.mozLockOrientation) {
+                    screen.mozLockOrientation('landscape');
+                } else if (screen.msLockOrientation) {
+                    screen.msLockOrientation('landscape');
+                }
+            } catch (err) {}
+        }
+
+        function unlockOrientation() {
+            try {
+                if (screen.orientation && typeof screen.orientation.unlock === 'function') {
+                    screen.orientation.unlock();
+                } else if (screen.unlockOrientation) {
+                    screen.unlockOrientation();
+                } else if (screen.mozUnlockOrientation) {
+                    screen.mozUnlockOrientation();
+                } else if (screen.msUnlockOrientation) {
+                    screen.msUnlockOrientation();
+                }
+            } catch (err) {}
+        }
+
+        async function toggleFullscreen() {
+            const root = document.getElementById('player-root');
+            const video = STATE.video;
+            const isFs = !!(
+                document.fullscreenElement ||
+                document.webkitFullscreenElement ||
+                document.mozFullScreenElement ||
+                document.msFullscreenElement ||
+                (video && video.webkitDisplayingFullscreen)
+            );
+
+            if (!isFs) {
+                try {
+                    if (root.requestFullscreen) {
+                        await root.requestFullscreen();
+                    } else if (root.webkitRequestFullscreen) {
+                        await root.webkitRequestFullscreen();
+                    } else if (root.mozRequestFullScreen) {
+                        await root.mozRequestFullScreen();
+                    } else if (root.msRequestFullscreen) {
+                        await root.msRequestFullscreen();
+                    } else if (video && video.webkitEnterFullscreen) {
+                        video.webkitEnterFullscreen();
+                    }
+                } catch (err) {
+                    if (video && video.webkitEnterFullscreen) {
+                        try { video.webkitEnterFullscreen(); } catch (e) {}
+                    }
+                }
+            } else {
+                try {
+                    if (document.exitFullscreen) {
+                        await document.exitFullscreen();
+                    } else if (document.webkitExitFullscreen) {
+                        await document.webkitExitFullscreen();
+                    } else if (document.mozCancelFullScreen) {
+                        await document.mozCancelFullScreen();
+                    } else if (document.msExitFullscreen) {
+                        await document.msExitFullscreen();
+                    }
+                } catch (err) {}
+            }
+        }
+
+        function onFullscreenChange() {
+            const root = document.getElementById('player-root');
+            const video = STATE.video;
+            const isFs = !!(
+                document.fullscreenElement ||
+                document.webkitFullscreenElement ||
+                document.mozFullScreenElement ||
+                document.msFullscreenElement ||
+                (video && video.webkitDisplayingFullscreen)
+            );
+
+            if (root) {
+                root.classList.toggle('is-fullscreen', isFs);
+            }
+            postToParent('aniembed:fullscreen', { fullscreen: isFs });
+
+            const isMobile = root && root.classList.contains('is-mobile');
+            if (isFs) {
+                if (isMobile) {
+                    lockLandscapeOrientation();
+                }
+            } else {
+                unlockOrientation();
+            }
+        }
+
+        document.addEventListener('fullscreenchange', onFullscreenChange);
+        document.addEventListener('webkitfullscreenchange', onFullscreenChange);
+        document.addEventListener('mozfullscreenchange', onFullscreenChange);
+        document.addEventListener('MSFullscreenChange', onFullscreenChange);
+
+        window.addEventListener('orientationchange', () => {
+            const isFs = !!(document.fullscreenElement || document.webkitFullscreenElement);
+            if (!isFs) {
+                unlockOrientation();
+            }
+        });
+
+        /* ── PiP ── */
+        function togglePiP() {
+            const video = STATE.video;
+            if (!video) return;
+            if (document.pictureInPictureElement) {
+                document.exitPictureInPicture().catch(() => {});
+            } else if (video.requestPictureInPicture) {
+                video.requestPictureInPicture().catch(() => {
+                    showToast('PiP not available', 'info', 1500);
+                });
+            }
+        }
+
+        /* ── Cast ── */
+        function attemptCast() {
+            if (navigator.remotePlayback && STATE.video) {
+                STATE.video.remote.prompt().catch(() => {
+                    showToast('Cast ready for compatible display', 'info', 2000);
+                });
+            } else {
+                showToast('Cast ready for compatible display', 'info', 2000);
+            }
+        }
+
+        /* ── Settings Panel ── */
+        function buildSettingsPanel() {
+            const container = document.getElementById('cp-settings');
+            if (!container) return;
+
+            container.innerHTML = '';
+            STATE.activePanel = 'main';
+
+            // Main panel
+            const mainPanel = document.createElement('div');
+            mainPanel.className = 'cp-settings-panel cp-panel-active';
+            mainPanel.id = 'cp-panel-main';
+
+            const mainBody = document.createElement('div');
+            mainBody.className = 'cp-submenu-body';
+
+            // 1. Server Route
+            mainBody.appendChild(createSettingItem({
+                icon: ICONS.SETTING.server,
+                text: 'Server Route',
+                tooltip: 'Server ' + STATE.server,
+                arrow: true,
+                onClick: () => showPanel('server')
+            }));
+
+            // 2. Subtitles (if available)
+            if (STATE.subtitles.length > 0) {
+                const currentSubLabel = STATE.currentSubIndex >= 0 ? STATE.subtitles[STATE.currentSubIndex].label : 'Off';
+                mainBody.appendChild(createSettingItem({
+                    icon: ICONS.SETTING.subtitles,
+                    text: 'Subtitles',
+                    tooltip: STATE.subtitleVisible ? currentSubLabel : 'Off',
+                    arrow: true,
+                    onClick: () => showPanel('subtitles')
+                }));
+            }
+
+            // 3. Quality (always available)
+            let currentQ = 'Auto';
+            if (STATE.currentQuality !== -1) {
+                const found = STATE.qualities.find(q => q.level === STATE.currentQuality);
+                if (found) currentQ = found.label;
+            } else if (STATE.autoLevelCurrent !== undefined && STATE.autoLevelCurrent >= 0) {
+                const activeLvl = STATE.qualities.find(q => q.level === STATE.autoLevelCurrent);
+                if (activeLvl && activeLvl.level !== -1) currentQ = 'Auto (' + activeLvl.label + ')';
+            } else if (STATE.qualities.length === 2 && STATE.qualities[1].label) {
+                currentQ = 'Auto (' + STATE.qualities[1].label + ')';
+            }
+            mainBody.appendChild(createSettingItem({
+                icon: ICONS.SETTING.quality,
+                text: 'Quality',
+                tooltip: currentQ,
+                arrow: true,
+                onClick: () => showPanel('quality')
+            }));
+
+            // 4. Playback Speed
+            mainBody.appendChild(createSettingItem({
+                icon: ICONS.SETTING.speed,
+                text: 'Playback Speed',
+                tooltip: STATE.playbackRate === 1 ? 'Normal' : STATE.playbackRate + 'x',
+                arrow: true,
+                onClick: () => showPanel('speed')
+            }));
+
+            // 5. Auto-Skip OP/ED (switch)
+            const autoSkipItem = createSettingItem({
+                icon: ICONS.SETTING.autoSkip,
+                text: 'Auto-Skip OP/ED',
+                isSwitch: true,
+                switchOn: STATE.autoSkip,
+                name: 'auto-skip',
+                onClick: () => {
+                    STATE.autoSkip = !STATE.autoSkip;
+                    buildSettingsPanel();
+                }
+            });
+            mainBody.appendChild(autoSkipItem);
+
+            mainPanel.appendChild(mainBody);
+            container.appendChild(mainPanel);
+
+            // Server submenu
+            container.appendChild(buildSubmenu('server', 'Server Route', [
+                { label: 'Server 1 (MegaPlay)', value: 1 },
+                { label: 'Server 2 (AniNeko)', value: 2 },
+                { label: 'Server 3 (Zoko)', value: 3 }
+            ], STATE.server, (item) => {
+                onUserSelectServer(item.value);
+            }));
+
+            // Subtitles submenu
+            if (STATE.subtitles.length > 0) {
+                const subItems = [{ label: 'Off', value: -1 }];
+                STATE.subtitles.forEach((s, idx) => { subItems.push({ label: s.label, value: idx }); });
+                container.appendChild(buildSubmenu('subtitles', 'Subtitles', subItems,
+                    STATE.subtitleVisible ? STATE.currentSubIndex : -1,
+                    (item) => {
+                        if (item.value === -1) {
+                            STATE.subtitleVisible = false;
+                            activateSubtitleTrack(-1);
+                            updateSubtitleIcon(false);
+                        } else {
+                            STATE.currentSubIndex = item.value;
+                            STATE.subtitleVisible = true;
+                            activateSubtitleTrack(item.value);
+                            updateSubtitleIcon(true);
+                        }
+                        buildSettingsPanel();
+                        showPanel('subtitles');
+                    }
+                ));
+            }
+
+            // Quality submenu
+            const qList = (STATE.qualities && STATE.qualities.length > 0)
+                ? STATE.qualities
+                : [{ label: 'Auto', level: -1 }];
+            const qItems = qList.map(q => ({ label: q.label, value: q.level }));
+            container.appendChild(buildSubmenu('quality', 'Quality', qItems, STATE.currentQuality, (item) => {
+                STATE.currentQuality = item.value;
+                if (STATE.hls) STATE.hls.currentLevel = item.value;
+                buildSettingsPanel();
+                showPanel('quality');
+            }));
+
+            // Speed submenu
+            const speeds = [0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0];
+            const speedItems = speeds.map(s => ({ label: s === 1 ? 'Normal' : s + 'x', value: s }));
+            container.appendChild(buildSubmenu('speed', 'Playback Speed', speedItems, STATE.playbackRate, (item) => {
+                STATE.playbackRate = item.value;
+                if (STATE.video) STATE.video.playbackRate = item.value;
+                buildSettingsPanel();
+                showPanel('speed');
+            }));
+
+            // Show correct panel
+            showPanel(STATE.activePanel);
+        }
+
+        function createSettingItem({ icon, text, tooltip, arrow, isSwitch, switchOn, name, onClick }) {
+            const item = document.createElement('div');
+            item.className = 'cp-settings-item';
+            if (name) item.setAttribute('data-name', name);
+
+            let html = '<div class="cp-settings-item-left">';
+            html += '<div class="cp-settings-item-icon">' + icon + '</div>';
+            html += '<span class="cp-settings-item-text">' + text + '</span>';
+            html += '</div>';
+            html += '<div class="cp-settings-item-right">';
+
+            if (isSwitch) {
+                html += '<div class="cp-switch' + (switchOn ? ' cp-switch-on' : '') + '">' +
+                    '<span class="cp-switch-track"><span class="cp-switch-thumb"></span></span>' +
+                    '</div>';
+            } else {
+                if (tooltip) html += '<span class="cp-settings-item-tooltip">' + tooltip + '</span>';
+                if (arrow) html += '<div class="cp-settings-item-arrow">' + ICONS.SETTING.arrowRight + '</div>';
+            }
+
+            html += '</div>';
+            item.innerHTML = html;
+            if (onClick) item.addEventListener('click', onClick);
+            return item;
+        }
+
+        function buildSubmenu(panelId, title, items, selectedValue, onSelect) {
+            const panel = document.createElement('div');
+            panel.className = 'cp-settings-panel cp-submenu';
+            panel.id = 'cp-panel-' + panelId;
+
+            // Fixed header (outside scrollable body)
+            const header = document.createElement('div');
+            header.className = 'cp-submenu-header';
+            header.innerHTML = '<div class="cp-back-btn">' + ICONS.SETTING.arrowLeft + '</div>' +
+                               '<span class="cp-submenu-title">' + title + '</span>';
+            header.addEventListener('click', () => showPanel('main'));
+            panel.appendChild(header);
+
+            // Scrollable body (only list items scroll)
+            const body = document.createElement('div');
+            body.className = 'cp-submenu-body';
+
+            items.forEach(item => {
+                const el = document.createElement('div');
+                el.className = 'cp-settings-item' + (item.value === selectedValue ? ' cp-selected' : '');
+                el.innerHTML = '<span class="cp-check-icon">' + ICONS.SETTING.check + '</span>' +
+                    '<span class="cp-settings-item-text">' + item.label + '</span>';
+                el.addEventListener('click', () => onSelect(item));
+                body.appendChild(el);
+            });
+
+            panel.appendChild(body);
+            return panel;
+        }
+
+        function showPanel(panelId) {
+            STATE.activePanel = panelId;
+            document.querySelectorAll('.cp-settings-panel').forEach(p => p.classList.remove('cp-panel-active'));
+            const target = document.getElementById('cp-panel-' + panelId);
+            if (target) {
+                target.classList.add('cp-panel-active');
+                const body = target.querySelector('.cp-submenu-body');
+                if (body) {
+                    const selected = body.querySelector('.cp-selected');
+                    if (selected) {
+                        selected.scrollIntoView({ block: 'nearest' });
+                    } else {
+                        body.scrollTop = 0;
+                    }
+                }
+            }
+        }
+
+        /* ── Settings Toggle ── */
+        function toggleSettings() {
+            STATE.isSettingsOpen = !STATE.isSettingsOpen;
+            const root = document.getElementById('player-root');
+            root.classList.toggle('cp-settings-open', STATE.isSettingsOpen);
+
+            const settBtns = document.querySelectorAll('.cp-btn-settings, .cp-mobile-settings-btn');
+            settBtns.forEach(b => b.classList.toggle('cp-active', STATE.isSettingsOpen));
+
+            if (STATE.isSettingsOpen) {
+                STATE.activePanel = 'main';
+                buildSettingsPanel();
+                clearTimeout(STATE.controlTimer);
+            } else {
+                triggerControlHideTimer(1500);
+            }
+        }
+
+        function closeSettings() {
+            if (!STATE.isSettingsOpen) return;
+            STATE.isSettingsOpen = false;
+            const root = document.getElementById('player-root');
+            root.classList.remove('cp-settings-open');
+            const settBtns = document.querySelectorAll('.cp-btn-settings, .cp-mobile-settings-btn');
+            settBtns.forEach(b => b.classList.remove('cp-active'));
+            triggerControlHideTimer(1500);
+        }
+
+        /* ── Controls Auto-Hide (1.5s) ── */
+        function isControlsHovered() {
+            const hasHover = window.matchMedia && window.matchMedia('(hover: hover) and (pointer: fine)').matches;
+            if (!hasHover) return false;
+            const controlsRow = document.querySelector('.cp-controls');
+            const progress = document.querySelector('.cp-progress');
+            const topBar = document.querySelector('.cp-mobile-top-bar');
+            if (controlsRow && controlsRow.matches(':hover')) return true;
+            if (progress && progress.matches(':hover')) return true;
+            if (topBar && topBar.matches(':hover')) return true;
+            return false;
+        }
+
+        function triggerControlHideTimer(delay) {
+            delay = delay || 1500;
+            clearTimeout(STATE.controlTimer);
+            if (STATE.isSettingsOpen || isControlsHovered()) return;
+            STATE.controlTimer = setTimeout(() => {
+                if (STATE.isSettingsOpen || isControlsHovered()) return;
+                const root = document.getElementById('player-root');
+                root.classList.remove('cp-controls-visible');
+            }, delay);
+        }
+
+        function wakeControls() {
+            const root = document.getElementById('player-root');
+            root.classList.add('cp-controls-visible');
+            triggerControlHideTimer(1500);
+        }
+
+        /* ── Control Hover Listeners ── */
+        function bindControlHoverListeners() {
+            const elements = document.querySelectorAll('.cp-controls, .cp-progress, .cp-mobile-top-bar');
+            elements.forEach(el => {
+                if (el.dataset.hoverWired) return;
+                el.dataset.hoverWired = 'true';
+                el.addEventListener('mouseenter', () => { clearTimeout(STATE.controlTimer); });
+                el.addEventListener('mouseleave', () => { triggerControlHideTimer(1500); });
+            });
+        }
+
+        /* ── Skip Timestamp ── */
+        function skipTimestamp(type) {
+            if (!STATE.video || !STATE.streamData) return;
+            if (type === 'intro' && STATE.streamData.intro && STATE.streamData.intro.end) {
+                STATE.video.currentTime = STATE.streamData.intro.end;
+                showToast('Skipped Intro', 'info', 2000);
+            } else if (type === 'outro' && STATE.streamData.outro && STATE.streamData.outro.end) {
+                STATE.video.currentTime = STATE.streamData.outro.end;
+                showToast('Skipped Outro', 'info', 2000);
+            }
+        }
+        // Expose to global for onclick
+        window.skipTimestamp = skipTimestamp;
+
+        /* ── Server / Episode Change ── */
+        function onUserSelectServer(serverVal) {
+            STATE.server = parseInt(serverVal, 10);
+            STATE.failoverAttempt = 0;
+            closeSettings();
+            initStream();
+        }
+
+        function changeEpisode(epNum) {
+            if (epNum === STATE.currentEp) return;
+            STATE.currentEp = epNum;
+            document.title = (STATE.title ? STATE.title + ' - ' : '') + 'Episode ' + epNum;
+            initStream();
+            postToParent('aniembed:episode_change', { episode: epNum });
+        }
+
+        /* ── Keyboard Hotkeys ── */
+        document.addEventListener('keydown', (e) => {
+            const video = STATE.video;
+            if (!video) return;
+            const key = e.key.toLowerCase();
+
+            switch (key) {
+                case ' ':
+                case 'k':
+                    e.preventDefault();
+                    togglePlayPause();
+                    wakeControls();
+                    break;
+                case 'arrowleft':
+                    e.preventDefault();
+                    video.currentTime = Math.max(0, video.currentTime - 10);
+                    wakeControls();
+                    break;
+                case 'arrowright':
+                    e.preventDefault();
+                    video.currentTime = Math.min(video.duration || 0, video.currentTime + 10);
+                    wakeControls();
+                    break;
+                case 'arrowup':
+                    e.preventDefault();
+                    video.volume = Math.min(1, video.volume + 0.1);
+                    video.muted = false;
+                    STATE.isMuted = false;
+                    updateVolumeUI();
+                    wakeControls();
+                    break;
+                case 'arrowdown':
+                    e.preventDefault();
+                    video.volume = Math.max(0, video.volume - 0.1);
+                    wakeControls();
+                    break;
+                case 'f':
+                    e.preventDefault();
+                    toggleFullscreen();
+                    break;
+                case 'm':
+                    e.preventDefault();
+                    toggleMute();
+                    wakeControls();
+                    break;
+                case 'c':
+                    e.preventDefault();
+                    toggleSubtitle();
+                    break;
+                case 'escape':
+                    if (STATE.isSettingsOpen) closeSettings();
+                    break;
+            }
+        });
+
+        /* ── Touch Gestures & Pointer Events Engine ── */
+        const gesture = {
+            activePointerId: null,
+            startX: 0,
+            startY: 0,
+            startTime: 0,
+            hasMoved: false,
+            longPressTimer: null,
+            isLongPressing: false,
+            prevPlaybackRate: 1.0,
+            lastTapTime: 0,
+            lastTapX: 0,
+            lastTapY: 0,
+            singleTapTimer: null,
+            seekTimer: null
+        };
+
+        let lastTouchTime = 0;
+
+        function seekRelative(seconds) {
+            const video = STATE.video;
+            if (!video || !video.duration) return;
+            const newTime = Math.max(0, Math.min(video.duration, video.currentTime + seconds));
+            video.currentTime = newTime;
+            wakeControls();
+        }
+
+        function showSeekIndicator(side, text) {
+            const el = document.querySelector('.cp-seek-indicator.cp-' + side);
+            if (!el) return;
+            el.textContent = text;
+            el.classList.add('cp-show');
+            clearTimeout(gesture.seekTimer);
+            gesture.seekTimer = setTimeout(() => {
+                el.classList.remove('cp-show');
+            }, 600);
+        }
+
+        function showSpeedIndicator(show) {
+            const el = document.getElementById('cp-speed-indicator');
+            if (!el) return;
+            if (show) {
+                el.classList.add('cp-show');
+            } else {
+                el.classList.remove('cp-show');
+            }
+        }
+
+        function cleanupGestureState() {
+            clearTimeout(gesture.longPressTimer);
+            gesture.longPressTimer = null;
+            if (gesture.isLongPressing) {
+                if (STATE.video) STATE.video.playbackRate = gesture.prevPlaybackRate;
+                showSpeedIndicator(false);
+                gesture.isLongPressing = false;
+            }
+            gesture.activePointerId = null;
+            gesture.hasMoved = false;
+        }
+
+        function isControlElement(target) {
+            if (!target) return false;
+            return !!target.closest(
+                '.cp-bottom, .cp-mobile-top-bar, .cp-settings, .skip-button, .cp-center-play, .toast-msg, .cp-speed-indicator, button, .cp-ctrl-btn, .cp-mobile-btn, .cp-progress'
+            );
+        }
+
+        const playerRoot = document.getElementById('player-root');
+
+        playerRoot.addEventListener('pointerdown', (e) => {
+            // Only primary pointer to ignore multi-touch / pinch gestures
+            if (!e.isPrimary) return;
+            // Ignore touches that begin on controls or buttons
+            if (isControlElement(e.target)) return;
+
+            // Reset any active gesture state
+            if (gesture.activePointerId !== null) {
+                cleanupGestureState();
+            }
+
+            gesture.activePointerId = e.pointerId;
+            gesture.startX = e.clientX;
+            gesture.startY = e.clientY;
+            gesture.startTime = Date.now();
+            gesture.hasMoved = false;
+            gesture.isLongPressing = false;
+
+            // Long-press detection for touch / pen
+            if (e.pointerType === 'touch' || e.pointerType === 'pen') {
+                clearTimeout(gesture.longPressTimer);
+                gesture.longPressTimer = setTimeout(() => {
+                    if (gesture.activePointerId === e.pointerId && !gesture.hasMoved && STATE.video && !STATE.video.paused) {
+                        gesture.isLongPressing = true;
+                        gesture.prevPlaybackRate = STATE.video.playbackRate || STATE.playbackRate || 1.0;
+                        STATE.video.playbackRate = TOUCH_CONFIG.longPressSpeed;
+                        showSpeedIndicator(true);
+
+                        // Cancel any pending single-tap
+                        clearTimeout(gesture.singleTapTimer);
+                        gesture.singleTapTimer = null;
+                    }
+                }, TOUCH_CONFIG.longPressDelay);
+            }
+        });
+
+        playerRoot.addEventListener('pointermove', (e) => {
+            if (e.pointerId !== gesture.activePointerId) return;
+
+            const dist = Math.hypot(e.clientX - gesture.startX, e.clientY - gesture.startY);
+            if (dist > TOUCH_CONFIG.moveThreshold) {
+                gesture.hasMoved = true;
+                // Meaningful movement cancels tap and long-press
+                clearTimeout(gesture.longPressTimer);
+                gesture.longPressTimer = null;
+                if (gesture.isLongPressing) {
+                    if (STATE.video) STATE.video.playbackRate = gesture.prevPlaybackRate;
+                    showSpeedIndicator(false);
+                    gesture.isLongPressing = false;
+                }
+            }
+        });
+
+        playerRoot.addEventListener('pointerup', (e) => {
+            if (e.pointerId !== gesture.activePointerId) return;
+
+            clearTimeout(gesture.longPressTimer);
+            gesture.longPressTimer = null;
+
+            // Long press release: restore previous speed and consume interaction without triggering tap
+            if (gesture.isLongPressing) {
+                if (STATE.video) STATE.video.playbackRate = gesture.prevPlaybackRate;
+                showSpeedIndicator(false);
+                gesture.isLongPressing = false;
+                lastTouchTime = Date.now();
+                gesture.activePointerId = null;
+                return;
+            }
+
+            // Moved finger: cancel tap
+            if (gesture.hasMoved) {
+                lastTouchTime = Date.now();
+                gesture.activePointerId = null;
+                return;
+            }
+
+            // Desktop mouse pointer: leave click handler to toggle play/pause immediately
+            if (e.pointerType === 'mouse') {
+                gesture.activePointerId = null;
+                return;
+            }
+
+            // Touch or pen interaction:
+            lastTouchTime = Date.now();
+            const now = Date.now();
+            const timeSinceLast = now - gesture.lastTapTime;
+            const distFromLast = Math.hypot(e.clientX - gesture.lastTapX, e.clientY - gesture.lastTapY);
+
+            // Double tap check
+            if (timeSinceLast < TOUCH_CONFIG.doubleTapDelay && distFromLast < 60) {
+                // Cancel pending single tap
+                clearTimeout(gesture.singleTapTimer);
+                gesture.singleTapTimer = null;
+
+                const rect = playerRoot.getBoundingClientRect();
+                const relativeX = e.clientX - rect.left;
+                const width = rect.width || window.innerWidth;
+
+                if (relativeX < width * 0.45) {
+                    // Left side: rewind
+                    seekRelative(-TOUCH_CONFIG.seekSeconds);
+                    showSeekIndicator('left', '-' + TOUCH_CONFIG.seekSeconds + 's');
+                } else if (relativeX > width * 0.55) {
+                    // Right side: forward
+                    seekRelative(TOUCH_CONFIG.seekSeconds);
+                    showSeekIndicator('right', '+' + TOUCH_CONFIG.seekSeconds + 's');
+                } else {
+                    // Center double tap: forward
+                    seekRelative(TOUCH_CONFIG.seekSeconds);
+                    showSeekIndicator('right', '+' + TOUCH_CONFIG.seekSeconds + 's');
+                }
+
+                gesture.lastTapTime = 0;
+            } else {
+                // First tap: delay by doubleTapDelay before executing single tap
+                gesture.lastTapTime = now;
+                gesture.lastTapX = e.clientX;
+                gesture.lastTapY = e.clientY;
+
+                clearTimeout(gesture.singleTapTimer);
+                gesture.singleTapTimer = setTimeout(() => {
+                    const root = document.getElementById('player-root');
+                    if (root) {
+                        if (root.classList.contains('cp-controls-visible')) {
+                            root.classList.remove('cp-controls-visible');
+                            clearTimeout(STATE.controlTimer);
+                        } else {
+                            wakeControls();
+                        }
+                    }
+                    gesture.singleTapTimer = null;
+                }, TOUCH_CONFIG.doubleTapDelay);
+            }
+
+            gesture.activePointerId = null;
+        });
+
+        playerRoot.addEventListener('pointercancel', (e) => {
+            if (e.pointerId === gesture.activePointerId) {
+                lastTouchTime = Date.now();
+                cleanupGestureState();
+            }
+        });
+
+        /* ── Click Outside Settings ── */
+        document.addEventListener('pointerdown', (e) => {
+            if (!STATE.isSettingsOpen) return;
+            const inSettings = e.target && e.target.closest && e.target.closest('.cp-settings');
+            const inSettingBtn = e.target && e.target.closest && e.target.closest('.cp-mobile-top-bar, .cp-btn-settings');
+            if (!inSettings && !inSettingBtn) {
+                closeSettings();
+            }
+        }, true);
+
+        /* ── Mouse Activity (Desktop) ── */
+        playerRoot.addEventListener('mousemove', (e) => {
+            if (e.pointerType === 'touch') return;
+            wakeControls();
+        });
+        playerRoot.addEventListener('mouseleave', () => { triggerControlHideTimer(1500); });
+
+        /* ── Video Click → Play/Pause (Desktop Mouse Only) ── */
+        document.getElementById('cp-video').addEventListener('click', (e) => {
+            if (Date.now() - lastTouchTime < 500) return; // Prevent synthetic click after touch tap
+            if (isControlElement(e.target)) return;
+            togglePlayPause();
+        });
+
+        /* ── Center Play Click ── */
+        document.querySelector('.cp-center-play').addEventListener('click', (e) => {
+            e.stopPropagation();
+            togglePlayPause();
+        });
+
+        /* ── Button Wiring ── */
+        document.querySelector('.cp-btn-volume').addEventListener('click', (e) => {
+            e.stopPropagation();
+            toggleMute();
+        });
+
+        document.querySelector('.cp-btn-cast').addEventListener('click', (e) => {
+            e.stopPropagation();
+            attemptCast();
+        });
+
+        document.querySelector('.cp-btn-sub').addEventListener('click', (e) => {
+            e.stopPropagation();
+            toggleSubtitle();
+            closeSettings();
+        });
+
+        document.querySelector('.cp-btn-pip').addEventListener('click', (e) => {
+            e.stopPropagation();
+            togglePiP();
+        });
+
+        document.querySelector('.cp-btn-settings').addEventListener('click', (e) => {
+            e.stopPropagation();
+            toggleSettings();
+        });
+
+        document.querySelector('.cp-btn-fullscreen').addEventListener('click', (e) => {
+            e.stopPropagation();
+            toggleFullscreen();
+        });
+
+        /* ── Mobile Top Bar Wiring ── */
+        document.addEventListener('click', (e) => {
+            const now = Date.now();
+            const mobileCastBtn = e.target && e.target.closest && e.target.closest('.cp-mobile-cast-btn');
+            if (mobileCastBtn) {
+                e.preventDefault();
+                e.stopPropagation();
+                attemptCast();
+                return;
+            }
+            const mobileSubBtn = e.target && e.target.closest && e.target.closest('.cp-mobile-sub-btn');
+            if (mobileSubBtn) {
+                e.preventDefault();
+                e.stopPropagation();
+                toggleSubtitle();
+                closeSettings();
+                return;
+            }
+            const mobileSetBtn = e.target && e.target.closest && e.target.closest('.cp-mobile-settings-btn');
+            if (mobileSetBtn) {
+                e.preventDefault();
+                e.stopPropagation();
+                toggleSettings();
+                return;
+            }
+        });
+
+        /* ── Initialize ── */
+        document.addEventListener('DOMContentLoaded', () => {
+            const isMob = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || 
+                          (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+            const root = document.getElementById('player-root');
+            if (root) {
+                if (isMob) {
+                    root.classList.add('is-mobile');
+                    root.classList.remove('is-desktop');
+                } else {
+                    root.classList.add('is-desktop');
+                    root.classList.remove('is-mobile');
+                }
+            }
+            setupProgressInteraction();
+            bindControlHoverListeners();
+            wakeControls();
+            initStream();
+        });
+    `;
+}
