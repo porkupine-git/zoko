@@ -650,23 +650,23 @@ const server = http.createServer(async (req, res) => {
         }
 
         const scorePct = data.score ? Math.round(data.score * 100) + '%' : '100% (Instant Cache)';
-        box.innerHTML = `
+        box.innerHTML = \`
           <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:10px;">
             <div>
               <span class="badge" style="background:#238636;">✓ Map Success</span>
-              <strong style="color:white; margin-left:8px; font-size:14px;">${data.matchedTitle || data.slug}</strong>
+              <strong style="color:white; margin-left:8px; font-size:14px;">\${data.matchedTitle || data.slug}</strong>
             </div>
-            <button class="btn-primary" style="padding:6px 14px; font-size:12px;" onclick="selectAnime('${data.slug}', '${(data.matchedTitle || data.slug).replace(/'/g, "\\'")}')">
+            <button class="btn-primary" style="padding:6px 14px; font-size:12px;" onclick="selectAnime('\${data.slug}', '\${(data.matchedTitle || data.slug).replace(/'/g, "\\\\'")}')">
               ▶ Load Episodes & Stream
             </button>
           </div>
           <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(140px, 1fr)); gap:10px; font-size:12px; color:#8b949e;">
-            <div><strong>Query:</strong> <span style="color:#f0f6fc;">${type.toUpperCase()}: ${rawId}</span></div>
-            <div><strong>AniNeko Slug:</strong> <code style="color:#7ee787;">${data.slug}</code></div>
-            <div><strong>Match Score:</strong> <span style="color:#58a6ff;">${scorePct}</span></div>
-            <div><strong>Cache Status:</strong> <span style="color:${data.cached ? '#2ea043' : '#f0883e'};">${data.cached ? 'Persistent Disk Cache (0ms)' : 'Live Resolved'}</span></div>
+            <div><strong>Query:</strong> <span style="color:#f0f6fc;">\${type.toUpperCase()}: \${rawId}</span></div>
+            <div><strong>AniNeko Slug:</strong> <code style="color:#7ee787;">\${data.slug}</code></div>
+            <div><strong>Match Score:</strong> <span style="color:#58a6ff;">\${scorePct}</span></div>
+            <div><strong>Cache Status:</strong> <span style="color:\${data.cached ? '#2ea043' : '#f0883e'};">\${data.cached ? 'Persistent Disk Cache (0ms)' : 'Live Resolved'}</span></div>
           </div>
-        `;
+        \`;
 
         // Automatically load episodes for this mapped slug!
         selectAnime(data.slug, data.matchedTitle || data.slug);
@@ -685,7 +685,7 @@ const server = http.createServer(async (req, res) => {
       if (!q) return;
 
       // Smart ID Detection: if user typed pure number or mal:123, route to ID tester automatically!
-      if (/^\d+$/.test(q)) {
+      if (/^\\d+$/.test(q)) {
         document.getElementById('idType').value = 'anilist';
         document.getElementById('testIdInput').value = q;
         testIdMapping();
@@ -721,16 +721,16 @@ const server = http.createServer(async (req, res) => {
           card.className = 'anime-card';
           card.onclick = () => selectAnime(anime.slug, anime.title);
           
-          card.innerHTML = `
-            <img src="${anime.poster || 'https://via.placeholder.com/200x300?text=No+Cover'}" alt="${anime.title}" loading="lazy">
+          card.innerHTML = \`
+            <img src="\${anime.poster || 'https://via.placeholder.com/200x300?text=No+Cover'}" alt="\${anime.title}" loading="lazy">
             <div class="anime-info">
-              <div class="anime-title" title="${anime.title}">${anime.title}</div>
+              <div class="anime-title" title="\${anime.title}">\${anime.title}</div>
               <div class="anime-meta">
-                <span class="badge">${anime.type || 'TV'}</span>
-                <span>${anime.subEpisodes ? 'CC ' + anime.subEpisodes : ''} ${anime.dubEpisodes ? '| DUB ' + anime.dubEpisodes : ''}</span>
+                <span class="badge">\${anime.type || 'TV'}</span>
+                <span>\${anime.subEpisodes ? 'CC ' + anime.subEpisodes : ''} \${anime.dubEpisodes ? '| DUB ' + anime.dubEpisodes : ''}</span>
               </div>
             </div>
-          `;
+          \`;
           grid.appendChild(card);
         });
       } catch (err) {
