@@ -5,7 +5,9 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "test": "node test.js"
+    "test": "node test.js",
+    "dev:worker": "npx wrangler dev",
+    "deploy": "npx wrangler deploy"
   },
   "keywords": [
     "scraper",

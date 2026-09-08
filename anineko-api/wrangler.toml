@@ -1,0 +1,19 @@
+name = "anineko-api"
+main = "worker.js"
+compatibility_date = "2024-11-01"
+compatibility_flags = ["nodejs_compat"]
+
+# Cloudflare Workers Paid ($5/mo Plan) Optimizations
+# Smart Placement routes worker execution close to backend stream CDNs for low TTFB
+[placement]
+mode = "smart"
+
+# Real-Time Observability & Edge Logs
+[observability]
+enabled = true
+
+# Cloudflare KV Cache Binding (Included in $5/mo Paid Plan)
+# Stores persistent AniList/MAL mappings across all worldwide edge locations
+[[kv_namespaces]]
+binding = "ANINEKO_CACHE"
+id = "b77a4adff5014a8d89516a290add396a"
