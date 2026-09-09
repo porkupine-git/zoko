@@ -7,6 +7,7 @@
 import { renderLandingHtml } from './src/landing/landingHtml.js';
 import { renderEmbedHtml } from './src/player/embedHtml.js';
 import { renderAdminHtml } from './src/admin/adminHtml.js';
+import { renderTestHtml } from './src/player/testHtml.js';
 import { searchAnime, getAnimeByAniListId, getAnimeByMalId } from './src/metadata/anilist.js';
 import { resolveStreamWithFailover, resolveSpecificServer } from './src/engines/resolver.js';
 import { checkClusterHealth } from './src/engines/health.js';
@@ -25,6 +26,8 @@ import {
     removeFirewallDomain,
     recordStreamAccess,
     clearTelemetry,
+    unmaskReferrer,
+    markReferrerSandboxed,
     recordHoneypotTrap,
     generateApiKey,
     syncAdminStoreWithKv,
@@ -72,6 +75,20 @@ function getBlockedLeechResponse() {
     );
 }
 
+function extractClientReferer(request, url) {
+    const parentParam = url.searchParams.get("parentHost") || url.searchParams.get("ref");
+    let domain = parentParam || request.headers.get("referer") || request.headers.get("origin") || "";
+    if (!domain) {
+        const secFetchDest = request.headers.get("sec-fetch-dest");
+        const secFetchSite = request.headers.get("sec-fetch-site");
+        if (secFetchDest === "iframe" || secFetchSite === "cross-site") {
+            const clientIp = request.headers.get("cf-connecting-ip") || request.headers.get("x-forwarded-for") || "unknown";
+            domain = `masked-iframe-${clientIp.replace(/[:.]/g, "-").slice(0, 16)}.leech`;
+        }
+    }
+    return domain;
+}
+
 export default {
     async fetch(request, env, ctx) {
         if (request.method === "OPTIONS") {
@@ -106,6 +123,32 @@ export default {
                 });
             }
 
+            // Embed SDK for third-party websites (e.g. AniCult, partner integrations)
+            if (pathname === "/embed-sdk.js") {
+                const sdkCode = `/** Anixo Player Embed SDK */
+(function(window) {
+    window.AniXoSDK = {
+        version: "2.1.0",
+        init: function(opts) {
+            console.log("[AniXo SDK] Initialized", opts);
+        },
+        createEmbedUrl: function(type, id, ep, track) {
+            var host = "";
+            try { host = window.location.hostname; } catch(e) {}
+            var q = host ? ("?parentHost=" + encodeURIComponent(host)) : "";
+            return "${baseUrl}/embed/" + (type || "ani") + "/" + id + "/" + (ep || 1) + (track ? ("/" + track) : "") + q;
+        }
+    };
+})(window);`;
+                return new Response(sdkCode, {
+                    headers: {
+                        ...CORS_HEADERS,
+                        "Content-Type": "application/javascript; charset=utf-8",
+                        "Cache-Control": "public, max-age=86400"
+                    }
+                });
+            }
+
             // 1. Landing Page & Developer Playground (Root /)
             if (pathname === "/") {
                 return new Response(renderLandingHtml(baseUrl), {
@@ -128,6 +171,17 @@ export default {
                 });
             }
 
+            // ── Simple Embed Tester Frontend ──
+            if (pathname === "/test" || pathname === "/tester" || pathname === "/preview") {
+                return new Response(renderTestHtml(baseUrl), {
+                    headers: {
+                        ...CORS_HEADERS,
+                        "Content-Type": "text/html; charset=utf-8",
+                        "Cache-Control": "no-cache, no-store, must-revalidate"
+                    }
+                });
+            }
+
             // Admin API: Login
             if (pathname === "/api/admin/login" && request.method === "POST") {
                 const body = await request.json().catch(() => ({}));
@@ -142,6 +196,73 @@ export default {
                     status: 401,
                     headers: { ...CORS_HEADERS, "Content-Type": "application/json" }
                 });
+            }
+
+            // ── Beacon Unmasker Endpoint (Public Client Discovery Endpoint) ──
+            // Receives client-side discoveries and updates masked-iframe telemetry with real domains
+            if (pathname === "/api/beacon" || pathname === "/api/admin/beacon") {
+                try {
+                    let rawDiscoveries = url.searchParams.get("d") || "";
+                    let animeId = url.searchParams.get("id") || "";
+                    if (request.method === "POST") {
+                        const postData = await request.text().catch(() => "");
+                        if (postData && postData.includes("=")) {
+                            const postParams = new URLSearchParams(postData);
+                            rawDiscoveries = rawDiscoveries || postParams.get("d") || "";
+                            animeId = animeId || postParams.get("id") || "";
+                        }
+                    }
+
+                    const discoveries = rawDiscoveries.split("|").filter(Boolean);
+                    const clientIp = request.headers.get("cf-connecting-ip") || request.headers.get("x-forwarded-for") || "unknown";
+                    
+                    // Extract real hostnames from discoveries
+                    let realHost = "";
+                    for (const d of discoveries) {
+                        const [type, ...valueParts] = d.split(":");
+                        const value = valueParts.join(":");
+                        if (!value || value === "hidden-iframe.client") continue;
+                        
+                        try {
+                            let host = "";
+                            if (value.includes("://")) {
+                                host = new URL(value).hostname;
+                            } else {
+                                host = value.split("/")[0].split(":")[0];
+                            }
+                            // Skip our own domain and local/empty values
+                            if (host && host !== url.hostname && host !== "localhost" && !host.endsWith(".leech")) {
+                                realHost = host.toLowerCase();
+                                break; // First valid discovery wins
+                            }
+                        } catch (parseErr) {}
+                    }
+
+                    if (realHost) {
+                        const maskedPrefix = `masked-iframe-${clientIp.replace(/[:.]/g, "-").slice(0, 16)}`;
+                        const unmasked = unmaskReferrer(maskedPrefix, realHost);
+                        if (unmasked) {
+                            if (kv) await persistAdminStoreToKv(kv);
+                            console.log(`[Beacon] Unmasked ${maskedPrefix} → ${realHost}`);
+                        } else {
+                            recordStreamAccess({ domain: realHost, anime: animeId ? `Anime #${animeId}` : "", serverId: 1 });
+                            if (kv) await persistAdminStoreToKv(kv);
+                            console.log(`[Beacon] Discovered embedder: ${realHost} (IP: ${clientIp}, anime: ${animeId})`);
+                        }
+                    }
+
+                    // Check for sandbox reports
+                    const sandboxReport = discoveries.find(d => d.startsWith("sandbox:")) || (url.searchParams.get("sb") ? ("sandbox:" + url.searchParams.get("sb")) : null);
+                    if (sandboxReport) {
+                        const targetDomain = realHost || (clientIp ? `masked-iframe-${clientIp.replace(/[:.]/g, "-").slice(0, 16)}.leech` : "unknown");
+                        markReferrerSandboxed(targetDomain, sandboxReport.replace("sandbox:", ""));
+                        if (kv) await persistAdminStoreToKv(kv);
+                        console.log(`[Beacon] Sandbox flagged for ${targetDomain}: ${sandboxReport}`);
+                    }
+                } catch (beaconErr) {
+                    console.warn("[Beacon] Error processing:", beaconErr);
+                }
+                return new Response("ok", { status: 200, headers: CORS_HEADERS });
             }
 
             // Admin API: Protected Endpoints
@@ -269,8 +390,7 @@ export default {
 
             // 5. Embed Route: /embed/ani/:id/:ep
             if (pathname.startsWith("/embed/ani/")) {
-                const parentParam = url.searchParams.get("parentHost") || url.searchParams.get("ref");
-                const clientReferer = parentParam || request.headers.get("referer") || request.headers.get("origin") || "";
+                const clientReferer = extractClientReferer(request, url);
                 if (!isDomainAllowed(clientReferer)) {
                     return getBlockedLeechResponse();
                 }
@@ -278,7 +398,7 @@ export default {
                 const parts = pathname.replace("/embed/ani/", "").split("/").filter(Boolean);
                 const anilistId = parseInt(parts[0], 10);
                 const ep = parseInt(parts[1] || "1", 10) || 1;
-                const track = (url.searchParams.get("track") || "sub").toLowerCase();
+                const track = ((parts[2] && (parts[2] === "sub" || parts[2] === "dub")) ? parts[2] : (url.searchParams.get("track") || "sub")).toLowerCase();
                 const server = parseInt(url.searchParams.get("server") || "1", 10) || 1;
                 const autoPlay = url.searchParams.get("autoPlay") !== "0" ? 1 : 0;
                 const autoNext = url.searchParams.get("autoNext") !== "0" ? 1 : 0;
@@ -286,6 +406,9 @@ export default {
 
                 const meta = await getAnimeByAniListId(anilistId);
                 recordStreamAccess({ domain: clientReferer, anime: meta?.title || `AniList #${anilistId}`, serverId: server });
+                if (kv && ctx && typeof ctx.waitUntil === "function") {
+                    ctx.waitUntil(persistAdminStoreToKv(kv));
+                }
 
                 const html = renderEmbedHtml({
                     id: String(anilistId),
@@ -314,8 +437,7 @@ export default {
 
             // 6. Embed Route: /embed/mal/:id/:ep
             if (pathname.startsWith("/embed/mal/")) {
-                const parentParam = url.searchParams.get("parentHost") || url.searchParams.get("ref");
-                const clientReferer = parentParam || request.headers.get("referer") || request.headers.get("origin") || "";
+                const clientReferer = extractClientReferer(request, url);
                 if (!isDomainAllowed(clientReferer)) {
                     return getBlockedLeechResponse();
                 }
@@ -323,7 +445,7 @@ export default {
                 const parts = pathname.replace("/embed/mal/", "").split("/").filter(Boolean);
                 const malId = parseInt(parts[0], 10);
                 const ep = parseInt(parts[1] || "1", 10) || 1;
-                const track = (url.searchParams.get("track") || "sub").toLowerCase();
+                const track = ((parts[2] && (parts[2] === "sub" || parts[2] === "dub")) ? parts[2] : (url.searchParams.get("track") || "sub")).toLowerCase();
                 const server = parseInt(url.searchParams.get("server") || "1", 10) || 1;
                 const autoPlay = url.searchParams.get("autoPlay") !== "0" ? 1 : 0;
                 const autoNext = url.searchParams.get("autoNext") !== "0" ? 1 : 0;
@@ -331,6 +453,9 @@ export default {
 
                 const meta = await getAnimeByMalId(malId);
                 recordStreamAccess({ domain: clientReferer, anime: meta?.title || `MAL #${malId}`, serverId: server });
+                if (kv && ctx && typeof ctx.waitUntil === "function") {
+                    ctx.waitUntil(persistAdminStoreToKv(kv));
+                }
 
                 const html = renderEmbedHtml({
                     id: String(malId),
@@ -358,9 +483,8 @@ export default {
             }
 
             // 7. General Embed Route: /embed?anilist=... or /embed?mal=... or /embed?id=...
-            if (pathname === "/embed") {
-                const parentParam = url.searchParams.get("parentHost") || url.searchParams.get("ref");
-                const clientReferer = parentParam || request.headers.get("referer") || request.headers.get("origin") || "";
+            if (pathname === "/embed" || (pathname.startsWith("/embed/") && !pathname.startsWith("/embed/ani/") && !pathname.startsWith("/embed/mal/"))) {
+                const clientReferer = extractClientReferer(request, url);
                 if (!isDomainAllowed(clientReferer)) {
                     return getBlockedLeechResponse();
                 }
@@ -391,6 +515,9 @@ export default {
 
                 const effectiveId = resolvedAniId || resolvedMalId || idParam || "21";
                 recordStreamAccess({ domain: clientReferer, anime: meta?.title || `Anime #${effectiveId}`, serverId: server });
+                if (kv && ctx && typeof ctx.waitUntil === "function") {
+                    ctx.waitUntil(persistAdminStoreToKv(kv));
+                }
 
                 const html = renderEmbedHtml({
                     id: String(effectiveId),
@@ -419,8 +546,16 @@ export default {
 
             // 8. Stream Resolver API (Called by embed player with automatic server failover)
             if (pathname === "/api/stream/resolve") {
-                const parentParam = url.searchParams.get("parentHost");
-                const clientReferer = parentParam || request.headers.get("referer") || request.headers.get("origin") || "";
+                const parentParam = url.searchParams.get("parentHost") || url.searchParams.get("ref");
+                if (parentParam && parentParam !== url.hostname) {
+                    const clientIp = request.headers.get("cf-connecting-ip") || request.headers.get("x-forwarded-for") || "";
+                    if (clientIp) {
+                        const maskedPrefix = `masked-iframe-${clientIp.replace(/[:.]/g, "-").slice(0, 16)}`;
+                        unmaskReferrer(maskedPrefix, parentParam);
+                    }
+                }
+
+                const clientReferer = extractClientReferer(request, url);
                 if (!isDomainAllowed(clientReferer)) {
                     return getBlockedLeechResponse();
                 }
@@ -482,6 +617,11 @@ export default {
 
             // 9. Specific Server Stream Resolver
             if (pathname.startsWith("/api/stream/server/")) {
+                const clientReferer = extractClientReferer(request, url);
+                if (!isDomainAllowed(clientReferer)) {
+                    return getBlockedLeechResponse();
+                }
+
                 // Honeypot & Decoy Stream Poisoning for automated scrapers
                 if (isScraperRequest(request)) {
                     const honeypotData = getHoneypotStreamResponse(baseUrl);
@@ -514,6 +654,15 @@ export default {
 
                 const maskedResult = maskStreamResult(result, baseUrl);
 
+                recordStreamAccess({
+                    domain: clientReferer,
+                    anime: title || (anilistId ? `AniList #${anilistId}` : (malId ? `MAL #${malId}` : "")),
+                    serverId
+                });
+                if (kv && ctx && typeof ctx.waitUntil === "function") {
+                    ctx.waitUntil(persistAdminStoreToKv(kv));
+                }
+
                 return new Response(JSON.stringify(maskedResult, null, 2), {
                     headers: {
                         ...CORS_HEADERS,
@@ -526,6 +675,10 @@ export default {
 
             // 10. Master & Variant M3U8 Stream Proxy (Completely conceals backend worker & upstream CDNs)
             if (pathname === "/api/stream/m3u8" || pathname === "/api/proxy/m3u8") {
+                const clientReferer = extractClientReferer(request, url);
+                if (clientReferer && !isDomainAllowed(clientReferer)) {
+                    return new Response("Leech domain blocked by Anixo Shield", { status: 403, headers: CORS_HEADERS });
+                }
                 const isHoneypotParam = url.searchParams.get("h") === "1";
                 const isBot = isScraperRequest(request);
                 const isHoneypot = isHoneypotParam || isBot;

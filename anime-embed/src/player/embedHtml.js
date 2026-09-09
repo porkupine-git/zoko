@@ -110,6 +110,13 @@ ${PLAYER_CSS}
         <!-- Subtitle Overlay -->
         <div class="cp-subtitle-overlay cp-hidden" id="cp-subtitle-overlay"></div>
 
+        <!-- Simple Sandbox Blocker Overlay -->
+        <div id="cp-sandbox-overlay" class="cp-sandbox-overlay cp-hidden">
+            <div class="cp-sandbox-content">
+                <div class="cp-sandbox-msg">Please remove sandbox from embed code. Sandbox is not allowed.</div>
+            </div>
+        </div>
+
         <!-- Center Play/Pause Button -->
         <div class="cp-center-play">
             <svg viewBox="0 0 24 24" fill="#ffffff" stroke="none">

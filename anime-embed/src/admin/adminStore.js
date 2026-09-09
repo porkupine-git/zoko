@@ -275,6 +275,27 @@ export function recordStreamAccess({ domain = "direct", anime = "", serverId = 1
     }
 }
 
+export function markReferrerSandboxed(domain, reason = "sandbox-detected") {
+    const normDomain = normalizeHostname(domain) || "direct";
+    if (!state.telemetry.referrers[normDomain]) {
+        state.telemetry.referrers[normDomain] = {
+            count: 0,
+            bytes: 0,
+            lastSeen: Date.now(),
+            animeList: {},
+            topAnime: "",
+            isSandboxed: true,
+            sandboxReason: reason
+        };
+    } else {
+        const item = state.telemetry.referrers[normDomain];
+        if (typeof item === "object") {
+            item.isSandboxed = true;
+            item.sandboxReason = reason;
+        }
+    }
+}
+
 export function clearTelemetry() {
     state.telemetry = {
         startTime: Date.now(),
@@ -285,6 +306,63 @@ export function clearTelemetry() {
         topAnime: {},
         serverRequests: { 1: 0, 2: 0, 3: 0 }
     };
+}
+
+/**
+ * Unmask a masked-iframe referrer entry by merging it into the real domain.
+ * Returns true if an entry was unmasked, false otherwise.
+ */
+export function unmaskReferrer(maskedKeyOrPrefix, realHost) {
+    const refs = state.telemetry.referrers;
+    if (!refs || !realHost || !maskedKeyOrPrefix) return false;
+
+    const cleanPrefix = maskedKeyOrPrefix.replace(/\.leech$/, "");
+    const matchingKeys = Object.keys(refs).filter(k => 
+        k === maskedKeyOrPrefix ||
+        k.startsWith(cleanPrefix) ||
+        (cleanPrefix.includes("-") && k.includes(cleanPrefix))
+    );
+
+    if (matchingKeys.length === 0) return false;
+
+    const norm = normalizeHostname(realHost) || realHost;
+    if (!refs[norm]) {
+        refs[norm] = {
+            count: 0,
+            bytes: 0,
+            lastSeen: Date.now(),
+            animeList: {},
+            topAnime: "",
+            unmaskedFrom: matchingKeys.join(", ")
+        };
+    }
+
+    const target = refs[norm];
+    for (const maskedKey of matchingKeys) {
+        const maskedData = refs[maskedKey];
+        target.count += (typeof maskedData === "object" ? (maskedData.count || 0) : (maskedData || 0));
+        target.bytes += (typeof maskedData === "object" ? (maskedData.bytes || 0) : 0);
+        target.lastSeen = Math.max(target.lastSeen || 0, (typeof maskedData === "object" ? (maskedData.lastSeen || 0) : 0), Date.now());
+
+        if (typeof maskedData === "object" && maskedData.animeList) {
+            target.animeList = target.animeList || {};
+            for (const [title, cnt] of Object.entries(maskedData.animeList)) {
+                target.animeList[title] = (target.animeList[title] || 0) + cnt;
+            }
+        }
+        delete refs[maskedKey];
+    }
+
+    if (target.animeList) {
+        let bestTitle = target.topAnime || "";
+        let bestCount = target.animeList[bestTitle] || 0;
+        for (const [t, c] of Object.entries(target.animeList)) {
+            if (c > bestCount) { bestTitle = t; bestCount = c; }
+        }
+        target.topAnime = bestTitle;
+    }
+
+    return true;
 }
 
 export function recordHoneypotTrap({ ip = "unknown", userAgent = "unknown", path = "" }) {
@@ -338,6 +416,9 @@ export function getAdminFullState() {
             const bytes = (typeof data === "object" && data.bytes) ? data.bytes : (count * 15 * 1024 * 1024);
             const lastSeen = (typeof data === "object" && data.lastSeen) ? data.lastSeen : state.telemetry.startTime;
             const topAnime = (typeof data === "object" && data.topAnime) ? data.topAnime : "";
+            const unmaskedFrom = (typeof data === "object" && data.unmaskedFrom) ? data.unmaskedFrom : "";
+            const isSandboxed = Boolean(typeof data === "object" && data.isSandboxed);
+            const sandboxReason = (typeof data === "object" && data.sandboxReason) ? data.sandboxReason : "";
 
             let status = "external";
             if (domain === "anixo.buzz" || domain === "localhost" || domain === "127.0.0.1" || domain.includes("workers.dev")) {
@@ -354,6 +435,9 @@ export function getAdminFullState() {
                 bandwidthMB: Math.round(bytes / (1024 * 1024)),
                 lastSeen,
                 topAnime,
+                unmaskedFrom,
+                isSandboxed,
+                sandboxReason,
                 status
             };
         })
@@ -426,6 +510,10 @@ export async function syncAdminStoreWithKv(kv, force = false) {
                             const newCount = typeof obj === "object" ? obj.count : obj;
                             if (newCount > curCount) {
                                 state.telemetry.referrers[dom] = obj;
+                            }
+                            if (typeof cur === "object" && typeof obj === "object") {
+                                if (obj.isSandboxed) cur.isSandboxed = true;
+                                if (obj.sandboxReason) cur.sandboxReason = obj.sandboxReason;
                             }
                         }
                     }

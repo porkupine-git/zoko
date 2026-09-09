@@ -1604,4 +1604,38 @@ export const PLAYER_CSS = `
                 gap: 5px;
             }
         }
+
+        /* ── Simple Sandbox Blocker Overlay ── */
+        .cp-sandbox-overlay {
+            position: absolute;
+            inset: 0;
+            background: #0b0c10;
+            z-index: 2147483647;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+            text-align: center;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        }
+
+        .cp-sandbox-overlay.cp-hidden {
+            display: none !important;
+        }
+
+        .cp-sandbox-content {
+            max-width: 480px;
+            background: #15161e;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 8px;
+            padding: 24px 28px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
+        }
+
+        .cp-sandbox-msg {
+            font-size: 15px;
+            color: #f1f5f9;
+            line-height: 1.6;
+            font-weight: 500;
+        }
 `;

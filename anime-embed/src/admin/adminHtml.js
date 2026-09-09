@@ -1643,6 +1643,8 @@ export function renderAdminHtml(baseUrl = "") {
                         badge = '<span class="server-status-tag tag-maintenance" style="font-size: 9.5px;">EXTERNAL</span>';
                     }
 
+                    const sandboxTag = r.isSandboxed ? ' <span class="server-status-tag tag-disabled" style="font-size: 9px; background: rgba(239, 68, 68, 0.2); color: #f87171; border-color: rgba(239, 68, 68, 0.4); margin-left: 6px;" title="Sandbox Detected: ' + (r.sandboxReason || 'Ad-stripping sandbox') + '">SANDBOXED</span>' : '';
+
                     const actionBtn = r.status === 'blocked'
                         ? '<button type="button" class="btn-secondary" style="padding: 2px 7px; font-size: 11px;" data-domain="' + r.domain + '" onclick="quickUnbanDomain(this.dataset.domain)">Unban</button>'
                         : '<div style="display: flex; gap: 4px;">' +
@@ -1651,7 +1653,7 @@ export function renderAdminHtml(baseUrl = "") {
                           '</div>';
 
                     return '<tr>' +
-                        '<td class="mono-cell" style="color: #38bdf8; font-weight: 600;">' + r.domain + '</td>' +
+                        '<td class="mono-cell" style="color: #38bdf8; font-weight: 600;">' + r.domain + sandboxTag + '</td>' +
                         '<td>' + badge + '</td>' +
                         '<td><strong>' + r.count + '</strong></td>' +
                         '<td class="mono-cell" style="color: var(--text-secondary);">' + (r.bandwidthMB || (r.count * 15)) + ' MB</td>' +

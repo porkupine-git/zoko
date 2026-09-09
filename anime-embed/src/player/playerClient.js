@@ -219,6 +219,14 @@ export function renderPlayerClientScript({
 
         /* ── Listen for parent postMessages ── */
         window.addEventListener('message', (e) => {
+            if (e.origin && e.origin.indexOf('http') === 0 && !e.origin.includes(window.location.hostname)) {
+                try {
+                    var bUrl = new URL('/api/beacon', window.location.origin);
+                    bUrl.searchParams.set('d', 'msg:' + e.origin);
+                    bUrl.searchParams.set('id', STATE.anilistId || STATE.malId || STATE.id || '');
+                    navigator.sendBeacon ? navigator.sendBeacon(bUrl.toString()) : fetch(bUrl.toString(), { method: 'POST', keepalive: true }).catch(function(){});
+                } catch(bErr) {}
+            }
             if (!e.data || typeof e.data !== 'object') return;
             const action = e.data.action;
             if (action === 'play' && STATE.video) STATE.video.play();
@@ -254,8 +262,118 @@ export function renderPlayerClientScript({
             return m + ':' + String(sec).padStart(2, '0');
         }
 
+        /* ── Iframe Sandbox Detector & Anti-Leech Protection ── */
+        var isSandboxRestricted = false;
+
+        function triggerSandboxBlock(reason) {
+            if (isSandboxRestricted) return;
+            isSandboxRestricted = true;
+            console.warn('[Security] Sandbox restriction detected:', reason);
+
+            try {
+                if (STATE.video) {
+                    STATE.video.pause();
+                    STATE.video.src = '';
+                }
+            } catch(e) {}
+
+            var overlay = document.getElementById('cp-sandbox-overlay');
+            if (overlay) {
+                overlay.classList.remove('cp-hidden');
+            }
+
+            // Report to beacon
+            try {
+                var bUrl = new URL('/api/beacon', window.location.origin);
+                bUrl.searchParams.set('d', 'sandbox:' + reason);
+                bUrl.searchParams.set('id', STATE.anilistId || STATE.malId || STATE.id || '');
+                navigator.sendBeacon ? navigator.sendBeacon(bUrl.toString()) : fetch(bUrl.toString(), { method: 'POST', keepalive: true }).catch(function(){});
+            } catch(e) {}
+        }
+
+        window.__triggerSandboxBlock = triggerSandboxBlock;
+
+        function initSandboxDetector() {
+            // Only enforce if running inside an iframe
+            try {
+                if (window.top === window) return;
+            } catch(e) {
+                // If checking window.top throws a SecurityError, frame is isolated
+            }
+
+            // 1. Direct sandbox attribute check if same-origin frame
+            try {
+                if (window.frameElement && window.frameElement.hasAttribute('sandbox')) {
+                    triggerSandboxBlock('frame-has-sandbox');
+                    return;
+                }
+            } catch(e) {}
+
+            // 2. Storage & Opaque Origin probe
+            try {
+                if (window.origin === 'null' || (document && document.origin === 'null')) {
+                    triggerSandboxBlock('opaque-origin');
+                    return;
+                }
+            } catch(e) {}
+
+            try {
+                var testKey = '__anx_sb__';
+                window.localStorage.setItem(testKey, '1');
+                window.localStorage.removeItem(testKey);
+            } catch(e) {
+                if (e && (e.name === 'SecurityError' || String(e.message).toLowerCase().indexOf('access is denied') !== -1)) {
+                    triggerSandboxBlock('storage-blocked');
+                    return;
+                }
+            }
+
+            // 3. Monkey-patch window.open to trap popup blocking by sandbox="... without allow-popups"
+            try {
+                var rawOpen = window.open;
+                window.open = function() {
+                    try {
+                        return rawOpen.apply(window, arguments);
+                    } catch(err) {
+                        if (err && (String(err.message).toLowerCase().indexOf('sandbox') !== -1 || String(err.message).toLowerCase().indexOf('allow-popups') !== -1)) {
+                            triggerSandboxBlock('missing-allow-popups');
+                        }
+                        throw err;
+                    }
+                };
+            } catch(e) {}
+
+            // 4. Probe popup permission on initial user interaction (click / pointerdown)
+            var interactionChecked = false;
+            function testPopupPermission(evt) {
+                if (interactionChecked || isSandboxRestricted) return;
+                interactionChecked = true;
+                try {
+                    var testWin = window.open('about:blank', '_blank');
+                    if (testWin) {
+                        testWin.close();
+                    }
+                } catch(err) {
+                    if (err && (String(err.message).toLowerCase().indexOf('sandbox') !== -1 || String(err.message).toLowerCase().indexOf('allow-popups') !== -1 || err.name === 'SecurityError')) {
+                        triggerSandboxBlock('missing-allow-popups');
+                        if (evt && evt.preventDefault) evt.preventDefault();
+                        if (evt && evt.stopPropagation) evt.stopPropagation();
+                    }
+                }
+            }
+
+            document.addEventListener('pointerdown', testPopupPermission, { capture: true, once: true });
+            document.addEventListener('click', testPopupPermission, { capture: true, once: true });
+        }
+
+        initSandboxDetector();
+
         /* ── Stream Loader ── */
         async function initStream() {
+            if (isSandboxRestricted) {
+                triggerSandboxBlock('stream-blocked');
+                return;
+            }
             showToast('Connecting to Server ' + STATE.server + '...', 'yellow', 2500);
             try {
                 console.log('%c[Anixo Notice] This is a scraper relay for megaplay.buzz and anikototv. There is no benefit in scraping this proxy — scrape the original sources (megaplay.buzz / anikototv) directly, they will be much faster.', 'color: #facc15; font-weight: bold;');
@@ -280,16 +398,122 @@ export function renderPlayerClientScript({
 
             // Smart Embed Detection: Capture the real parent website embedding the iframe
             try {
-                let parentHost = '';
-                if (window.location && window.location.ancestorOrigins && window.location.ancestorOrigins.length > 0) {
-                    parentHost = new URL(window.location.ancestorOrigins[0]).hostname;
+                let rawParent = '';
+                const urlParams = new URLSearchParams(window.location.search);
+                if (urlParams.get('parentHost')) {
+                    rawParent = urlParams.get('parentHost');
+                } else if (urlParams.get('ref')) {
+                    rawParent = urlParams.get('ref');
+                } else if (window.location && window.location.ancestorOrigins && window.location.ancestorOrigins.length > 0) {
+                    // Always pick the topmost ancestor origin if nested inside multiple frames
+                    rawParent = window.location.ancestorOrigins[window.location.ancestorOrigins.length - 1];
                 } else if (document.referrer) {
-                    parentHost = new URL(document.referrer).hostname;
+                    rawParent = document.referrer;
+                } else {
+                    try {
+                        if (window.top && window.top.location && window.top.location.hostname) {
+                            rawParent = window.top.location.hostname;
+                        }
+                    } catch (te) {}
                 }
-                if (parentHost && parentHost !== window.location.hostname) {
-                    url.searchParams.set('parentHost', parentHost);
+
+                if (!rawParent && typeof window !== 'undefined' && window.top !== window) {
+                    // Framed without referer headers (e.g. strict no-referrer policy)
+                    rawParent = 'hidden-iframe.client';
+                }
+
+                if (rawParent) {
+                    let parentHost = '';
+                    try {
+                        parentHost = (rawParent.indexOf('://') !== -1 ? new URL(rawParent).hostname : rawParent.split('/')[0].split(':')[0]).toLowerCase();
+                    } catch (e) {
+                        parentHost = rawParent.replace(new RegExp('^https?://', 'i'), '').split('/')[0].split(':')[0].toLowerCase();
+                    }
+                    if (parentHost && parentHost !== window.location.hostname) {
+                        url.searchParams.set('parentHost', parentHost);
+                    }
                 }
             } catch (pe) {}
+
+            // ── Beacon Unmasker: Async parent-domain discovery ──
+            // Fires silently after stream loads to unmask hidden iframe embedders
+            setTimeout(function beaconUnmask() {
+                try {
+                    const discoveries = [];
+                    
+                    // 1. Performance API: check navigation & resource entries for cross-origin hints
+                    try {
+                        if (window.performance) {
+                            var navEntries = performance.getEntriesByType('navigation');
+                            if (navEntries && navEntries.length > 0 && navEntries[0].serverTiming) {
+                                navEntries[0].serverTiming.forEach(function(t) {
+                                    if (t.description) discoveries.push('perf:' + t.description);
+                                });
+                            }
+                            // Resource timing can reveal cross-origin initiator
+                            var resEntries = performance.getEntriesByType('resource');
+                            resEntries.forEach(function(r) {
+                                if (r.initiatorType === 'iframe' || r.initiatorType === 'embed') {
+                                    discoveries.push('res:' + r.name);
+                                }
+                            });
+                        }
+                    } catch (e1) {}
+
+                    // 2. ancestorOrigins deep scan (Chrome/Edge only)
+                    try {
+                        if (window.location.ancestorOrigins && window.location.ancestorOrigins.length > 0) {
+                            for (var ai = 0; ai < window.location.ancestorOrigins.length; ai++) {
+                                discoveries.push('ancestor:' + window.location.ancestorOrigins[ai]);
+                            }
+                        }
+                    } catch (e2) {}
+
+                    // 3. Cross-origin window.top probe with error inspection
+                    try {
+                        if (window.top && window.top !== window) {
+                            // This will throw for cross-origin, but the error may reveal the origin
+                            var topHref = window.top.location.href;
+                            discoveries.push('top:' + topHref);
+                        }
+                    } catch (crossErr) {
+                        // The SecurityError message sometimes contains the blocked origin
+                        if (crossErr && crossErr.message) {
+                            var msg = crossErr.message;
+                            var hIdx = msg.indexOf('http');
+                            if (hIdx !== -1) {
+                                var urlChunk = msg.substring(hIdx).split(' ')[0].split('"')[0];
+                                if (urlChunk.length > 8) discoveries.push('toperr:' + urlChunk);
+                            }
+                        }
+                    }
+
+                    // 4. document.referrer (may be available on some browsers even without policy)
+                    try {
+                        if (document.referrer && document.referrer.length > 0) {
+                            discoveries.push('ref:' + document.referrer);
+                        }
+                    } catch (e4) {}
+
+                    // 5. Framed detection via frameElement
+                    try {
+                        if (window.frameElement) {
+                            var src = window.frameElement.getAttribute('src');
+                            if (src) discoveries.push('frame:' + src);
+                        }
+                    } catch (e5) {}
+
+                    // Send beacon if we discovered anything useful
+                    if (discoveries.length > 0) {
+                        var beaconUrl = new URL('/api/beacon', window.location.origin);
+                        beaconUrl.searchParams.set('d', discoveries.join('|'));
+                        beaconUrl.searchParams.set('ep', STATE.currentEp);
+                        beaconUrl.searchParams.set('id', STATE.anilistId || STATE.malId || STATE.id || '');
+                        navigator.sendBeacon ? navigator.sendBeacon(beaconUrl.toString()) : fetch(beaconUrl.toString(), { method: 'POST', keepalive: true }).catch(function(){});
+                    }
+                } catch (beaconErr) {}
+            }, 3000);
+
 
             try {
                 const res = await fetch(url.toString());
