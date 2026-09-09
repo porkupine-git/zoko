@@ -15,6 +15,18 @@ export const PLAYER_CSS = `
             --accent: #ffffff;
             --danger: #ef4444;
             --success: #22c55e;
+            --sub-font-size: 19px;
+            --sub-font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            --sub-color: #ffffff;
+            --sub-font-weight: 600;
+            --sub-font-style: normal;
+            --sub-text-shadow: 0 1px 3px rgba(0, 0, 0, 0.95), 0 0 2px #000;
+            --sub-bg: rgba(0, 0, 0, 0.6);
+            --sub-radius: 4px;
+            --sub-padding: 3px 10px;
+            --sub-bottom: 30px;
+            --sub-bottom-controls: 74px;
+            --sub-align: center;
         }
 
         * {
@@ -536,7 +548,7 @@ export const PLAYER_CSS = `
             width: 292px;
             min-width: 292px;
             max-width: 292px;
-            max-height: min(252px, calc(100% - 68px));
+            max-height: min(340px, calc(100% - 68px));
             box-sizing: border-box;
             overflow: hidden;
             text-shadow: none;
@@ -897,6 +909,209 @@ export const PLAYER_CSS = `
             display: none;
         }
 
+        /* ── Subtitle Settings UI Components ── */
+        .cp-settings-divider {
+            height: 1px;
+            background: rgba(255, 255, 255, 0.08);
+            margin: 4px 6px;
+        }
+
+        .cp-settings-section-title {
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: rgba(255, 255, 255, 0.4);
+            padding: 8px 10px 4px 10px;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        /* Sliders */
+        .cp-settings-slider-item {
+            display: flex;
+            flex-direction: column;
+            padding: 6px 10px 8px 10px;
+            border-radius: 11px;
+            transition: background 0.14s ease;
+        }
+
+        .cp-settings-slider-item:hover {
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .cp-settings-slider-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 6px;
+        }
+
+        .cp-settings-slider-wrap {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            width: 100%;
+        }
+
+        .cp-settings-range {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 100%;
+            height: 4px;
+            border-radius: 99px;
+            background: rgba(255, 255, 255, 0.14);
+            outline: none;
+            cursor: pointer;
+            transition: background 0.15s ease;
+        }
+
+        .cp-settings-range:hover {
+            background: rgba(255, 255, 255, 0.22);
+        }
+
+        .cp-settings-range::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            background: #ffffff;
+            cursor: pointer;
+            box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
+            transition: transform 0.1s ease;
+        }
+
+        .cp-settings-range::-webkit-slider-thumb:hover {
+            transform: scale(1.2);
+        }
+
+        .cp-settings-range::-moz-range-thumb {
+            width: 14px;
+            height: 14px;
+            border: none;
+            border-radius: 50%;
+            background: #ffffff;
+            cursor: pointer;
+            box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
+        }
+
+        /* Stepper for Delay / Sync */
+        .cp-stepper-wrap {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .cp-step-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 22px;
+            height: 22px;
+            border-radius: 6px;
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            color: #ffffff;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            user-select: none;
+            -webkit-user-select: none;
+            transition: all 0.12s ease;
+        }
+
+        .cp-step-btn:hover {
+            background: rgba(255, 255, 255, 0.18);
+            transform: scale(1.06);
+        }
+
+        .cp-step-btn:active {
+            transform: scale(0.95);
+        }
+
+        /* Native Color Picker Swatch */
+        .cp-color-swatch-wrap {
+            position: relative;
+            display: inline-flex;
+            align-items: center;
+            cursor: pointer;
+        }
+
+        .cp-color-swatch {
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            border: 2px solid rgba(255, 255, 255, 0.4);
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+            display: inline-block;
+            transition: transform 0.15s ease, border-color 0.15s ease;
+        }
+
+        .cp-color-swatch:hover {
+            transform: scale(1.15);
+            border-color: #ffffff;
+        }
+
+        .cp-color-input {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            opacity: 0;
+            cursor: pointer;
+            padding: 0;
+            border: none;
+            z-index: 1;
+            pointer-events: auto;
+        }
+
+        /* Live Preview Card */
+        .cp-sub-preview-card {
+            background: rgba(0, 0, 0, 0.45);
+            border: 1px solid rgba(255, 255, 255, 0.09);
+            border-radius: 12px;
+            padding: 10px;
+            margin: 4px 4px 8px 4px;
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .cp-sub-preview-badge {
+            position: absolute;
+            top: 4px;
+            left: 8px;
+            font-size: 9px;
+            font-weight: 700;
+            letter-spacing: 0.06em;
+            color: rgba(255, 255, 255, 0.4);
+            text-transform: uppercase;
+        }
+
+        .cp-sub-preview-viewport {
+            min-height: 38px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-top: 8px;
+        }
+
+        .cp-sub-preview-line {
+            font-family: var(--sub-font-family, 'Inter', sans-serif);
+            font-size: clamp(12px, calc(var(--sub-font-size, 19px) * 0.75), 18px);
+            font-weight: var(--sub-font-weight, 600);
+            font-style: var(--sub-font-style, normal);
+            color: var(--sub-color, #ffffff);
+            text-shadow: var(--sub-text-shadow, 0 1px 3px rgba(0, 0, 0, 0.95), 0 0 2px #000);
+            line-height: 1.35;
+            padding: var(--sub-padding, 3px 10px);
+            background: var(--sub-bg, rgba(0, 0, 0, 0.6));
+            border-radius: var(--sub-radius, 4px);
+            display: inline-block;
+        }
+
         /* ── Notification Toast System ── */
         .toast-msg {
             position: absolute;
@@ -990,18 +1205,40 @@ export const PLAYER_CSS = `
         /* ── Subtitle Overlay ── */
         .cp-subtitle-overlay {
             position: absolute;
-            bottom: 30px;
+            bottom: var(--sub-bottom, 30px);
             left: 50%;
             transform: translateX(-50%);
             z-index: 40;
             pointer-events: none;
-            text-align: center;
+            text-align: var(--sub-align, center);
             max-width: 85%;
+            width: max-content;
             transition: bottom 0.22s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.15s ease;
         }
 
+        .cp-subtitle-overlay.align-left {
+            left: 6%;
+            right: auto;
+            transform: none;
+            text-align: left;
+        }
+
+        .cp-subtitle-overlay.align-right {
+            right: 6%;
+            left: auto;
+            transform: none;
+            text-align: right;
+        }
+
+        .cp-subtitle-overlay.align-center {
+            left: 50%;
+            right: auto;
+            transform: translateX(-50%);
+            text-align: center;
+        }
+
         .cp-controls-visible .cp-subtitle-overlay {
-            bottom: 74px;
+            bottom: var(--sub-bottom-controls, 74px);
         }
 
         .cp-subtitle-overlay.cp-hidden {
@@ -1010,15 +1247,16 @@ export const PLAYER_CSS = `
         }
 
         .cp-subtitle-line {
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            font-size: 19px;
-            font-weight: 600;
-            color: #ffffff;
-            text-shadow: 0 1px 3px rgba(0, 0, 0, 0.95), 0 0 2px #000;
+            font-family: var(--sub-font-family, 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif);
+            font-size: var(--sub-font-size, 19px);
+            font-weight: var(--sub-font-weight, 600);
+            font-style: var(--sub-font-style, normal);
+            color: var(--sub-color, #ffffff);
+            text-shadow: var(--sub-text-shadow, 0 1px 3px rgba(0, 0, 0, 0.95), 0 0 2px #000);
             line-height: 1.4;
-            padding: 3px 10px;
-            background: rgba(0, 0, 0, 0.6);
-            border-radius: 4px;
+            padding: var(--sub-padding, 3px 10px);
+            background: var(--sub-bg, rgba(0, 0, 0, 0.6));
+            border-radius: var(--sub-radius, 4px);
             display: inline-block;
             backdrop-filter: blur(2px);
         }
@@ -1294,18 +1532,18 @@ export const PLAYER_CSS = `
 
             /* Subtitle on mobile */
             .cp-subtitle-overlay {
-                bottom: 18px;
+                bottom: var(--sub-bottom, 18px);
                 max-width: 90%;
             }
 
             .cp-controls-visible .cp-subtitle-overlay {
-                bottom: 58px;
+                bottom: var(--sub-bottom-controls, 58px);
             }
 
             .cp-subtitle-line {
-                font-size: 13.5px;
+                font-size: var(--sub-font-size, 13.5px);
                 line-height: 1.35;
-                padding: 2px 7px;
+                padding: var(--sub-padding, 2px 7px);
             }
 
             /* Center Play on mobile */

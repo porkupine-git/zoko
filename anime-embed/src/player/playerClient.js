@@ -25,6 +25,125 @@ export function renderPlayerClientScript({
     autoSkip = 1
 }) {
     return `
+        /* ── Subtitle Settings Storage & Defaults ── */
+        const SUB_SETTINGS_STORAGE_KEY = 'aniembed_sub_settings';
+        const DEFAULT_SUB_SETTINGS = {
+            preset: 'default',
+            fontSize: 100,
+            fontFamily: 'default',
+            textColor: '#ffffff',
+            textOpacity: 100,
+            fontWeight: '600',
+            fontStyle: 'normal',
+            edgeStyle: 'shadow',
+            backgroundType: 'none',
+            backgroundColor: '#000000',
+            backgroundOpacity: 60,
+            borderRadius: 4,
+            paddingHorizontal: 10,
+            paddingVertical: 3,
+            position: 'normal',
+            customPositionBottom: 30,
+            alignment: 'center',
+            delay: 0.0
+        };
+
+        const SUBTITLE_PRESETS = {
+            'default': {
+                preset: 'default',
+                fontSize: 100,
+                fontFamily: 'default',
+                textColor: '#ffffff',
+                textOpacity: 100,
+                fontWeight: '600',
+                fontStyle: 'normal',
+                edgeStyle: 'shadow',
+                backgroundType: 'none',
+                backgroundColor: '#000000',
+                backgroundOpacity: 60,
+                borderRadius: 4,
+                paddingHorizontal: 10,
+                paddingVertical: 3,
+                position: 'normal',
+                customPositionBottom: 30,
+                alignment: 'center'
+            },
+            'anime': {
+                preset: 'anime',
+                fontSize: 115,
+                fontFamily: 'default',
+                textColor: '#ffffff',
+                textOpacity: 100,
+                fontWeight: '700',
+                fontStyle: 'normal',
+                edgeStyle: 'outline',
+                backgroundType: 'box',
+                backgroundColor: '#000000',
+                backgroundOpacity: 45,
+                borderRadius: 6,
+                paddingHorizontal: 12,
+                paddingVertical: 4,
+                position: 'normal',
+                customPositionBottom: 30,
+                alignment: 'center'
+            },
+            'clean': {
+                preset: 'clean',
+                fontSize: 95,
+                fontFamily: 'sans-serif',
+                textColor: '#ffffff',
+                textOpacity: 95,
+                fontWeight: '500',
+                fontStyle: 'normal',
+                edgeStyle: 'shadow',
+                backgroundType: 'none',
+                backgroundColor: '#000000',
+                backgroundOpacity: 0,
+                borderRadius: 4,
+                paddingHorizontal: 8,
+                paddingVertical: 2,
+                position: 'low',
+                customPositionBottom: 14,
+                alignment: 'center'
+            },
+            'high-contrast': {
+                preset: 'high-contrast',
+                fontSize: 120,
+                fontFamily: 'default',
+                textColor: '#ffff00',
+                textOpacity: 100,
+                fontWeight: '700',
+                fontStyle: 'normal',
+                edgeStyle: 'outline',
+                backgroundType: 'box',
+                backgroundColor: '#000000',
+                backgroundOpacity: 85,
+                borderRadius: 4,
+                paddingHorizontal: 14,
+                paddingVertical: 4,
+                position: 'normal',
+                customPositionBottom: 30,
+                alignment: 'center'
+            }
+        };
+
+        function loadSubtitleSettings() {
+            try {
+                const raw = localStorage.getItem(SUB_SETTINGS_STORAGE_KEY);
+                if (raw) {
+                    const parsed = JSON.parse(raw);
+                    return Object.assign({}, DEFAULT_SUB_SETTINGS, parsed);
+                }
+            } catch (e) {}
+            return Object.assign({}, DEFAULT_SUB_SETTINGS);
+        }
+
+        function saveSubtitleSettings(settings) {
+            try {
+                localStorage.setItem(SUB_SETTINGS_STORAGE_KEY, JSON.stringify(settings));
+            } catch (e) {}
+        }
+
         /* ── STATE ── */
         const STATE = {
             id: "${escapeJs(id || '')}",
@@ -46,6 +165,7 @@ export function renderPlayerClientScript({
             subtitleVisible: true,
             subtitleCues: [],
             subtitleCache: {},
+            subtitleSettings: loadSubtitleSettings(),
             activeSubtitleBlobUrl: null,
             failoverAttempt: 0,
             qualities: [{ label: 'Auto', level: -1 }],
@@ -214,6 +334,7 @@ export function renderPlayerClientScript({
 
             const video = document.getElementById('cp-video');
             STATE.video = video;
+            applySubtitleStyles();
             if (video && !video.dataset.ctxWired) {
                 video.dataset.ctxWired = 'true';
                 video.addEventListener('contextmenu', suppressMobileVideoContextMenu, { capture: true });
@@ -838,7 +959,8 @@ export function renderPlayerClientScript({
                 return;
             }
 
-            const matching = STATE.subtitleCues.filter(c => curTime >= c.start && curTime <= c.end);
+            const effectiveTime = curTime - (STATE.subtitleSettings ? (STATE.subtitleSettings.delay || 0) : 0);
+            const matching = STATE.subtitleCues.filter(c => effectiveTime >= c.start && effectiveTime <= c.end);
             if (matching.length > 0) {
                 const html = matching.map(c => '<span class="cp-subtitle-line">' + c.html + '</span>').join('<br>');
                 if (overlay.innerHTML !== html) {
@@ -1043,17 +1165,98 @@ export function renderPlayerClientScript({
             }
         }
 
+        /* ── Subtitle Styling Engine ── */
+        function hexToRgba(hex, alpha = 1) {
+            if (!hex) return 'rgba(0, 0, 0, ' + alpha + ')';
+            hex = String(hex).replace('#', '');
+            if (hex.length === 3) {
+                hex = hex.split('').map(c => c + c).join('');
+            }
+            const num = parseInt(hex, 16);
+            if (isNaN(num)) return 'rgba(0, 0, 0, ' + alpha + ')';
+            const r = (num >> 16) & 255;
+            const g = (num >> 8) & 255;
+            const b = num & 255;
+            return 'rgba(' + r + ', ' + g + ', ' + b + ', ' + alpha + ')';
+        }
+
+        function applySubtitleStyles() {
+            const s = STATE.subtitleSettings || DEFAULT_SUB_SETTINGS;
+            const root = document.getElementById('player-root');
+            if (!root) return;
+
+            const isMob = root.classList.contains('is-mobile');
+            const baseSize = isMob ? 14 : 19;
+            const pct = (s.fontSize || 100) / 100;
+            const computedSize = Math.round(baseSize * pct * 10) / 10 + 'px';
+            root.style.setProperty('--sub-font-size', computedSize);
+
+            let ff = "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
+            if (s.fontFamily === 'sans-serif') ff = "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
+            else if (s.fontFamily === 'serif') ff = "Georgia, Cambria, 'Times New Roman', Times, serif";
+            else if (s.fontFamily === 'monospace') ff = "'JetBrains Mono', 'Courier New', Courier, monospace";
+            root.style.setProperty('--sub-font-family', ff);
+
+            const textOp = (s.textOpacity !== undefined ? s.textOpacity : 100) / 100;
+            root.style.setProperty('--sub-color', hexToRgba(s.textColor || '#ffffff', textOp));
+            root.style.setProperty('--sub-font-weight', s.fontWeight || '600');
+            root.style.setProperty('--sub-font-style', s.fontStyle || 'normal');
+
+            let textShadow = 'none';
+            if (s.edgeStyle === 'shadow') {
+                textShadow = '0 1px 3px rgba(0, 0, 0, 0.95), 0 0 2px #000';
+            } else if (s.edgeStyle === 'outline') {
+                textShadow = '-1.5px -1.5px 0 #000, 1.5px -1.5px 0 #000, -1.5px 1.5px 0 #000, 1.5px 1.5px 0 #000, 0 2px 4px rgba(0, 0, 0, 0.85)';
+            } else if (s.edgeStyle === 'raised') {
+                textShadow = '0 1px 0 #000, 0 2px 0 #000, 0 3px 2px rgba(0, 0, 0, 0.7)';
+            } else if (s.edgeStyle === 'depressed') {
+                textShadow = '0 -1px 0 #000, 0 -2px 0 #000, 0 2px 2px rgba(0, 0, 0, 0.7)';
+            }
+            root.style.setProperty('--sub-text-shadow', textShadow);
+
+            if (s.backgroundType === 'none') {
+                root.style.setProperty('--sub-bg', 'transparent');
+            } else {
+                const bgOp = (s.backgroundOpacity !== undefined ? s.backgroundOpacity : 60) / 100;
+                root.style.setProperty('--sub-bg', hexToRgba(s.backgroundColor || '#000000', bgOp));
+            }
+
+            root.style.setProperty('--sub-radius', (s.borderRadius !== undefined ? s.borderRadius : 4) + 'px');
+            const padH = s.paddingHorizontal !== undefined ? s.paddingHorizontal : 10;
+            const padV = s.paddingVertical !== undefined ? s.paddingVertical : 3;
+            root.style.setProperty('--sub-padding', padV + 'px ' + padH + 'px');
+
+            let bottom = 30;
+            if (s.position === 'low') bottom = 14;
+            else if (s.position === 'high') bottom = 64;
+            else if (s.position === 'custom') bottom = Math.max(5, Math.min(150, s.customPositionBottom || 30));
+
+            if (isMob) bottom = Math.max(10, Math.round(bottom * 0.7));
+            root.style.setProperty('--sub-bottom', bottom + 'px');
+            root.style.setProperty('--sub-bottom-controls', (bottom + 44) + 'px');
+
+            const align = s.alignment || 'center';
+            root.style.setProperty('--sub-align', align);
+
+            const overlay = document.getElementById('cp-subtitle-overlay');
+            if (overlay) {
+                overlay.classList.remove('align-left', 'align-center', 'align-right');
+                overlay.classList.add('align-' + align);
+            }
+        }
+
         /* ── Settings Panel ── */
-        function buildSettingsPanel() {
+        function buildSettingsPanel(preservePanel = false) {
             const container = document.getElementById('cp-settings');
             if (!container) return;
 
+            const targetPanel = preservePanel ? (STATE.activePanel || 'main') : 'main';
             container.innerHTML = '';
-            STATE.activePanel = 'main';
+            STATE.activePanel = targetPanel;
 
             // Main panel
             const mainPanel = document.createElement('div');
-            mainPanel.className = 'cp-settings-panel cp-panel-active';
+            mainPanel.className = 'cp-settings-panel';
             mainPanel.id = 'cp-panel-main';
 
             const mainBody = document.createElement('div');
@@ -1068,17 +1271,17 @@ export function renderPlayerClientScript({
                 onClick: () => showPanel('server')
             }));
 
-            // 2. Subtitles (if available)
-            if (STATE.subtitles.length > 0) {
-                const currentSubLabel = STATE.currentSubIndex >= 0 ? STATE.subtitles[STATE.currentSubIndex].label : 'Off';
-                mainBody.appendChild(createSettingItem({
-                    icon: ICONS.SETTING.subtitles,
-                    text: 'Subtitles',
-                    tooltip: STATE.subtitleVisible ? currentSubLabel : 'Off',
-                    arrow: true,
-                    onClick: () => showPanel('subtitles')
-                }));
-            }
+            // 2. Subtitles (always present, allows accessing tracks & subtitle settings!)
+            const currentSubLabel = (STATE.subtitleVisible && STATE.currentSubIndex >= 0 && STATE.subtitles[STATE.currentSubIndex])
+                ? STATE.subtitles[STATE.currentSubIndex].label
+                : 'Off';
+            mainBody.appendChild(createSettingItem({
+                icon: ICONS.SETTING.subtitles,
+                text: 'Subtitles',
+                tooltip: currentSubLabel,
+                arrow: true,
+                onClick: () => showPanel('subtitles')
+            }));
 
             // 3. Quality (always available)
             let currentQ = 'Auto';
@@ -1117,7 +1320,7 @@ export function renderPlayerClientScript({
                 name: 'auto-skip',
                 onClick: () => {
                     STATE.autoSkip = !STATE.autoSkip;
-                    buildSettingsPanel();
+                    buildSettingsPanel(true);
                 }
             });
             mainBody.appendChild(autoSkipItem);
@@ -1135,27 +1338,48 @@ export function renderPlayerClientScript({
             }));
 
             // Subtitles submenu
-            if (STATE.subtitles.length > 0) {
-                const subItems = [{ label: 'Off', value: -1 }];
+            const subItems = [{ label: 'Off', value: -1 }];
+            if (STATE.subtitles && STATE.subtitles.length > 0) {
                 STATE.subtitles.forEach((s, idx) => { subItems.push({ label: s.label, value: idx }); });
-                container.appendChild(buildSubmenu('subtitles', 'Subtitles', subItems,
-                    STATE.subtitleVisible ? STATE.currentSubIndex : -1,
-                    (item) => {
-                        if (item.value === -1) {
-                            STATE.subtitleVisible = false;
-                            activateSubtitleTrack(-1);
-                            updateSubtitleIcon(false);
-                        } else {
-                            STATE.currentSubIndex = item.value;
-                            STATE.subtitleVisible = true;
-                            activateSubtitleTrack(item.value);
-                            updateSubtitleIcon(true);
-                        }
-                        buildSettingsPanel();
-                        showPanel('subtitles');
-                    }
-                ));
             }
+            const subPanel = buildSubmenu('subtitles', 'Subtitles', subItems,
+                STATE.subtitleVisible ? STATE.currentSubIndex : -1,
+                (item) => {
+                    if (item.value === -1) {
+                        STATE.subtitleVisible = false;
+                        activateSubtitleTrack(-1);
+                        updateSubtitleIcon(false);
+                    } else {
+                        STATE.currentSubIndex = item.value;
+                        STATE.subtitleVisible = true;
+                        activateSubtitleTrack(item.value);
+                        updateSubtitleIcon(true);
+                    }
+                    buildSettingsPanel(true);
+                    showPanel('subtitles');
+                }
+            );
+
+            // Add Divider and "Subtitle Settings >" option to Subtitles submenu!
+            const subBody = subPanel.querySelector('.cp-submenu-body');
+            if (subBody) {
+                const divider = document.createElement('div');
+                divider.className = 'cp-settings-divider';
+                subBody.appendChild(divider);
+
+                const settOpt = createSettingItem({
+                    icon: ICONS.SETTING.subtitles,
+                    text: 'Subtitle Settings',
+                    arrow: true,
+                    onClick: () => showPanel('sub-settings')
+                });
+                subBody.appendChild(settOpt);
+            }
+            container.appendChild(subPanel);
+
+            // Subtitle Settings Panel & Submenus
+            container.appendChild(buildSubtitleSettingsPanel());
+            buildSubtitleSubmenus(container);
 
             // Quality submenu
             const qList = (STATE.qualities && STATE.qualities.length > 0)
@@ -1165,7 +1389,7 @@ export function renderPlayerClientScript({
             container.appendChild(buildSubmenu('quality', 'Quality', qItems, STATE.currentQuality, (item) => {
                 STATE.currentQuality = item.value;
                 if (STATE.hls) STATE.hls.currentLevel = item.value;
-                buildSettingsPanel();
+                buildSettingsPanel(true);
                 showPanel('quality');
             }));
 
@@ -1175,12 +1399,667 @@ export function renderPlayerClientScript({
             container.appendChild(buildSubmenu('speed', 'Playback Speed', speedItems, STATE.playbackRate, (item) => {
                 STATE.playbackRate = item.value;
                 if (STATE.video) STATE.video.playbackRate = item.value;
-                buildSettingsPanel();
+                buildSettingsPanel(true);
                 showPanel('speed');
             }));
 
-            // Show correct panel
-            showPanel(STATE.activePanel);
+            // Show target panel
+            showPanel(targetPanel);
+        }
+
+        /* ── Subtitle Settings UI Components ── */
+        function createSliderItem({ text, value, min, max, step, unit = '', onChange, onInput }) {
+            const item = document.createElement('div');
+            item.className = 'cp-settings-slider-item';
+
+            const header = document.createElement('div');
+            header.className = 'cp-settings-slider-header';
+            header.innerHTML = '<span class="cp-settings-item-text">' + text + '</span>' +
+                               '<span class="cp-settings-item-tooltip cp-slider-val">' + value + unit + '</span>';
+
+            const wrap = document.createElement('div');
+            wrap.className = 'cp-settings-slider-wrap';
+
+            const range = document.createElement('input');
+            range.type = 'range';
+            range.className = 'cp-settings-range';
+            range.min = min;
+            range.max = max;
+            range.step = step;
+            range.value = value;
+
+            const valBadge = header.querySelector('.cp-slider-val');
+
+            range.addEventListener('input', (e) => {
+                const val = parseFloat(e.target.value);
+                if (valBadge) valBadge.textContent = val + unit;
+                if (onInput) onInput(val);
+            });
+
+            range.addEventListener('change', (e) => {
+                const val = parseFloat(e.target.value);
+                if (onChange) onChange(val);
+            });
+
+            wrap.appendChild(range);
+            item.appendChild(header);
+            item.appendChild(wrap);
+            return item;
+        }
+
+        function createColorItem({ text, value, onChange }) {
+            const item = document.createElement('div');
+            item.className = 'cp-settings-item cp-color-item';
+
+            let html = '<div class="cp-settings-item-left">' +
+                       '<span class="cp-settings-item-text">' + text + '</span>' +
+                       '</div>' +
+                       '<div class="cp-settings-item-right">' +
+                       '<div class="cp-color-swatch-wrap">' +
+                       '<span class="cp-color-swatch" style="background-color: ' + value + ';"></span>' +
+                       '<input type="color" class="cp-color-input" value="' + value + '">' +
+                       '</div>' +
+                       '<span class="cp-settings-item-tooltip cp-color-label">' + value.toUpperCase() + '</span>' +
+                       '</div>';
+            item.innerHTML = html;
+
+            const input = item.querySelector('.cp-color-input');
+            const swatch = item.querySelector('.cp-color-swatch');
+            const colorLabel = item.querySelector('.cp-color-label');
+
+            if (input) {
+                // Prevent the input's click from bubbling to the row handler (avoids double-fire)
+                input.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                });
+
+                input.addEventListener('input', (e) => {
+                    const c = e.target.value;
+                    if (swatch) swatch.style.backgroundColor = c;
+                    if (colorLabel) colorLabel.textContent = c.toUpperCase();
+                    if (onChange) onChange(c, false);
+                });
+                input.addEventListener('change', (e) => {
+                    const c = e.target.value;
+                    if (onChange) onChange(c, true);
+                });
+
+                // Make the entire row open the color picker
+                item.addEventListener('click', () => {
+                    input.click();
+                });
+            }
+            return item;
+        }
+
+        function createStepperItem({ text, value, min, max, step, format, onStep }) {
+            const item = document.createElement('div');
+            item.className = 'cp-settings-item';
+
+            item.innerHTML = '<div class="cp-settings-item-left">' +
+                             '<span class="cp-settings-item-text">' + text + '</span>' +
+                             '</div>' +
+                             '<div class="cp-settings-item-right">' +
+                             '<div class="cp-stepper-wrap">' +
+                             '<button class="cp-step-btn cp-step-minus" type="button" aria-label="Decrease">−</button>' +
+                             '<span class="cp-settings-item-tooltip cp-step-val">' + (format ? format(value) : value) + '</span>' +
+                             '<button class="cp-step-btn cp-step-plus" type="button" aria-label="Increase">+</button>' +
+                             '</div>' +
+                             '</div>';
+
+            const minus = item.querySelector('.cp-step-minus');
+            const plus = item.querySelector('.cp-step-plus');
+            const valLabel = item.querySelector('.cp-step-val');
+
+            minus.addEventListener('click', (e) => {
+                e.stopPropagation();
+                let v = Math.round((value - step) * 10) / 10;
+                if (v < min) v = min;
+                value = v;
+                if (valLabel) valLabel.textContent = format ? format(v) : v;
+                if (onStep) onStep(v);
+            });
+
+            plus.addEventListener('click', (e) => {
+                e.stopPropagation();
+                let v = Math.round((value + step) * 10) / 10;
+                if (v > max) v = max;
+                value = v;
+                if (valLabel) valLabel.textContent = format ? format(v) : v;
+                if (onStep) onStep(v);
+            });
+
+            return item;
+        }
+
+        function buildSubtitleSettingsPanel() {
+            const panel = document.createElement('div');
+            panel.className = 'cp-settings-panel cp-submenu';
+            panel.id = 'cp-panel-sub-settings';
+
+            // Fixed header (returns to 'subtitles')
+            const header = document.createElement('div');
+            header.className = 'cp-submenu-header';
+            header.innerHTML = '<div class="cp-back-btn">' + ICONS.SETTING.arrowLeft + '</div>' +
+                               '<span class="cp-submenu-title">Subtitle Settings</span>';
+            header.addEventListener('click', () => showPanel('subtitles'));
+            panel.appendChild(header);
+
+            // Scrollable body
+            const body = document.createElement('div');
+            body.className = 'cp-submenu-body';
+
+            // 1. Live Preview Card
+            const previewCard = document.createElement('div');
+            previewCard.className = 'cp-sub-preview-card';
+            previewCard.innerHTML = '<div class="cp-sub-preview-badge">LIVE PREVIEW</div>' +
+                                    '<div class="cp-sub-preview-viewport">' +
+                                    '<span class="cp-sub-preview-line">Anime subtitle preview 01</span>' +
+                                    '</div>';
+            body.appendChild(previewCard);
+
+            const s = STATE.subtitleSettings;
+
+            // 2. Presets Selector Item
+            const presetLabels = {
+                'default': 'Default',
+                'anime': 'Anime',
+                'clean': 'Clean',
+                'high-contrast': 'High Contrast',
+                'custom': 'Custom'
+            };
+            body.appendChild(createSettingItem({
+                icon: ICONS.SETTING.subtitles,
+                text: 'Preset',
+                tooltip: presetLabels[s.preset] || 'Default',
+                arrow: true,
+                onClick: () => showPanel('sub-presets')
+            }));
+
+            // 3. Section: TEXT APPEARANCE
+            const textSec = document.createElement('div');
+            textSec.className = 'cp-settings-section-title';
+            textSec.textContent = 'Text Appearance';
+            body.appendChild(textSec);
+
+            // Font Family
+            const fontLabels = {
+                'default': 'Inter',
+                'sans-serif': 'Sans-Serif',
+                'serif': 'Serif',
+                'monospace': 'Monospace'
+            };
+            body.appendChild(createSettingItem({
+                icon: ICONS.SETTING.font,
+                text: 'Font Family',
+                tooltip: fontLabels[s.fontFamily] || 'Default',
+                arrow: true,
+                onClick: () => showPanel('sub-font')
+            }));
+
+            // Font Size Slider
+            body.appendChild(createSliderItem({
+                text: 'Font Size',
+                value: s.fontSize,
+                min: 50,
+                max: 200,
+                step: 5,
+                unit: '%',
+                onInput: (val) => {
+                    s.fontSize = val;
+                    s.preset = 'custom';
+                    applySubtitleStyles();
+                    if (STATE.video) renderActiveSubtitles(STATE.video.currentTime);
+                },
+                onChange: (val) => {
+                    s.fontSize = val;
+                    s.preset = 'custom';
+                    saveSubtitleSettings(s);
+                    buildSettingsPanel(true);
+                }
+            }));
+
+            // Text Color
+            body.appendChild(createColorItem({
+                text: 'Text Color',
+                value: s.textColor || '#ffffff',
+                onChange: (color, final) => {
+                    s.textColor = color;
+                    s.preset = 'custom';
+                    applySubtitleStyles();
+                    if (STATE.video) renderActiveSubtitles(STATE.video.currentTime);
+                    if (final) {
+                        saveSubtitleSettings(s);
+                        buildSettingsPanel(true);
+                    }
+                }
+            }));
+
+            // Text Opacity Slider
+            body.appendChild(createSliderItem({
+                text: 'Text Opacity',
+                value: s.textOpacity,
+                min: 0,
+                max: 100,
+                step: 5,
+                unit: '%',
+                onInput: (val) => {
+                    s.textOpacity = val;
+                    s.preset = 'custom';
+                    applySubtitleStyles();
+                    if (STATE.video) renderActiveSubtitles(STATE.video.currentTime);
+                },
+                onChange: (val) => {
+                    s.textOpacity = val;
+                    s.preset = 'custom';
+                    saveSubtitleSettings(s);
+                    buildSettingsPanel(true);
+                }
+            }));
+
+            // Text Style
+            let styleLabel = 'Normal';
+            if (s.fontWeight === '700' && s.fontStyle === 'italic') styleLabel = 'Bold Italic';
+            else if (s.fontWeight === '700') styleLabel = 'Bold';
+            else if (s.fontStyle === 'italic') styleLabel = 'Italic';
+
+            body.appendChild(createSettingItem({
+                icon: ICONS.SETTING.font,
+                text: 'Text Style',
+                tooltip: styleLabel,
+                arrow: true,
+                onClick: () => showPanel('sub-style')
+            }));
+
+            // Edge Style
+            const edgeLabels = {
+                'none': 'None',
+                'shadow': 'Shadow',
+                'outline': 'Outline',
+                'raised': 'Raised',
+                'depressed': 'Depressed'
+            };
+            body.appendChild(createSettingItem({
+                icon: ICONS.SETTING.sliders,
+                text: 'Edge Style',
+                tooltip: edgeLabels[s.edgeStyle] || 'Shadow',
+                arrow: true,
+                onClick: () => showPanel('sub-edge')
+            }));
+
+            // 4. Section: BACKGROUND BOX
+            const bgSec = document.createElement('div');
+            bgSec.className = 'cp-settings-section-title';
+            bgSec.textContent = 'Background Box';
+            body.appendChild(bgSec);
+
+            // Background Type
+            const bgLabels = {
+                'none': 'None',
+                'box': 'Box',
+                'custom': 'Custom'
+            };
+            body.appendChild(createSettingItem({
+                icon: ICONS.SETTING.palette,
+                text: 'Background',
+                tooltip: bgLabels[s.backgroundType] || 'Box',
+                arrow: true,
+                onClick: () => showPanel('sub-bg')
+            }));
+
+            if (s.backgroundType !== 'none') {
+                // Background Color
+                body.appendChild(createColorItem({
+                    text: 'Background Color',
+                    value: s.backgroundColor || '#000000',
+                    onChange: (color, final) => {
+                        s.backgroundColor = color;
+                        s.preset = 'custom';
+                        applySubtitleStyles();
+                        if (STATE.video) renderActiveSubtitles(STATE.video.currentTime);
+                        if (final) {
+                            saveSubtitleSettings(s);
+                            buildSettingsPanel(true);
+                        }
+                    }
+                }));
+
+                // Background Opacity
+                body.appendChild(createSliderItem({
+                    text: 'Bg Opacity',
+                    value: s.backgroundOpacity,
+                    min: 0,
+                    max: 100,
+                    step: 5,
+                    unit: '%',
+                    onInput: (val) => {
+                        s.backgroundOpacity = val;
+                        s.preset = 'custom';
+                        applySubtitleStyles();
+                        if (STATE.video) renderActiveSubtitles(STATE.video.currentTime);
+                    },
+                    onChange: (val) => {
+                        s.backgroundOpacity = val;
+                        s.preset = 'custom';
+                        saveSubtitleSettings(s);
+                        buildSettingsPanel(true);
+                    }
+                }));
+
+                // Corner Radius
+                body.appendChild(createSliderItem({
+                    text: 'Corner Radius',
+                    value: s.borderRadius,
+                    min: 0,
+                    max: 12,
+                    step: 1,
+                    unit: 'px',
+                    onInput: (val) => {
+                        s.borderRadius = val;
+                        s.preset = 'custom';
+                        applySubtitleStyles();
+                    },
+                    onChange: (val) => {
+                        s.borderRadius = val;
+                        s.preset = 'custom';
+                        saveSubtitleSettings(s);
+                        buildSettingsPanel(true);
+                    }
+                }));
+
+                // Horizontal Padding
+                body.appendChild(createSliderItem({
+                    text: 'Horizontal Padding',
+                    value: s.paddingHorizontal,
+                    min: 0,
+                    max: 24,
+                    step: 1,
+                    unit: 'px',
+                    onInput: (val) => {
+                        s.paddingHorizontal = val;
+                        s.preset = 'custom';
+                        applySubtitleStyles();
+                    },
+                    onChange: (val) => {
+                        s.paddingHorizontal = val;
+                        s.preset = 'custom';
+                        saveSubtitleSettings(s);
+                        buildSettingsPanel(true);
+                    }
+                }));
+
+                // Vertical Padding
+                body.appendChild(createSliderItem({
+                    text: 'Vertical Padding',
+                    value: s.paddingVertical,
+                    min: 0,
+                    max: 16,
+                    step: 1,
+                    unit: 'px',
+                    onInput: (val) => {
+                        s.paddingVertical = val;
+                        s.preset = 'custom';
+                        applySubtitleStyles();
+                    },
+                    onChange: (val) => {
+                        s.paddingVertical = val;
+                        s.preset = 'custom';
+                        saveSubtitleSettings(s);
+                        buildSettingsPanel(true);
+                    }
+                }));
+            }
+
+            // 5. Section: POSITION & TIMING
+            const posSec = document.createElement('div');
+            posSec.className = 'cp-settings-section-title';
+            posSec.textContent = 'Position & Timing';
+            body.appendChild(posSec);
+
+            // Position
+            const posLabels = {
+                'low': 'Low',
+                'normal': 'Normal',
+                'high': 'High',
+                'custom': 'Custom'
+            };
+            body.appendChild(createSettingItem({
+                icon: ICONS.SETTING.sliders,
+                text: 'Position',
+                tooltip: posLabels[s.position] || 'Normal',
+                arrow: true,
+                onClick: () => showPanel('sub-pos')
+            }));
+
+            if (s.position === 'custom') {
+                body.appendChild(createSliderItem({
+                    text: 'Custom Bottom',
+                    value: s.customPositionBottom,
+                    min: 5,
+                    max: 150,
+                    step: 5,
+                    unit: 'px',
+                    onInput: (val) => {
+                        s.customPositionBottom = val;
+                        s.preset = 'custom';
+                        applySubtitleStyles();
+                    },
+                    onChange: (val) => {
+                        s.customPositionBottom = val;
+                        s.preset = 'custom';
+                        saveSubtitleSettings(s);
+                        buildSettingsPanel(true);
+                    }
+                }));
+            }
+
+            // Alignment
+            const alignLabels = {
+                'left': 'Left',
+                'center': 'Center',
+                'right': 'Right'
+            };
+            body.appendChild(createSettingItem({
+                icon: ICONS.SETTING.sliders,
+                text: 'Alignment',
+                tooltip: alignLabels[s.alignment] || 'Center',
+                arrow: true,
+                onClick: () => showPanel('sub-align')
+            }));
+
+            // Subtitle Delay
+            const formatDelay = (d) => {
+                const num = parseFloat(d) || 0;
+                return (num > 0 ? '+' : '') + num.toFixed(1) + 's';
+            };
+            body.appendChild(createStepperItem({
+                text: 'Subtitle Delay',
+                value: s.delay,
+                min: -5.0,
+                max: 5.0,
+                step: 0.1,
+                format: formatDelay,
+                onStep: (val) => {
+                    s.delay = val;
+                    s.preset = 'custom';
+                    saveSubtitleSettings(s);
+                    if (STATE.video) renderActiveSubtitles(STATE.video.currentTime);
+                    const fineRange = panel.querySelector('.cp-sub-delay-range');
+                    if (fineRange) fineRange.value = val;
+                }
+            }));
+
+            // Fine Delay Slider
+            body.appendChild(createSliderItem({
+                text: 'Fine Delay Scrub',
+                value: s.delay,
+                min: -5.0,
+                max: 5.0,
+                step: 0.1,
+                unit: 's',
+                onInput: (val) => {
+                    s.delay = val;
+                    s.preset = 'custom';
+                    if (STATE.video) renderActiveSubtitles(STATE.video.currentTime);
+                    const stepVal = panel.querySelector('.cp-step-val');
+                    if (stepVal) stepVal.textContent = formatDelay(val);
+                },
+                onChange: (val) => {
+                    s.delay = val;
+                    s.preset = 'custom';
+                    saveSubtitleSettings(s);
+                    if (STATE.video) renderActiveSubtitles(STATE.video.currentTime);
+                }
+            }));
+
+            // Divider
+            const div = document.createElement('div');
+            div.className = 'cp-settings-divider';
+            body.appendChild(div);
+
+            // Reset to Defaults
+            body.appendChild(createSettingItem({
+                icon: ICONS.SETTING.reset,
+                text: 'Reset to Defaults',
+                tooltip: 'Restore',
+                onClick: () => {
+                    STATE.subtitleSettings = Object.assign({}, DEFAULT_SUB_SETTINGS);
+                    saveSubtitleSettings(STATE.subtitleSettings);
+                    applySubtitleStyles();
+                    if (STATE.video) renderActiveSubtitles(STATE.video.currentTime);
+                    buildSettingsPanel(true);
+                    showToast('Subtitle settings reset', 'info', 1500);
+                }
+            }));
+
+            panel.appendChild(body);
+            return panel;
+        }
+
+        function buildSubtitleSubmenus(container) {
+            // 1. Presets Submenu
+            container.appendChild(buildSubmenu('sub-presets', 'Subtitle Presets', [
+                { label: 'Default', value: 'default' },
+                { label: 'Anime', value: 'anime' },
+                { label: 'Clean', value: 'clean' },
+                { label: 'High Contrast', value: 'high-contrast' }
+            ], STATE.subtitleSettings.preset, (item) => {
+                if (SUBTITLE_PRESETS[item.value]) {
+                    STATE.subtitleSettings = Object.assign({}, SUBTITLE_PRESETS[item.value], {
+                        delay: STATE.subtitleSettings.delay || 0
+                    });
+                    saveSubtitleSettings(STATE.subtitleSettings);
+                    applySubtitleStyles();
+                    if (STATE.video) renderActiveSubtitles(STATE.video.currentTime);
+                    buildSettingsPanel(true);
+                    showToast('Preset: ' + item.label, 'info', 1500);
+                }
+            }, 'sub-settings'));
+
+            // 2. Font Family Submenu
+            container.appendChild(buildSubmenu('sub-font', 'Font Family', [
+                { label: 'Default (Inter)', value: 'default' },
+                { label: 'Sans-Serif (System)', value: 'sans-serif' },
+                { label: 'Serif (Georgia)', value: 'serif' },
+                { label: 'Monospace (JetBrains)', value: 'monospace' }
+            ], STATE.subtitleSettings.fontFamily, (item) => {
+                STATE.subtitleSettings.fontFamily = item.value;
+                STATE.subtitleSettings.preset = 'custom';
+                saveSubtitleSettings(STATE.subtitleSettings);
+                applySubtitleStyles();
+                if (STATE.video) renderActiveSubtitles(STATE.video.currentTime);
+                buildSettingsPanel(true);
+            }, 'sub-settings'));
+
+            // 3. Text Style Submenu
+            const currentStyleVal = (STATE.subtitleSettings.fontWeight === '700' && STATE.subtitleSettings.fontStyle === 'italic') ? 'bold-italic'
+                : (STATE.subtitleSettings.fontWeight === '700') ? 'bold'
+                : (STATE.subtitleSettings.fontStyle === 'italic') ? 'italic' : 'normal';
+
+            container.appendChild(buildSubmenu('sub-style', 'Text Style', [
+                { label: 'Normal', value: 'normal' },
+                { label: 'Bold', value: 'bold' },
+                { label: 'Italic', value: 'italic' },
+                { label: 'Bold + Italic', value: 'bold-italic' }
+            ], currentStyleVal, (item) => {
+                if (item.value === 'bold-italic') {
+                    STATE.subtitleSettings.fontWeight = '700';
+                    STATE.subtitleSettings.fontStyle = 'italic';
+                } else if (item.value === 'bold') {
+                    STATE.subtitleSettings.fontWeight = '700';
+                    STATE.subtitleSettings.fontStyle = 'normal';
+                } else if (item.value === 'italic') {
+                    STATE.subtitleSettings.fontWeight = '400';
+                    STATE.subtitleSettings.fontStyle = 'italic';
+                } else {
+                    STATE.subtitleSettings.fontWeight = '400';
+                    STATE.subtitleSettings.fontStyle = 'normal';
+                }
+                STATE.subtitleSettings.preset = 'custom';
+                saveSubtitleSettings(STATE.subtitleSettings);
+                applySubtitleStyles();
+                if (STATE.video) renderActiveSubtitles(STATE.video.currentTime);
+                buildSettingsPanel(true);
+            }, 'sub-settings'));
+
+            // 4. Edge Style Submenu
+            container.appendChild(buildSubmenu('sub-edge', 'Edge Style', [
+                { label: 'None', value: 'none' },
+                { label: 'Shadow (Default)', value: 'shadow' },
+                { label: 'Outline', value: 'outline' },
+                { label: 'Raised', value: 'raised' },
+                { label: 'Depressed', value: 'depressed' }
+            ], STATE.subtitleSettings.edgeStyle, (item) => {
+                STATE.subtitleSettings.edgeStyle = item.value;
+                STATE.subtitleSettings.preset = 'custom';
+                saveSubtitleSettings(STATE.subtitleSettings);
+                applySubtitleStyles();
+                if (STATE.video) renderActiveSubtitles(STATE.video.currentTime);
+                buildSettingsPanel(true);
+            }, 'sub-settings'));
+
+            // 5. Background Submenu
+            container.appendChild(buildSubmenu('sub-bg', 'Background Type', [
+                { label: 'None', value: 'none' },
+                { label: 'Box (Default)', value: 'box' },
+                { label: 'Custom', value: 'custom' }
+            ], STATE.subtitleSettings.backgroundType, (item) => {
+                STATE.subtitleSettings.backgroundType = item.value;
+                STATE.subtitleSettings.preset = 'custom';
+                saveSubtitleSettings(STATE.subtitleSettings);
+                applySubtitleStyles();
+                if (STATE.video) renderActiveSubtitles(STATE.video.currentTime);
+                buildSettingsPanel(true);
+            }, 'sub-settings'));
+
+            // 6. Position Submenu
+            container.appendChild(buildSubmenu('sub-pos', 'Vertical Position', [
+                { label: 'Low', value: 'low' },
+                { label: 'Normal (Default)', value: 'normal' },
+                { label: 'High', value: 'high' },
+                { label: 'Custom', value: 'custom' }
+            ], STATE.subtitleSettings.position, (item) => {
+                STATE.subtitleSettings.position = item.value;
+                STATE.subtitleSettings.preset = 'custom';
+                saveSubtitleSettings(STATE.subtitleSettings);
+                applySubtitleStyles();
+                if (STATE.video) renderActiveSubtitles(STATE.video.currentTime);
+                buildSettingsPanel(true);
+            }, 'sub-settings'));
+
+            // 7. Alignment Submenu
+            container.appendChild(buildSubmenu('sub-align', 'Text Alignment', [
+                { label: 'Left', value: 'left' },
+                { label: 'Center (Default)', value: 'center' },
+                { label: 'Right', value: 'right' }
+            ], STATE.subtitleSettings.alignment, (item) => {
+                STATE.subtitleSettings.alignment = item.value;
+                STATE.subtitleSettings.preset = 'custom';
+                saveSubtitleSettings(STATE.subtitleSettings);
+                applySubtitleStyles();
+                if (STATE.video) renderActiveSubtitles(STATE.video.currentTime);
+                buildSettingsPanel(true);
+            }, 'sub-settings'));
         }
 
         function createSettingItem({ icon, text, tooltip, arrow, isSwitch, switchOn, name, onClick }) {
@@ -1189,7 +2068,7 @@ export function renderPlayerClientScript({
             if (name) item.setAttribute('data-name', name);
 
             let html = '<div class="cp-settings-item-left">';
-            html += '<div class="cp-settings-item-icon">' + icon + '</div>';
+            if (icon) html += '<div class="cp-settings-item-icon">' + icon + '</div>';
             html += '<span class="cp-settings-item-text">' + text + '</span>';
             html += '</div>';
             html += '<div class="cp-settings-item-right">';
@@ -1209,7 +2088,7 @@ export function renderPlayerClientScript({
             return item;
         }
 
-        function buildSubmenu(panelId, title, items, selectedValue, onSelect) {
+        function buildSubmenu(panelId, title, items, selectedValue, onSelect, backPanelId = 'main') {
             const panel = document.createElement('div');
             panel.className = 'cp-settings-panel cp-submenu';
             panel.id = 'cp-panel-' + panelId;
@@ -1219,7 +2098,7 @@ export function renderPlayerClientScript({
             header.className = 'cp-submenu-header';
             header.innerHTML = '<div class="cp-back-btn">' + ICONS.SETTING.arrowLeft + '</div>' +
                                '<span class="cp-submenu-title">' + title + '</span>';
-            header.addEventListener('click', () => showPanel('main'));
+            header.addEventListener('click', () => showPanel(backPanelId));
             panel.appendChild(header);
 
             // Scrollable body (only list items scroll)
@@ -1861,6 +2740,7 @@ export function renderPlayerClientScript({
 
         document.addEventListener('DOMContentLoaded', () => {
             updateDeviceMode();
+            applySubtitleStyles();
             setupProgressInteraction();
             bindControlHoverListeners();
             wakeControls();
