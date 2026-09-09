@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>SVG Geometry Verification</title>
+    <style>
+        body { background: #080a0f; color: #fff; font-family: sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; gap: 20px; }
+        .row { display: flex; gap: 30px; align-items: center; }
+        .box { background: #0e1219; border: 1px solid #1e2636; border-radius: 8px; padding: 20px; display: flex; flex-direction: column; align-items: center; gap: 10px; }
+    </style>
+</head>
+<body>
+    <h1>ZOKO Code-Crafted Vector Geometries</h1>
+    <div class="row">
+        <!-- Variation A: Solid Z with Precision Intersecting Play Wedge -->
+        <div class="box">
+            <h3>A: Precision Cut Wedge</h3>
+            <svg width="128" height="128" viewBox="0 0 64 64" fill="none">
+                <rect width="64" height="64" rx="14" fill="#0E1219" stroke="#1E2636" stroke-width="2"/>
+                <!-- Pure Mathematical Z -->
+                <path d="M15 15 H49 V23 L26 41 H49 V49 H15 V41 L38 23 H15 Z" fill="#FFFFFF"/>
+                <!-- Precision Studio Crimson Play Pip -->
+                <polygon points="26,24 38,32 26,40" fill="#E50914"/>
+            </svg>
+        </div>
+
+        <!-- Variation B: Katana Split (Two Interlocking Angled Blades forming Z + ▶) -->
+        <div class="box">
+            <h3>B: Katana Slit Dual-Blade</h3>
+            <svg width="128" height="128" viewBox="0 0 64 64" fill="none">
+                <rect width="64" height="64" rx="14" fill="#0E1219" stroke="#1E2636" stroke-width="2"/>
+                <!-- Upper Blade (White) -->
+                <path d="M15 15 H49 V23 H32 L15 35 Z" fill="#FFFFFF"/>
+                <!-- Dynamic Forward Play Chevron (Crimson) -->
+                <polygon points="22,23 38,32 22,41 28,32" fill="#E50914"/>
+                <!-- Lower Blade (White) -->
+                <path d="M49 49 H15 V41 H32 L49 29 Z" fill="#FFFFFF"/>
+            </svg>
+        </div>
+
+        <!-- Variation C: The Origami Shutter (Interlocking Planes) -->
+        <div class="box">
+            <h3>C: Shutter Chevron</h3>
+            <svg width="128" height="128" viewBox="0 0 64 64" fill="none">
+                <rect width="64" height="64" rx="14" fill="#0E1219" stroke="#1E2636" stroke-width="2"/>
+                <!-- Top Beam -->
+                <polygon points="14,14 50,14 42,22 14,22" fill="#FFFFFF"/>
+                <!-- Diagonal Forward Shutter Blade -->
+                <polygon points="50,14 42,22 22,42 14,50 22,50 42,30 50,22" fill="#E50914"/>
+                <!-- Bottom Beam -->
+                <polygon points="22,42 50,42 50,50 14,50" fill="#FFFFFF"/>
+                <!-- Centered Micro-Pip -->
+                <polygon points="27,27 37,32 27,37" fill="#FFFFFF"/>
+            </svg>
+        </div>
+
+        <!-- Variation D: The Pure Minimalist (Netflix / Sony Studio level) -->
+        <div class="box">
+            <h3>D: Minimalist Studio Z-Line</h3>
+            <svg width="128" height="128" viewBox="0 0 64 64" fill="none">
+                <rect width="64" height="64" rx="14" fill="#0E1219" stroke="#1E2636" stroke-width="2"/>
+                <!-- Upper Arm (White) -->
+                <polygon points="15,15 49,15 49,23 27,23 15,15" fill="#FFFFFF"/>
+                <!-- Kinetic Play Diagonal (Crimson) -->
+                <polygon points="49,15 49,23 23,49 15,49 15,41 41,15" fill="#E50914"/>
+                <!-- Lower Arm (White) -->
+                <polygon points="15,41 37,41 49,49 15,49" fill="#FFFFFF"/>
+            </svg>
+        </div>
+    </div>
+</body>
+</html>

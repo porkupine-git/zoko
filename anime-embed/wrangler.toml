@@ -28,3 +28,8 @@ service = "anineko-api"
 [[services]]
 binding = "ZOKO_SERVICE"
 service = "zoko-stream"
+
+# Persistent Cloudflare KV Database for Admin Config, Firewall, and Keys
+[[kv_namespaces]]
+binding = "ANIXO_ADMIN_STORE"
+id = "d8743d081b64441099d52e9e175268b1"

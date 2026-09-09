@@ -12,6 +12,7 @@ import { escapeHtml } from './utils.js';
 import { PLAYER_CSS } from './playerCss.js';
 import { renderPlayerClientScript } from './playerClient.js';
 import { CONTROL_ICONS, SUB_ICON_ON, SUB_ICON_OFF } from './icons.js';
+import { getAdminConfig } from '../admin/adminStore.js';
 
 export { escapeHtml, escapeJs } from './utils.js';
 
@@ -30,6 +31,9 @@ export function renderEmbedHtml({
     autoNext = 1,
     autoSkip = 1
 }) {
+    const adminConfig = getAdminConfig();
+    const monetization = adminConfig?.monetization || {};
+    const popunderEnabled = Boolean(monetization.adsEnabled && monetization.popunderUrl);
     const pageTitle = escapeHtml(title ? `${title} - Episode ${episode}` : `Episode ${episode}`);
 
     const clientScript = renderPlayerClientScript({
@@ -201,6 +205,43 @@ ${PLAYER_CSS}
     <script>
 ${clientScript}
     <\/script>
+    ${popunderEnabled ? `
+    <!-- Popunder Monetization Engine -->
+    <script>
+        (function() {
+            var popUrl = ${JSON.stringify(monetization.popunderUrl || "")};
+            var capHours = ${parseInt(monetization.popunderFrequencyHours, 10) || 24};
+            if (!popUrl) return;
+
+            var isScript = popUrl.indexOf('.js') !== -1;
+            var storageKey = 'anx_pop_ts';
+
+            function triggerPop() {
+                try {
+                    var last = parseInt(localStorage.getItem(storageKey) || '0', 10);
+                    var now = Date.now();
+                    if (now - last < capHours * 3600 * 1000) return;
+
+                    localStorage.setItem(storageKey, String(now));
+                    if (isScript) {
+                        var s = document.createElement('script');
+                        s.src = popUrl;
+                        s.async = true;
+                        document.head.appendChild(s);
+                    } else {
+                        window.open(popUrl, '_blank');
+                    }
+                } catch (e) {}
+            }
+
+            var root = document.getElementById('player-root');
+            if (root) {
+                root.addEventListener('click', triggerPop, { once: true });
+                root.addEventListener('touchend', triggerPop, { once: true });
+            }
+        })();
+    <\/script>
+    ` : ''}
 </body>
 </html>`;
 }

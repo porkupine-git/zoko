@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32" fill="none">
+  <!-- 32x32 Favicon: Razor Sharp Geometric Z + Crimson Play Wedge -->
+  <rect width="32" height="32" rx="7" fill="#0E1219"/>
+  <path d="M7 7 H25 V11 L13 21 H25 V25 H7 V21 L19 11 H7 Z" fill="#FFFFFF"/>
+  <polygon points="12,12 20,16 12,20" fill="#E50914"/>
+</svg>

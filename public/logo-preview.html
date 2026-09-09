@@ -1,0 +1,963 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ZOKO Identity System — Code-Crafted Vector Logos</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #080a0f;
+            --surface: #0e1219;
+            --surface-elevated: #141a24;
+            --surface-hover: #1b2331;
+            --border: #1e2636;
+            --border-light: #2c384e;
+            --crimson: #e50914;
+            --crimson-hover: #f40612;
+            --text-main: #f8fafc;
+            --text-secondary: #94a3b8;
+            --text-muted: #64748b;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            text-shadow: none !important;
+            box-shadow: none !important;
+        }
+
+        body {
+            background-color: var(--bg);
+            color: var(--text-main);
+            font-family: 'Outfit', -apple-system, BlinkMacSystemFont, sans-serif;
+            padding: 48px 24px 80px;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        .container {
+            max-width: 1240px;
+            margin: 0 auto;
+        }
+
+        /* Top Header */
+        .header {
+            margin-bottom: 48px;
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 28px;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 20px;
+            flex-wrap: wrap;
+        }
+
+        .pill-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            background: #131924;
+            color: #94a3b8;
+            border: 1px solid var(--border);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 11px;
+            font-weight: 600;
+            padding: 4px 10px;
+            border-radius: 4px;
+            margin-bottom: 14px;
+            letter-spacing: 0.5px;
+        }
+
+        .pill-dot {
+            width: 6px;
+            height: 6px;
+            background: var(--crimson);
+            border-radius: 50%;
+        }
+
+        h1 {
+            font-size: 32px;
+            font-weight: 800;
+            letter-spacing: -0.8px;
+            margin-bottom: 8px;
+        }
+
+        .header-desc {
+            color: var(--text-secondary);
+            font-size: 15px;
+            max-width: 680px;
+            line-height: 1.6;
+        }
+
+        /* Tabs / Filter */
+        .controls-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 24px;
+            gap: 16px;
+            flex-wrap: wrap;
+        }
+
+        .theme-switcher {
+            display: flex;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            padding: 3px;
+            border-radius: 6px;
+            gap: 4px;
+        }
+
+        .theme-btn {
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            padding: 6px 14px;
+            font-size: 12.5px;
+            font-weight: 600;
+            font-family: inherit;
+            cursor: pointer;
+            border-radius: 4px;
+            transition: all 0.15s ease;
+        }
+
+        .theme-btn.active {
+            background: #1c2433;
+            color: #fff;
+        }
+
+        /* 3 Main Concepts Grid */
+        .concepts-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 24px;
+            margin-bottom: 56px;
+        }
+
+        @media (max-width: 1024px) {
+            .concepts-grid { grid-template-columns: 1fr; }
+        }
+
+        .card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            transition: border-color 0.15s ease;
+        }
+
+        .card:hover {
+            border-color: var(--border-light);
+        }
+
+        .card.featured {
+            border-color: #3b4963;
+        }
+
+        .card-stage {
+            height: 250px;
+            background: #05070a;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            border-bottom: 1px solid var(--border);
+            background-image: 
+                linear-gradient(to right, rgba(255,255,255,0.02) 1px, transparent 1px),
+                linear-gradient(to bottom, rgba(255,255,255,0.02) 1px, transparent 1px);
+            background-size: 20px 20px;
+            transition: background-color 0.2s ease;
+        }
+
+        .stage-label {
+            position: absolute;
+            top: 14px;
+            left: 14px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 10px;
+            font-weight: 600;
+            color: var(--text-muted);
+            letter-spacing: 1px;
+            text-transform: uppercase;
+        }
+
+        .badge-recommended {
+            position: absolute;
+            top: 14px;
+            right: 14px;
+            background: var(--crimson);
+            color: #ffffff;
+            font-size: 10px;
+            font-weight: 700;
+            padding: 3px 8px;
+            border-radius: 3px;
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
+        }
+
+        .card-body {
+            padding: 24px;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+
+        .concept-title {
+            font-size: 18px;
+            font-weight: 700;
+            letter-spacing: -0.3px;
+            margin-bottom: 6px;
+        }
+
+        .concept-meta {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 11px;
+            color: var(--crimson);
+            margin-bottom: 12px;
+        }
+
+        .concept-desc {
+            color: var(--text-secondary);
+            font-size: 13.5px;
+            line-height: 1.55;
+            margin-bottom: 20px;
+        }
+
+        .card-actions {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+
+        .btn-action {
+            background: var(--surface-elevated);
+            color: var(--text-main);
+            border: 1px solid var(--border);
+            padding: 10px 12px;
+            border-radius: 5px;
+            font-size: 12.5px;
+            font-weight: 600;
+            font-family: inherit;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 7px;
+            transition: all 0.15s ease;
+        }
+
+        .btn-action:hover {
+            background: var(--surface-hover);
+            border-color: var(--border-light);
+            color: #ffffff;
+        }
+
+        .btn-action.primary {
+            background: #ffffff;
+            color: #080a0f;
+            border-color: #ffffff;
+            font-weight: 700;
+        }
+
+        .btn-action.primary:hover {
+            background: #e2e8f0;
+        }
+
+        /* Section Headings */
+        .section-header {
+            margin-bottom: 20px;
+        }
+
+        .section-title {
+            font-size: 20px;
+            font-weight: 700;
+            letter-spacing: -0.4px;
+            margin-bottom: 4px;
+        }
+
+        .section-desc {
+            color: var(--text-secondary);
+            font-size: 13.5px;
+        }
+
+        /* Testbench 1: In-Context Header Simulation */
+        .context-box {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 28px;
+            margin-bottom: 40px;
+        }
+
+        .mock-navbar {
+            background: #090c12;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 12px 24px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 16px;
+        }
+
+        .mock-nav-menu {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .mock-nav-link {
+            color: var(--text-secondary);
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        .mock-nav-link.active {
+            color: #fff;
+        }
+
+        .mock-nav-actions {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .mock-btn-stream {
+            background: var(--crimson);
+            color: #fff;
+            padding: 6px 14px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 700;
+            letter-spacing: 0.4px;
+            cursor: pointer;
+        }
+
+        /* Testbench 2: Scale Matrix (Responsive / Favicon Test) */
+        .scale-grid {
+            display: flex;
+            align-items: flex-end;
+            gap: 36px;
+            padding: 32px;
+            background: #05070a;
+            border-radius: 6px;
+            border: 1px solid var(--border);
+            overflow-x: auto;
+            margin-bottom: 40px;
+        }
+
+        .scale-cell {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 14px;
+        }
+
+        .scale-caption {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 11px;
+            color: var(--text-muted);
+        }
+
+        /* Testbench 3: Contrast Matrix */
+        .contrast-matrix {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 16px;
+            margin-bottom: 40px;
+        }
+
+        @media (max-width: 800px) {
+            .contrast-matrix { grid-template-columns: 1fr 1fr; }
+        }
+
+        .contrast-card {
+            height: 150px;
+            border-radius: 6px;
+            border: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+        }
+
+        .contrast-card.dark {
+            background: #080a0f;
+        }
+
+        .contrast-card.pitch {
+            background: #000000;
+        }
+
+        .contrast-card.slate {
+            background: #141a24;
+        }
+
+        .contrast-card.light {
+            background: #ffffff;
+            border-color: #cbd5e1;
+        }
+
+        .contrast-card.light .contrast-label {
+            color: #475569;
+        }
+
+        .contrast-label {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 11px;
+            color: var(--text-muted);
+        }
+
+        /* Code Viewer Modal / Drawer */
+        .code-box {
+            background: #05070a;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 16px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 12px;
+            color: #cbd5e1;
+            overflow-x: auto;
+            white-space: pre;
+            margin-top: 20px;
+            line-height: 1.5;
+        }
+
+        /* Toast notification */
+        .toast {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            background: #ffffff;
+            color: #080a0f;
+            padding: 10px 18px;
+            border-radius: 5px;
+            font-weight: 700;
+            font-size: 13px;
+            opacity: 0;
+            transform: translateY(10px);
+            transition: all 0.2s ease;
+            pointer-events: none;
+            z-index: 1000;
+        }
+
+        .toast.show {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+
+        <!-- Top Header -->
+        <header class="header">
+            <div>
+                <div class="pill-badge">
+                    <span class="pill-dot"></span>
+                    <span>MATHEMATICAL VECTOR GEOMETRY &bull; ZERO GLOW &bull; ZERO AI SLOP</span>
+                </div>
+                <h1>ANIXO &amp; ZOKO Identity System</h1>
+                <p class="header-desc">
+                    Engineered exclusively with pure SVG code for <strong>anixo.buzz</strong> and the Zoko ecosystem. Built for ultra-crisp rendering from 16px favicons up to 4K displays. Zero AI slop, zero glow bloom.
+                </p>
+            </div>
+            <div class="theme-switcher">
+                <button class="theme-btn active" onclick="setBg('dark')">Cinema Dark</button>
+                <button class="theme-btn" onclick="setBg('pitch')">Pitch Black</button>
+                <button class="theme-btn" onclick="setBg('slate')">Slate</button>
+                <button class="theme-btn" onclick="setBg('light')">Light</button>
+            </div>
+        </header>
+
+        <!-- Main Vector Concepts Grid -->
+        <div class="concepts-grid">
+
+            <!-- CONCEPT 0: ANIXO A-PLAY (FLAGSHIP FOR anixo.buzz) -->
+            <div class="card featured" style="border-color: var(--crimson);">
+                <div class="card-stage" id="stage-anixo">
+                    <span class="stage-label">anixo.buzz</span>
+                    <span class="badge-recommended">Embed Flagship</span>
+                    
+                    <!-- SVG LOCKUP: ANIXO -->
+                    <svg id="svg-concept-anixo" width="230" height="52" viewBox="0 0 250 52" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <g transform="translate(4, 4)">
+                            <rect width="44" height="44" rx="10" fill="#0E1219" stroke="#1E2636" stroke-width="1.5"/>
+                            <path d="M19 9 H25 L34.5 35 H28 L25.5 27 H18.5 L16 35 H9.5 L19 9 Z M22 16 L19.5 23 H24.5 L22 16 Z" fill="#FFFFFF"/>
+                            <polygon points="17,21 30,27 17,33" fill="#E50914"/>
+                        </g>
+                        <g transform="translate(60, 14)">
+                            <path d="M 0,24 L 9,0 H 15 L 24,24 H 18.5 L 16.5,18 H 7.5 L 5.5,24 H 0 Z M 9,13.5 H 15 L 12,5 Z" fill="#FFFFFF"/>
+                            <path d="M 28,0 H 33.5 L 43.5,16.5 V 0 H 49 V 24 H 43.5 L 33.5,7.5 V 24 H 28 Z" fill="#FFFFFF"/>
+                            <path d="M 54,0 H 59.5 V 24 H 54 Z" fill="#FFFFFF"/>
+                            <path d="M 64,0 H 70 L 76,9.5 L 82,0 H 88 L 79.5,12 L 88.5,24 H 82.5 L 76,14.5 L 69.5,24 H 63.5 L 72.5,12 Z" fill="#FFFFFF"/>
+                            <path d="M 103,0 C 110,0 115,5 115,12 C 115,19 110,24 103,24 C 96,24 91,19 91,12 C 91,5 96,0 103,0 Z M 103,4.8 C 99,4.8 96.2,8 96.2,12 C 96.2,16 99,19.2 103,19.2 C 107,19.2 109.8,16 109.8,12 C 109.8,8 107,4.8 103,4.8 Z" fill="#FFFFFF"/>
+                            <text x="124" y="19" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="9.5" font-weight="800" fill="#E50914" letter-spacing="2.5">BUZZ</text>
+                        </g>
+                    </svg>
+                </div>
+                <div class="card-body">
+                    <div>
+                        <div class="concept-title">ANIXO &bull; A-Play Vector</div>
+                        <div class="concept-meta">anixo.buzz / EMBED INFRASTRUCTURE</div>
+                        <p class="concept-desc">
+                            Architectural 'A' frame with an embedded crimson forward Play chevron (`▶`). Engineered specifically for anixo.buzz embed player and developer documentation.
+                        </p>
+                    </div>
+                    <div class="card-actions">
+                        <button class="btn-action primary" onclick="copySvg('svg-concept-anixo')">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                            Copy Full SVG
+                        </button>
+                        <button class="btn-action" onclick="downloadSvg('svg-concept-anixo', 'anixo-buzz-logo.svg')">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                            Download SVG
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- CONCEPT 1: THE KINETIC BLADE (ZOKO ENGINE) -->
+            <div class="card">
+                <div class="card-stage" id="stage-1">
+                    <span class="stage-label">Zoko Engine</span>
+                    
+                    <!-- SVG LOCKUP: KINETIC BLADE -->
+                    <svg id="svg-concept-1" width="220" height="52" viewBox="0 0 220 52" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <!-- ICON MARK: 44x44 (Centred in 52h) -->
+                        <g id="mark-kinetic" transform="translate(4, 4)">
+                            <!-- Outer Frame (Zero glow, razor bevel) -->
+                            <rect x="0" y="0" width="44" height="44" rx="7" fill="#0E1219" stroke="#1E2636" stroke-width="1.5"/>
+                            
+                            <!-- Top Z Bar (Pure White) -->
+                            <polygon points="10,11 34,11 34,17 19.5,17 10,11" fill="#FFFFFF"/>
+                            
+                            <!-- Central Dynamic Katana Play Blade (Studio Crimson #E50914) -->
+                            <!-- Optical play chevron embedded into diagonal stroke -->
+                            <polygon points="34,14 34,22 21.5,31 10,31 23,22 13.5,14" fill="#E50914"/>
+                            
+                            <!-- Forward Play Triangle Accent (High Velocity Anchor) -->
+                            <polygon points="17,17 27,24 17,31" fill="#FFFFFF"/>
+                            
+                            <!-- Bottom Z Bar (Pure White) -->
+                            <polygon points="10,33 24.5,33 34,33 34,27 10,27" fill="#FFFFFF"/>
+                        </g>
+                        
+                        <!-- WORDMARK: "ZOKO" Custom Vector Geometry -->
+                        <g id="wordmark-1" transform="translate(60, 14)">
+                            <!-- Z -->
+                            <path d="M 0,0 H 18 L 4.5,19.5 H 18 V 24 H 0 L 13.5,4.5 H 0 V 0 Z" fill="#FFFFFF"/>
+                            <!-- O -->
+                            <path d="M 33.5,0 C 40.5,0 45.5,5 45.5,12 C 45.5,19 40.5,24 33.5,24 C 26.5,24 21.5,19 21.5,12 C 21.5,5 26.5,0 33.5,0 Z M 33.5,4.8 C 29.5,4.8 26.8,8 26.8,12 C 26.8,16 29.5,19.2 33.5,19.2 C 37.5,19.2 40.2,16 40.2,12 C 40.2,8 37.5,4.8 33.5,4.8 Z" fill="#FFFFFF"/>
+                            <!-- K -->
+                            <path d="M 49,0 H 54.2 V 9.8 L 63.8,0 H 70.2 L 59.8,10.6 L 70.8,24 H 64.2 L 54.2,11.8 V 24 H 49 V 0 Z" fill="#FFFFFF"/>
+                            <!-- O -->
+                            <path d="M 83.5,0 C 90.5,0 95.5,5 95.5,12 C 95.5,19 90.5,24 83.5,24 C 76.5,24 71.5,19 71.5,12 C 71.5,5 76.5,0 83.5,0 Z M 83.5,4.8 C 79.5,4.8 76.8,8 76.8,12 C 76.8,16 79.5,19.2 83.5,19.2 C 87.5,19.2 90.2,16 90.2,12 C 90.2,8 87.5,4.8 83.5,4.8 Z" fill="#FFFFFF"/>
+                            
+                            <!-- Sub-label: "STREAM" (Precision tracking) -->
+                            <text x="103" y="19" font-family="'JetBrains Mono', monospace" font-size="9.5" font-weight="700" fill="#E50914" letter-spacing="2.5">STREAM</text>
+                        </g>
+                    </svg>
+                </div>
+                <div class="card-body">
+                    <div>
+                        <div class="concept-title">Kinetic Blade &bull; Z-Play</div>
+                        <div class="concept-meta">PRECISION HYBRID / CINEMA STREAMING</div>
+                        <p class="concept-desc">
+                            A razor-cut 'Z' constructed from two planar white brackets framing an internal crimson play chevron. Sharp, aggressive velocity that perfectly reflects high-octane anime and instant HLS streaming.
+                        </p>
+                    </div>
+                    <div class="card-actions">
+                        <button class="btn-action primary" onclick="copySvg('svg-concept-1')">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                            Copy Full SVG
+                        </button>
+                        <button class="btn-action" onclick="downloadSvg('svg-concept-1', 'zoko-kinetic-blade.svg')">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                            Download SVG
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- CONCEPT 2: THE APERTURE MONOLITH (SWISS MINIMAL) -->
+            <div class="card">
+                <div class="card-stage" id="stage-2">
+                    <span class="stage-label">Concept 02</span>
+                    
+                    <!-- SVG LOCKUP: APERTURE MONOLITH -->
+                    <svg id="svg-concept-2" width="220" height="52" viewBox="0 0 220 52" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <!-- ICON MARK: 44x44 Monolith -->
+                        <g id="mark-monolith" transform="translate(4, 4)">
+                            <!-- Solid Obsidian Monolith Base -->
+                            <rect x="0" y="0" width="44" height="44" rx="7" fill="#0E1219" stroke="#1E2636" stroke-width="1.5"/>
+                            
+                            <!-- Pure Geometric Negative-Space Ribbon Z -->
+                            <!-- Upper L-bracket -->
+                            <path d="M10,10 H34 V16 H18 L34,32 V34 H10 V28 H26 L10,12 Z" fill="#FFFFFF"/>
+                            
+                            <!-- Precision Embedded Crimson Play Pip -->
+                            <polygon points="19,18 27,22 19,26" fill="#E50914"/>
+                        </g>
+                        
+                        <!-- WORDMARK: "ZOKO" Studio Minimal -->
+                        <g id="wordmark-2" transform="translate(60, 14)">
+                            <!-- Z -->
+                            <path d="M 0,0 H 18 L 4.5,19.5 H 18 V 24 H 0 L 13.5,4.5 H 0 V 0 Z" fill="#FFFFFF"/>
+                            <!-- O -->
+                            <path d="M 33.5,0 C 40.5,0 45.5,5 45.5,12 C 45.5,19 40.5,24 33.5,24 C 26.5,24 21.5,19 21.5,12 C 21.5,5 26.5,0 33.5,0 Z M 33.5,4.8 C 29.5,4.8 26.8,8 26.8,12 C 26.8,16 29.5,19.2 33.5,19.2 C 37.5,19.2 40.2,16 40.2,12 C 40.2,8 37.5,4.8 33.5,4.8 Z" fill="#FFFFFF"/>
+                            <!-- K -->
+                            <path d="M 49,0 H 54.2 V 9.8 L 63.8,0 H 70.2 L 59.8,10.6 L 70.8,24 H 64.2 L 54.2,11.8 V 24 H 49 V 0 Z" fill="#FFFFFF"/>
+                            <!-- O -->
+                            <path d="M 83.5,0 C 90.5,0 95.5,5 95.5,12 C 95.5,19 90.5,24 83.5,24 C 76.5,24 71.5,19 71.5,12 C 71.5,5 76.5,0 83.5,0 Z M 83.5,4.8 C 79.5,4.8 76.8,8 76.8,12 C 76.8,16 79.5,19.2 83.5,19.2 C 87.5,19.2 90.2,16 90.2,12 C 90.2,8 87.5,4.8 83.5,4.8 Z" fill="#FFFFFF"/>
+                            
+                            <!-- Sub-label: "ENGINE" (Architectural White) -->
+                            <text x="103" y="19" font-family="'JetBrains Mono', monospace" font-size="9.5" font-weight="600" fill="#94A3B8" letter-spacing="2.5">ENGINE</text>
+                        </g>
+                    </svg>
+                </div>
+                <div class="card-body">
+                    <div>
+                        <div class="concept-title">Aperture Monolith</div>
+                        <div class="concept-meta">ARCHITECTURAL SWISS / STUDIO GRADE</div>
+                        <p class="concept-desc">
+                            Inspired by high-end Japanese studio equipment (Sony broadcast / Canon Cinema). A solid monoline ribbon 'Z' with a centered, razor-sharp 45° play vector. Timeless and authoritative.
+                        </p>
+                    </div>
+                    <div class="card-actions">
+                        <button class="btn-action primary" onclick="copySvg('svg-concept-2')">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                            Copy Full SVG
+                        </button>
+                        <button class="btn-action" onclick="downloadSvg('svg-concept-2', 'zoko-aperture-monolith.svg')">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                            Download SVG
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- CONCEPT 3: THE ISO-MECHA SHARD (CYBERNETIC PRECISION) -->
+            <div class="card">
+                <div class="card-stage" id="stage-3">
+                    <span class="stage-label">Concept 03</span>
+                    
+                    <!-- SVG LOCKUP: ISO-MECHA SHARD -->
+                    <svg id="svg-concept-3" width="220" height="52" viewBox="0 0 220 52" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <!-- ICON MARK: 44x44 Isometric Mecha Glyph -->
+                        <g id="mark-iso" transform="translate(4, 4)">
+                            <!-- Base frame -->
+                            <rect x="0" y="0" width="44" height="44" rx="7" fill="#0E1219" stroke="#1E2636" stroke-width="1.5"/>
+                            
+                            <!-- Hexagonal Facet Upper (White) -->
+                            <polygon points="10,12 28,12 34,18 16,18" fill="#FFFFFF"/>
+                            
+                            <!-- Hexagonal Facet Center (Crimson Shutter) -->
+                            <polygon points="34,18 28,24 16,24 22,18" fill="#E50914"/>
+                            
+                            <!-- Hexagonal Facet Lower-Mid (Deep Crimson Facet) -->
+                            <polygon points="28,24 34,30 22,30 16,24" fill="#B20710"/>
+                            
+                            <!-- Hexagonal Facet Lower (White) -->
+                            <polygon points="28,26 34,32 16,32 10,26" fill="#FFFFFF"/>
+                            
+                            <!-- Optical Play Core (Diamond Play Edge) -->
+                            <polygon points="20,18 28,22 20,26" fill="#FFFFFF"/>
+                        </g>
+                        
+                        <!-- WORDMARK: "ZOKO" Mechanical -->
+                        <g id="wordmark-3" transform="translate(60, 14)">
+                            <!-- Z -->
+                            <path d="M 0,0 H 18 L 4.5,19.5 H 18 V 24 H 0 L 13.5,4.5 H 0 V 0 Z" fill="#FFFFFF"/>
+                            <!-- O -->
+                            <path d="M 33.5,0 C 40.5,0 45.5,5 45.5,12 C 45.5,19 40.5,24 33.5,24 C 26.5,24 21.5,19 21.5,12 C 21.5,5 26.5,0 33.5,0 Z M 33.5,4.8 C 29.5,4.8 26.8,8 26.8,12 C 26.8,16 29.5,19.2 33.5,19.2 C 37.5,19.2 40.2,16 40.2,12 C 40.2,8 37.5,4.8 33.5,4.8 Z" fill="#FFFFFF"/>
+                            <!-- K -->
+                            <path d="M 49,0 H 54.2 V 9.8 L 63.8,0 H 70.2 L 59.8,10.6 L 70.8,24 H 64.2 L 54.2,11.8 V 24 H 49 V 0 Z" fill="#FFFFFF"/>
+                            <!-- O -->
+                            <path d="M 83.5,0 C 90.5,0 95.5,5 95.5,12 C 95.5,19 90.5,24 83.5,24 C 76.5,24 71.5,19 71.5,12 C 71.5,5 76.5,0 83.5,0 Z M 83.5,4.8 C 79.5,4.8 76.8,8 76.8,12 C 76.8,16 79.5,19.2 83.5,19.2 C 87.5,19.2 90.2,16 90.2,12 C 90.2,8 87.5,4.8 83.5,4.8 Z" fill="#FFFFFF"/>
+                            
+                            <!-- Sub-label: "CORE" -->
+                            <text x="103" y="19" font-family="'JetBrains Mono', monospace" font-size="9.5" font-weight="700" fill="#E50914" letter-spacing="2.5">CORE</text>
+                        </g>
+                    </svg>
+                </div>
+                <div class="card-body">
+                    <div>
+                        <div class="concept-title">Iso-Mecha Shard</div>
+                        <div class="concept-meta">CYBER-MECHANICAL / DUAL-PLANE DEPTH</div>
+                        <p class="concept-desc">
+                            Rooted in Evangelion & Ghost in the Shell UI design aesthetics. 60° isometric planar facets forming an interlocking mechanical 'Z'. Zero glow, flat industrial precision.
+                        </p>
+                    </div>
+                    <div class="card-actions">
+                        <button class="btn-action primary" onclick="copySvg('svg-concept-3')">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                            Copy Full SVG
+                        </button>
+                        <button class="btn-action" onclick="downloadSvg('svg-concept-3', 'zoko-iso-mecha.svg')">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                            Download SVG
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- Section 2: Live In-Navbar Context Preview -->
+        <div class="section-header">
+            <div class="section-title">Live Navbar Header Simulation</div>
+            <p class="section-desc">How Concept 01 (Flagship) renders in the real ZOKO desktop & mobile header interface.</p>
+        </div>
+
+        <div class="context-box">
+            <div class="mock-navbar">
+                <div style="display: flex; align-items: center; gap: 24px;">
+                    <!-- Scaled Logo in Navbar (34px height) -->
+                    <svg width="144" height="34" viewBox="0 0 220 52" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <use href="#mark-kinetic"/>
+                        <use href="#wordmark-1"/>
+                    </svg>
+
+                    <div class="mock-nav-menu">
+                        <span class="mock-nav-link active">Catalog</span>
+                        <span class="mock-nav-link">Trending</span>
+                        <span class="mock-nav-link">Simulcasts</span>
+                        <span class="mock-nav-link">API Docs</span>
+                    </div>
+                </div>
+
+                <div class="mock-nav-actions">
+                    <span style="font-size: 12px; font-family: 'JetBrains Mono'; color: var(--text-muted);">KERNEL v2.4</span>
+                    <button class="mock-btn-stream">START STREAM</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Section 3: Optical Scale Matrix (16px to 64px) -->
+        <div class="section-header">
+            <div class="section-title">Optical Scale & Favicon Test</div>
+            <p class="section-desc">Testing legibility across extreme screen densities and micro resolutions.</p>
+        </div>
+
+        <div class="scale-grid">
+            <div class="scale-cell">
+                <!-- 16px Favicon test -->
+                <svg width="16" height="16" viewBox="0 0 44 44" fill="none">
+                    <rect width="44" height="44" rx="7" fill="#0E1219"/>
+                    <polygon points="10,11 34,11 34,17 19.5,17 10,11" fill="#FFFFFF"/>
+                    <polygon points="34,14 34,22 21.5,31 10,31 23,22 13.5,14" fill="#E50914"/>
+                    <polygon points="10,33 24.5,33 34,33 34,27 10,27" fill="#FFFFFF"/>
+                </svg>
+                <span class="scale-caption">16px (Favicon)</span>
+            </div>
+
+            <div class="scale-cell">
+                <!-- 24px Tab / Mobile Icon -->
+                <svg width="24" height="24" viewBox="0 0 44 44" fill="none">
+                    <rect width="44" height="44" rx="7" fill="#0E1219" stroke="#1E2636" stroke-width="1.5"/>
+                    <polygon points="10,11 34,11 34,17 19.5,17 10,11" fill="#FFFFFF"/>
+                    <polygon points="34,14 34,22 21.5,31 10,31 23,22 13.5,14" fill="#E50914"/>
+                    <polygon points="17,17 27,24 17,31" fill="#FFFFFF"/>
+                    <polygon points="10,33 24.5,33 34,33 34,27 10,27" fill="#FFFFFF"/>
+                </svg>
+                <span class="scale-caption">24px (Mobile)</span>
+            </div>
+
+            <div class="scale-cell">
+                <!-- 32px Standard -->
+                <svg width="32" height="32" viewBox="0 0 44 44" fill="none">
+                    <rect width="44" height="44" rx="7" fill="#0E1219" stroke="#1E2636" stroke-width="1.5"/>
+                    <polygon points="10,11 34,11 34,17 19.5,17 10,11" fill="#FFFFFF"/>
+                    <polygon points="34,14 34,22 21.5,31 10,31 23,22 13.5,14" fill="#E50914"/>
+                    <polygon points="17,17 27,24 17,31" fill="#FFFFFF"/>
+                    <polygon points="10,33 24.5,33 34,33 34,27 10,27" fill="#FFFFFF"/>
+                </svg>
+                <span class="scale-caption">32px (Toolbar)</span>
+            </div>
+
+            <div class="scale-cell">
+                <!-- 48px Header -->
+                <svg width="48" height="48" viewBox="0 0 44 44" fill="none">
+                    <rect width="44" height="44" rx="7" fill="#0E1219" stroke="#1E2636" stroke-width="1.5"/>
+                    <polygon points="10,11 34,11 34,17 19.5,17 10,11" fill="#FFFFFF"/>
+                    <polygon points="34,14 34,22 21.5,31 10,31 23,22 13.5,14" fill="#E50914"/>
+                    <polygon points="17,17 27,24 17,31" fill="#FFFFFF"/>
+                    <polygon points="10,33 24.5,33 34,33 34,27 10,27" fill="#FFFFFF"/>
+                </svg>
+                <span class="scale-caption">48px (Header)</span>
+            </div>
+
+            <div class="scale-cell">
+                <!-- 64px App Launcher -->
+                <svg width="64" height="64" viewBox="0 0 44 44" fill="none">
+                    <rect width="44" height="44" rx="7" fill="#0E1219" stroke="#1E2636" stroke-width="1.5"/>
+                    <polygon points="10,11 34,11 34,17 19.5,17 10,11" fill="#FFFFFF"/>
+                    <polygon points="34,14 34,22 21.5,31 10,31 23,22 13.5,14" fill="#E50914"/>
+                    <polygon points="17,17 27,24 17,31" fill="#FFFFFF"/>
+                    <polygon points="10,33 24.5,33 34,33 34,27 10,27" fill="#FFFFFF"/>
+                </svg>
+                <span class="scale-caption">64px (App Icon)</span>
+            </div>
+
+            <div class="scale-cell">
+                <!-- 96px Cinema / Splash -->
+                <svg width="96" height="96" viewBox="0 0 44 44" fill="none">
+                    <rect width="44" height="44" rx="7" fill="#0E1219" stroke="#1E2636" stroke-width="1.5"/>
+                    <polygon points="10,11 34,11 34,17 19.5,17 10,11" fill="#FFFFFF"/>
+                    <polygon points="34,14 34,22 21.5,31 10,31 23,22 13.5,14" fill="#E50914"/>
+                    <polygon points="17,17 27,24 17,31" fill="#FFFFFF"/>
+                    <polygon points="10,33 24.5,33 34,33 34,27 10,27" fill="#FFFFFF"/>
+                </svg>
+                <span class="scale-caption">96px (Splash)</span>
+            </div>
+        </div>
+
+        <!-- Section 4: Contrast Testing Matrix -->
+        <div class="section-header">
+            <div class="section-title">Contrast & Background Stress Test</div>
+            <p class="section-desc">Testing readability on Dark Base, Pitch Black, Slate Surface, and High-Key Light backgrounds.</p>
+        </div>
+
+        <div class="contrast-matrix">
+            <div class="contrast-card dark">
+                <svg width="150" height="36" viewBox="0 0 220 52" fill="none">
+                    <use href="#mark-kinetic"/>
+                    <use href="#wordmark-1"/>
+                </svg>
+                <span class="contrast-label">#080A0F Base</span>
+            </div>
+
+            <div class="contrast-card pitch">
+                <svg width="150" height="36" viewBox="0 0 220 52" fill="none">
+                    <use href="#mark-kinetic"/>
+                    <use href="#wordmark-1"/>
+                </svg>
+                <span class="contrast-label">#000000 Pitch Black</span>
+            </div>
+
+            <div class="contrast-card slate">
+                <svg width="150" height="36" viewBox="0 0 220 52" fill="none">
+                    <use href="#mark-kinetic"/>
+                    <use href="#wordmark-1"/>
+                </svg>
+                <span class="contrast-label">#141A24 Slate</span>
+            </div>
+
+            <div class="contrast-card light">
+                <!-- Light mode version: dark text, crimson accent -->
+                <svg width="150" height="36" viewBox="0 0 220 52" fill="none">
+                    <g transform="translate(4, 4)">
+                        <rect x="0" y="0" width="44" height="44" rx="7" fill="#F1F5F9" stroke="#CBD5E1" stroke-width="1.5"/>
+                        <polygon points="10,11 34,11 34,17 19.5,17 10,11" fill="#0F172A"/>
+                        <polygon points="34,14 34,22 21.5,31 10,31 23,22 13.5,14" fill="#E50914"/>
+                        <polygon points="17,17 27,24 17,31" fill="#0F172A"/>
+                        <polygon points="10,33 24.5,33 34,33 34,27 10,27" fill="#0F172A"/>
+                    </g>
+                    <g transform="translate(60, 14)">
+                        <path d="M 0,0 H 18 L 4.5,19.5 H 18 V 24 H 0 L 13.5,4.5 H 0 V 0 Z" fill="#0F172A"/>
+                        <path d="M 33.5,0 C 40.5,0 45.5,5 45.5,12 C 45.5,19 40.5,24 33.5,24 C 26.5,24 21.5,19 21.5,12 C 21.5,5 26.5,0 33.5,0 Z M 33.5,4.8 C 29.5,4.8 26.8,8 26.8,12 C 26.8,16 29.5,19.2 33.5,19.2 C 37.5,19.2 40.2,16 40.2,12 C 40.2,8 37.5,4.8 33.5,4.8 Z" fill="#0F172A"/>
+                        <path d="M 49,0 H 54.2 V 9.8 L 63.8,0 H 70.2 L 59.8,10.6 L 70.8,24 H 64.2 L 54.2,11.8 V 24 H 49 V 0 Z" fill="#0F172A"/>
+                        <path d="M 83.5,0 C 90.5,0 95.5,5 95.5,12 C 95.5,19 90.5,24 83.5,24 C 76.5,24 71.5,19 71.5,12 C 71.5,5 76.5,0 83.5,0 Z M 83.5,4.8 C 79.5,4.8 76.8,8 76.8,12 C 76.8,16 79.5,19.2 83.5,19.2 C 87.5,19.2 90.2,16 90.2,12 C 90.2,8 87.5,4.8 83.5,4.8 Z" fill="#0F172A"/>
+                        <text x="103" y="19" font-family="'JetBrains Mono', monospace" font-size="9.5" font-weight="700" fill="#E50914" letter-spacing="2.5">STREAM</text>
+                    </g>
+                </svg>
+                <span class="contrast-label">#FFFFFF High Key</span>
+            </div>
+        </div>
+
+        <!-- Section 5: Standalone SVG Mark Code Viewer -->
+        <div class="section-header">
+            <div class="section-title">Pure SVG Source Code (Drop-in Ready)</div>
+            <p class="section-desc">Zero external dependencies. Pure inline vector markup ready to paste anywhere.</p>
+        </div>
+
+        <div class="code-box" id="code-display">
+&lt;!-- ZOKO KINETIC BLADE LOGO (Zero Glow) --&gt;
+&lt;svg width="220" height="52" viewBox="0 0 220 52" fill="none" xmlns="http://www.w3.org/2000/svg"&gt;
+  &lt;g transform="translate(4, 4)"&gt;
+    &lt;rect width="44" height="44" rx="7" fill="#0E1219" stroke="#1E2636" stroke-width="1.5"/&gt;
+    &lt;polygon points="10,11 34,11 34,17 19.5,17 10,11" fill="#FFFFFF"/&gt;
+    &lt;polygon points="34,14 34,22 21.5,31 10,31 23,22 13.5,14" fill="#E50914"/&gt;
+    &lt;polygon points="17,17 27,24 17,31" fill="#FFFFFF"/&gt;
+    &lt;polygon points="10,33 24.5,33 34,33 34,27 10,27" fill="#FFFFFF"/&gt;
+  &lt;/g&gt;
+  &lt;g transform="translate(60, 14)"&gt;
+    &lt;path d="M 0,0 H 18 L 4.5,19.5 H 18 V 24 H 0 L 13.5,4.5 H 0 V 0 Z" fill="#FFFFFF"/&gt;
+    &lt;path d="M 33.5,0 C 40.5,0 45.5,5 45.5,12 C 45.5,19 40.5,24 33.5,24 C 26.5,24 21.5,19 21.5,12 C 21.5,5 26.5,0 33.5,0 Z M 33.5,4.8 C 29.5,4.8 26.8,8 26.8,12 C 26.8,16 29.5,19.2 33.5,19.2 C 37.5,19.2 40.2,16 40.2,12 C 40.2,8 37.5,4.8 33.5,4.8 Z" fill="#FFFFFF"/&gt;
+    &lt;path d="M 49,0 H 54.2 V 9.8 L 63.8,0 H 70.2 L 59.8,10.6 L 70.8,24 H 64.2 L 54.2,11.8 V 24 H 49 V 0 Z" fill="#FFFFFF"/&gt;
+    &lt;path d="M 83.5,0 C 90.5,0 95.5,5 95.5,12 C 95.5,19 90.5,24 83.5,24 C 76.5,24 71.5,19 71.5,12 C 71.5,5 76.5,0 83.5,0 Z M 83.5,4.8 C 79.5,4.8 76.8,8 76.8,12 C 76.8,16 79.5,19.2 83.5,19.2 C 87.5,19.2 90.2,16 90.2,12 C 90.2,8 87.5,4.8 83.5,4.8 Z" fill="#FFFFFF"/&gt;
+    &lt;text x="103" y="19" font-family="'JetBrains Mono', monospace" font-size="9.5" font-weight="700" fill="#E50914" letter-spacing="2.5"&gt;STREAM&lt;/text&gt;
+  &lt;/g&gt;
+&lt;/svg&gt;
+        </div>
+
+    </div>
+
+    <div class="toast" id="toast">SVG copied to clipboard!</div>
+
+    <script>
+        function setBg(theme) {
+            document.querySelectorAll('.theme-btn').forEach(b => b.classList.remove('active'));
+            event.target.classList.add('active');
+            
+            const stages = document.querySelectorAll('.card-stage');
+            stages.forEach(st => {
+                if (theme === 'pitch') {
+                    st.style.backgroundColor = '#000000';
+                } else if (theme === 'slate') {
+                    st.style.backgroundColor = '#141a24';
+                } else if (theme === 'light') {
+                    st.style.backgroundColor = '#f8fafc';
+                } else {
+                    st.style.backgroundColor = '#05070a';
+                }
+            });
+        }
+
+        function copySvg(elementId) {
+            const svgEl = document.getElementById(elementId);
+            if (!svgEl) return;
+            const serializer = new XMLSerializer();
+            const svgString = serializer.serializeToString(svgEl);
+            navigator.clipboard.writeText(svgString).then(() => {
+                showToast('SVG code copied to clipboard!');
+            });
+        }
+
+        function downloadSvg(elementId, filename) {
+            const svgEl = document.getElementById(elementId);
+            if (!svgEl) return;
+            const serializer = new XMLSerializer();
+            const svgString = '<?xml version="1.0" encoding="UTF-8"?>\n' + serializer.serializeToString(svgEl);
+            const blob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            showToast(`Downloaded ${filename}!`);
+        }
+
+        function showToast(msg) {
+            const t = document.getElementById('toast');
+            t.innerText = msg;
+            t.classList.add('show');
+            setTimeout(() => {
+                t.classList.remove('show');
+            }, 2500);
+        }
+    </script>
+</body>
+</html>

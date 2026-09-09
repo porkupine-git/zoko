@@ -12,7 +12,8 @@ export function renderLandingHtml(baseUrl = "") {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Anixo — Clean Anime Video Embed Infrastructure</title>
     <meta name="description" content="High-speed anime video embed player with multi-engine failover, frame-accurate subtitles, and zero advertising overlays.">
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><polygon points=%2230,20 80,50 30,80%22 fill=%22%23ffffff%22/></svg>">
+    <meta name="profiton-domain-verification" content="c73696bb4afe1bbeeeeea1d53c4db5ca727521d399f62952ea4796fbd94fc788" />
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230E1219'/%3E%3Cpath d='M14 6 H18 L25 26 H20.5 L18.5 20 H13.5 L11.5 26 H7 L14 6 Z M16 11 L14.5 17 H17.5 L16 11 Z' fill='%23FFFFFF'/%3E%3Cpolygon points='13,15 22,19.5 13,24' fill='%23E50914'/%3E%3C/svg%3E">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -80,32 +81,20 @@ export function renderLandingHtml(baseUrl = "") {
         .brand-link {
             display: inline-flex;
             align-items: center;
-            gap: 10px;
+            gap: 12px;
             text-decoration: none;
             color: #ffffff;
+            transition: opacity 0.15s ease;
         }
 
-        .brand-mark {
-            width: 26px;
-            height: 26px;
-            background: #ffffff;
-            border-radius: var(--radius-sm);
-            display: flex;
-            align-items: center;
-            justify-content: center;
+        .brand-link:hover {
+            opacity: 0.92;
         }
 
-        .brand-mark svg {
-            width: 12px;
-            height: 12px;
-            color: #09090b;
-        }
-
-        .brand-title {
-            font-size: 16px;
-            font-weight: 700;
-            color: #ffffff;
-            letter-spacing: -0.3px;
+        .brand-navbar-logo {
+            height: 28px;
+            width: auto;
+            display: block;
         }
 
         .brand-edition {
@@ -500,6 +489,306 @@ export function renderLandingHtml(baseUrl = "") {
             display: block;
         }
 
+        /* ── Curated Anime Cards Section (#catalog) ── */
+        .catalog-section {
+            padding: 56px 0 72px;
+            border-top: 1px solid var(--border);
+        }
+
+        .catalog-header-wrap {
+            display: flex;
+            align-items: flex-end;
+            justify-content: space-between;
+            margin-bottom: 28px;
+            gap: 20px;
+            flex-wrap: wrap;
+        }
+
+        .catalog-title-group {
+            max-width: 600px;
+        }
+
+        .catalog-badge-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            background: var(--surface-elevated);
+            border: 1px solid var(--border);
+            padding: 3px 9px;
+            border-radius: 4px;
+            margin-bottom: 12px;
+            letter-spacing: 0.05em;
+        }
+
+        .catalog-badge-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: #e50914;
+        }
+
+        .catalog-heading {
+            font-size: 26px;
+            font-weight: 700;
+            color: #ffffff;
+            letter-spacing: -0.5px;
+            margin-bottom: 6px;
+        }
+
+        .catalog-subheading {
+            font-size: 13.5px;
+            color: var(--text-secondary);
+            line-height: 1.5;
+        }
+
+        .catalog-filters {
+            display: flex;
+            gap: 6px;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            padding: 4px;
+            border-radius: var(--radius-md);
+            flex-wrap: wrap;
+        }
+
+        .filter-btn {
+            background: transparent;
+            border: none;
+            color: var(--text-secondary);
+            font-family: inherit;
+            font-size: 12px;
+            font-weight: 600;
+            padding: 6px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+
+        .filter-btn:hover {
+            color: #ffffff;
+            background: var(--surface-hover);
+        }
+
+        .filter-btn.active {
+            background: #ffffff;
+            color: #09090b;
+        }
+
+        /* ── Stream Benchmark Manifest Grid (#catalog) ── */
+        .anime-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 16px;
+        }
+
+        @media (max-width: 1160px) {
+            .anime-grid { grid-template-columns: repeat(2, 1fr); gap: 16px; }
+        }
+
+        @media (max-width: 640px) {
+            .anime-grid { grid-template-columns: 1fr; gap: 14px; }
+            .catalog-header-wrap { flex-direction: column; align-items: flex-start; }
+        }
+
+        /* Benchmark Card - Precision Engineered Dark Surface */
+        .anime-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-md);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            cursor: pointer;
+            position: relative;
+            text-align: left;
+            transition: border-color 0.18s ease, transform 0.18s ease, background 0.18s ease;
+        }
+
+        .anime-card:hover {
+            border-color: var(--border-hover);
+            transform: translateY(-2px);
+            background: #141418;
+        }
+
+        .anime-card.is-active-stream {
+            border-color: #ffffff;
+            box-shadow: inset 0 0 0 1px #ffffff;
+        }
+
+        /* Card Top Identification Header */
+        .card-manifest-head {
+            padding: 8px 12px;
+            background: var(--surface-elevated);
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .manifest-tag {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 10.5px;
+            font-weight: 600;
+            color: var(--text-muted);
+            letter-spacing: 0.04em;
+        }
+
+        .manifest-status {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 10px;
+            font-weight: 500;
+            color: var(--text-secondary);
+        }
+
+        .manifest-status-dot {
+            width: 5px;
+            height: 5px;
+            border-radius: 50%;
+            background: var(--status-green);
+        }
+
+        /* 16:9 Cinematic Video Viewport */
+        .card-viewport-box {
+            position: relative;
+            width: 100%;
+            aspect-ratio: 16 / 9;
+            overflow: hidden;
+            background: #000000;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .card-banner-img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+            filter: brightness(0.86) contrast(1.04);
+            transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1), filter 0.25s ease;
+        }
+
+        .anime-card:hover .card-banner-img {
+            transform: scale(1.04);
+            filter: brightness(0.96) contrast(1.04);
+        }
+
+        .card-viewport-badge {
+            position: absolute;
+            bottom: 8px;
+            right: 8px;
+            background: rgba(9, 9, 11, 0.88);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            color: #ffffff;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 9.5px;
+            font-weight: 600;
+            padding: 2px 6px;
+            border-radius: 4px;
+            letter-spacing: 0.3px;
+            pointer-events: none;
+            backdrop-filter: blur(4px);
+            -webkit-backdrop-filter: blur(4px);
+        }
+
+        /* Card Specification Body */
+        .card-meta-body {
+            padding: 12px 14px 14px;
+            display: flex;
+            flex-direction: column;
+            flex: 1;
+            justify-content: space-between;
+        }
+
+        .card-title-line {
+            font-size: 14px;
+            font-weight: 600;
+            color: #ffffff;
+            letter-spacing: -0.2px;
+            line-height: 1.35;
+            margin-bottom: 3px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .anime-card:hover .card-title-line {
+            color: #ffffff;
+        }
+
+        .card-studio-sub {
+            font-size: 11.5px;
+            color: var(--text-muted);
+            margin-bottom: 10px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        /* Technical Specification Chips */
+        .card-specs-group {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 5px;
+            margin-bottom: 12px;
+        }
+
+        .spec-chip {
+            background: var(--surface-elevated);
+            border: 1px solid var(--border);
+            color: var(--text-secondary);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 10px;
+            font-weight: 500;
+            padding: 2px 6px;
+            border-radius: 4px;
+            letter-spacing: 0.02em;
+        }
+
+        /* Card Action Row */
+        .card-action-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding-top: 10px;
+            border-top: 1px solid var(--border);
+        }
+
+        .action-node-id {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 10.5px;
+            color: var(--text-muted);
+        }
+
+        .action-mount-cta {
+            font-size: 11.5px;
+            font-weight: 500;
+            color: var(--text-secondary);
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            transition: color 0.15s ease, transform 0.15s ease;
+        }
+
+        .anime-card:hover .action-mount-cta {
+            color: #ffffff;
+        }
+
+        .anime-card:hover .action-mount-cta svg {
+            transform: translateX(2px);
+        }
+
+        .action-mount-cta svg {
+            width: 12px;
+            height: 12px;
+            transition: transform 0.15s ease;
+        }
+
         /* ── Core Architecture Grid (#architecture) ── */
         .content-section {
             padding: 64px 0;
@@ -846,18 +1135,27 @@ export function renderLandingHtml(baseUrl = "") {
     <!-- ── Top Header ── -->
     <header class="site-header">
         <div class="header-inner">
-            <a href="/" class="brand-link">
-                <div class="brand-mark">
-                    <svg viewBox="0 0 24 24" fill="currentColor">
-                        <polygon points="6 4 18 12 6 20 6 4"/>
-                    </svg>
-                </div>
-                <span class="brand-title">Anixo</span>
-                <span class="brand-edition">Embed Core</span>
+            <a href="/" class="brand-link" aria-label="Anixo Embed Core">
+                <svg class="brand-navbar-logo" viewBox="0 0 250 52" height="28" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <g id="anixo-mark" transform="translate(4, 4)">
+                        <rect width="44" height="44" rx="10" fill="#141A24" stroke="#2E3B52" stroke-width="1.5"/>
+                        <path d="M19 9 H25 L34.5 35 H28 L25.5 27 H18.5 L16 35 H9.5 L19 9 Z M22 16 L19.5 23 H24.5 L22 16 Z" fill="#FFFFFF"/>
+                        <polygon points="17,21 30,27 17,33" fill="#FFFFFF"/>
+                    </g>
+                    <g id="anixo-type" transform="translate(60, 14)">
+                        <path d="M 0,24 L 9,0 H 15 L 24,24 H 18.5 L 16.5,18 H 7.5 L 5.5,24 H 0 Z M 9,13.5 H 15 L 12,5 Z" fill="#FFFFFF"/>
+                        <path d="M 28,0 H 33.5 L 43.5,16.5 V 0 H 49 V 24 H 43.5 L 33.5,7.5 V 24 H 28 Z" fill="#FFFFFF"/>
+                        <path d="M 54,0 H 59.5 V 24 H 54 Z" fill="#FFFFFF"/>
+                        <path d="M 64,0 H 70 L 76,9.5 L 82,0 H 88 L 79.5,12 L 88.5,24 H 82.5 L 76,14.5 L 69.5,24 H 63.5 L 72.5,12 Z" fill="#FFFFFF"/>
+                        <path d="M 103,0 C 110,0 115,5 115,12 C 115,19 110,24 103,24 C 96,24 91,19 91,12 C 91,5 96,0 103,0 Z M 103,4.8 C 99,4.8 96.2,8 96.2,12 C 96.2,16 99,19.2 103,19.2 C 107,19.2 109.8,16 109.8,12 C 109.8,8 107,4.8 103,4.8 Z" fill="#FFFFFF"/>
+                        <text x="124" y="19" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Outfit', monospace" font-size="9.5" font-weight="800" fill="#94A3B8" letter-spacing="2.5">CORE</text>
+                    </g>
+                </svg>
             </a>
 
             <nav class="header-nav">
                 <a href="#studio" class="nav-link">Studio</a>
+                <a href="#catalog" class="nav-link">Catalog</a>
                 <a href="#architecture" class="nav-link">Architecture</a>
                 <a href="#telemetry" class="nav-link">Telemetry</a>
                 <a href="#docs" class="nav-link">Documentation</a>
@@ -962,6 +1260,268 @@ export function renderLandingHtml(baseUrl = "") {
                 <!-- Video Frame -->
                 <div class="console-video-box">
                     <iframe id="live-iframe" src="" allowfullscreen allow="autoplay; fullscreen; picture-in-picture"></iframe>
+                </div>
+            </div>
+        </section>
+
+        <!-- ── Curated Stream Showcase Catalog (#catalog) ── -->
+        <section class="catalog-section" id="catalog">
+            <div class="catalog-header-wrap">
+                <div class="catalog-title-group">
+                    <div class="catalog-badge-pill">
+                        <span class="catalog-badge-dot"></span>
+                        <span>STREAM BENCHMARKS</span>
+                    </div>
+                    <h2 class="catalog-heading">Stream Engine Test Manifests</h2>
+                    <p class="catalog-subheading">Pre-configured 1080p stream manifests verified against Sora and Pahe clusters. Click any benchmark to mount in the studio playground.</p>
+                </div>
+                <div class="catalog-filters">
+                    <button type="button" class="filter-btn active" onclick="filterAnimeCards('all', this)">All (8)</button>
+                    <button type="button" class="filter-btn" onclick="filterAnimeCards('action', this)">Action &amp; Shounen</button>
+                    <button type="button" class="filter-btn" onclick="filterAnimeCards('fantasy', this)">Fantasy &amp; Adventure</button>
+                    <button type="button" class="filter-btn" onclick="filterAnimeCards('supernatural', this)">Dark &amp; Supernatural</button>
+                </div>
+            </div>
+
+            <div class="anime-grid">
+                <!-- 1. Frieren -->
+                <div class="anime-card" id="card-154587" data-category="fantasy adventure" onclick="mountAnimePreset(154587, 1, 'Frieren')">
+                    <div class="card-manifest-head">
+                        <span class="manifest-tag">PRESET #01</span>
+                        <span class="manifest-status"><span class="manifest-status-dot"></span>Active Node</span>
+                    </div>
+                    <div class="card-viewport-box">
+                        <img class="card-banner-img" src="https://s4.anilist.co/file/anilistcdn/media/anime/banner/154587-ivXNJ23SM1xB.jpg" alt="Frieren: Beyond Journey’s End" loading="lazy">
+                        <span class="card-viewport-badge">EP 01 • 1080p</span>
+                    </div>
+                    <div class="card-meta-body">
+                        <div>
+                            <div class="card-title-line" title="Frieren: Beyond Journey’s End">Frieren: Beyond Journey’s End</div>
+                            <div class="card-studio-sub">Madhouse · 2023</div>
+                            <div class="card-specs-group">
+                                <span class="spec-chip">ID: 154587</span>
+                                <span class="spec-chip">WebVTT Subs</span>
+                                <span class="spec-chip">Auto-Skip</span>
+                            </div>
+                        </div>
+                        <div class="card-action-row">
+                            <span class="action-node-id">Sora · Edge</span>
+                            <span class="action-mount-cta">
+                                <span>Mount in Studio</span>
+                                <svg viewBox="0 0 16 16" fill="currentColor"><path fill-rule="evenodd" d="M1 8a.5.5 0 0 1 .5-.5h11.793l-3.147-3.146a.5.5 0 0 1 .708-.708l4 4a.5.5 0 0 1 0 .708l-4 4a.5.5 0 0 1-.708-.708L13.293 8.5H1.5A.5.5 0 0 1 1 8z"/></svg>
+                            </span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 2. Jujutsu Kaisen -->
+                <div class="anime-card" id="card-113415" data-category="action supernatural" onclick="mountAnimePreset(113415, 1, 'Jujutsu Kaisen')">
+                    <div class="card-manifest-head">
+                        <span class="manifest-tag">PRESET #02</span>
+                        <span class="manifest-status"><span class="manifest-status-dot"></span>Active Node</span>
+                    </div>
+                    <div class="card-viewport-box">
+                        <img class="card-banner-img" src="https://s4.anilist.co/file/anilistcdn/media/anime/banner/113415-jQBSkxWAAk83.jpg" alt="JUJUTSU KAISEN" loading="lazy">
+                        <span class="card-viewport-badge">EP 01 • 1080p</span>
+                    </div>
+                    <div class="card-meta-body">
+                        <div>
+                            <div class="card-title-line" title="JUJUTSU KAISEN">JUJUTSU KAISEN</div>
+                            <div class="card-studio-sub">MAPPA · 2020</div>
+                            <div class="card-specs-group">
+                                <span class="spec-chip">ID: 113415</span>
+                                <span class="spec-chip">Multi-Audio</span>
+                                <span class="spec-chip">1080p 60fps</span>
+                            </div>
+                        </div>
+                        <div class="card-action-row">
+                            <span class="action-node-id">Sora · Edge</span>
+                            <span class="action-mount-cta">
+                                <span>Mount in Studio</span>
+                                <svg viewBox="0 0 16 16" fill="currentColor"><path fill-rule="evenodd" d="M1 8a.5.5 0 0 1 .5-.5h11.793l-3.147-3.146a.5.5 0 0 1 .708-.708l4 4a.5.5 0 0 1 0 .708l-4 4a.5.5 0 0 1-.708-.708L13.293 8.5H1.5A.5.5 0 0 1 1 8z"/></svg>
+                            </span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 3. Solo Leveling -->
+                <div class="anime-card" id="card-151807" data-category="action fantasy adventure" onclick="mountAnimePreset(151807, 1, 'Solo Leveling')">
+                    <div class="card-manifest-head">
+                        <span class="manifest-tag">PRESET #03</span>
+                        <span class="manifest-status"><span class="manifest-status-dot"></span>Active Node</span>
+                    </div>
+                    <div class="card-viewport-box">
+                        <img class="card-banner-img" src="https://s4.anilist.co/file/anilistcdn/media/anime/banner/151807-37yfQA3ym8PA.jpg" alt="Solo Leveling" loading="lazy">
+                        <span class="card-viewport-badge">EP 01 • 1080p</span>
+                    </div>
+                    <div class="card-meta-body">
+                        <div>
+                            <div class="card-title-line" title="Solo Leveling">Solo Leveling</div>
+                            <div class="card-studio-sub">A-1 Pictures · 2024</div>
+                            <div class="card-specs-group">
+                                <span class="spec-chip">ID: 151807</span>
+                                <span class="spec-chip">Low Latency</span>
+                                <span class="spec-chip">Frame Accurate</span>
+                            </div>
+                        </div>
+                        <div class="card-action-row">
+                            <span class="action-node-id">Neko · CDN</span>
+                            <span class="action-mount-cta">
+                                <span>Mount in Studio</span>
+                                <svg viewBox="0 0 16 16" fill="currentColor"><path fill-rule="evenodd" d="M1 8a.5.5 0 0 1 .5-.5h11.793l-3.147-3.146a.5.5 0 0 1 .708-.708l4 4a.5.5 0 0 1 0 .708l-4 4a.5.5 0 0 1-.708-.708L13.293 8.5H1.5A.5.5 0 0 1 1 8z"/></svg>
+                            </span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 4. One Piece -->
+                <div class="anime-card" id="card-21" data-category="action adventure fantasy" onclick="mountAnimePreset(21, 1, 'ONE PIECE')">
+                    <div class="card-manifest-head">
+                        <span class="manifest-tag">PRESET #04</span>
+                        <span class="manifest-status"><span class="manifest-status-dot"></span>Active Node</span>
+                    </div>
+                    <div class="card-viewport-box">
+                        <img class="card-banner-img" src="https://s4.anilist.co/file/anilistcdn/media/anime/banner/21-wf37VakJmZqs.jpg" alt="ONE PIECE" loading="lazy">
+                        <span class="card-viewport-badge">EP 01 • 1080p</span>
+                    </div>
+                    <div class="card-meta-body">
+                        <div>
+                            <div class="card-title-line" title="ONE PIECE">ONE PIECE</div>
+                            <div class="card-studio-sub">Toei Animation · 1999</div>
+                            <div class="card-specs-group">
+                                <span class="spec-chip">ID: 21</span>
+                                <span class="spec-chip">1100+ Ep Matrix</span>
+                                <span class="spec-chip">Adaptive Rate</span>
+                            </div>
+                        </div>
+                        <div class="card-action-row">
+                            <span class="action-node-id">Zozo · Cluster</span>
+                            <span class="action-mount-cta">
+                                <span>Mount in Studio</span>
+                                <svg viewBox="0 0 16 16" fill="currentColor"><path fill-rule="evenodd" d="M1 8a.5.5 0 0 1 .5-.5h11.793l-3.147-3.146a.5.5 0 0 1 .708-.708l4 4a.5.5 0 0 1 0 .708l-4 4a.5.5 0 0 1-.708-.708L13.293 8.5H1.5A.5.5 0 0 1 1 8z"/></svg>
+                            </span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 5. Demon Slayer -->
+                <div class="anime-card" id="card-101922" data-category="action supernatural fantasy" onclick="mountAnimePreset(101922, 1, 'Demon Slayer')">
+                    <div class="card-manifest-head">
+                        <span class="manifest-tag">PRESET #05</span>
+                        <span class="manifest-status"><span class="manifest-status-dot"></span>Active Node</span>
+                    </div>
+                    <div class="card-viewport-box">
+                        <img class="card-banner-img" src="https://s4.anilist.co/file/anilistcdn/media/anime/banner/101922-33MtJGsUSxga.jpg" alt="Demon Slayer: Kimetsu no Yaiba" loading="lazy">
+                        <span class="card-viewport-badge">EP 01 • 1080p</span>
+                    </div>
+                    <div class="card-meta-body">
+                        <div>
+                            <div class="card-title-line" title="Demon Slayer: Kimetsu no Yaiba">Demon Slayer</div>
+                            <div class="card-studio-sub">Ufotable · 2019</div>
+                            <div class="card-specs-group">
+                                <span class="spec-chip">ID: 101922</span>
+                                <span class="spec-chip">HDR Master</span>
+                                <span class="spec-chip">WebVTT Styled</span>
+                            </div>
+                        </div>
+                        <div class="card-action-row">
+                            <span class="action-node-id">Sora · Edge</span>
+                            <span class="action-mount-cta">
+                                <span>Mount in Studio</span>
+                                <svg viewBox="0 0 16 16" fill="currentColor"><path fill-rule="evenodd" d="M1 8a.5.5 0 0 1 .5-.5h11.793l-3.147-3.146a.5.5 0 0 1 .708-.708l4 4a.5.5 0 0 1 0 .708l-4 4a.5.5 0 0 1-.708-.708L13.293 8.5H1.5A.5.5 0 0 1 1 8z"/></svg>
+                            </span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 6. Attack on Titan -->
+                <div class="anime-card" id="card-16498" data-category="action supernatural" onclick="mountAnimePreset(16498, 1, 'Attack on Titan')">
+                    <div class="card-manifest-head">
+                        <span class="manifest-tag">PRESET #06</span>
+                        <span class="manifest-status"><span class="manifest-status-dot"></span>Active Node</span>
+                    </div>
+                    <div class="card-viewport-box">
+                        <img class="card-banner-img" src="https://s4.anilist.co/file/anilistcdn/media/anime/banner/16498-8jpFCOcDmneX.jpg" alt="Attack on Titan" loading="lazy">
+                        <span class="card-viewport-badge">EP 01 • 1080p</span>
+                    </div>
+                    <div class="card-meta-body">
+                        <div>
+                            <div class="card-title-line" title="Attack on Titan">Attack on Titan</div>
+                            <div class="card-studio-sub">Wit Studio · 2013</div>
+                            <div class="card-specs-group">
+                                <span class="spec-chip">ID: 16498</span>
+                                <span class="spec-chip">Dolby Stereo</span>
+                                <span class="spec-chip">Edge Cached</span>
+                            </div>
+                        </div>
+                        <div class="card-action-row">
+                            <span class="action-node-id">Sora · Edge</span>
+                            <span class="action-mount-cta">
+                                <span>Mount in Studio</span>
+                                <svg viewBox="0 0 16 16" fill="currentColor"><path fill-rule="evenodd" d="M1 8a.5.5 0 0 1 .5-.5h11.793l-3.147-3.146a.5.5 0 0 1 .708-.708l4 4a.5.5 0 0 1 0 .708l-4 4a.5.5 0 0 1-.708-.708L13.293 8.5H1.5A.5.5 0 0 1 1 8z"/></svg>
+                            </span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 7. Chainsaw Man -->
+                <div class="anime-card" id="card-127230" data-category="action supernatural" onclick="mountAnimePreset(127230, 1, 'Chainsaw Man')">
+                    <div class="card-manifest-head">
+                        <span class="manifest-tag">PRESET #07</span>
+                        <span class="manifest-status"><span class="manifest-status-dot"></span>Active Node</span>
+                    </div>
+                    <div class="card-viewport-box">
+                        <img class="card-banner-img" src="https://s4.anilist.co/file/anilistcdn/media/anime/banner/127230-o8IRwCGVr9KW.jpg" alt="Chainsaw Man" loading="lazy">
+                        <span class="card-viewport-badge">EP 01 • 1080p</span>
+                    </div>
+                    <div class="card-meta-body">
+                        <div>
+                            <div class="card-title-line" title="Chainsaw Man">Chainsaw Man</div>
+                            <div class="card-studio-sub">MAPPA · 2022</div>
+                            <div class="card-specs-group">
+                                <span class="spec-chip">ID: 127230</span>
+                                <span class="spec-chip">Failover Cluster</span>
+                                <span class="spec-chip">1080p Native</span>
+                            </div>
+                        </div>
+                        <div class="card-action-row">
+                            <span class="action-node-id">Neko · CDN</span>
+                            <span class="action-mount-cta">
+                                <span>Mount in Studio</span>
+                                <svg viewBox="0 0 16 16" fill="currentColor"><path fill-rule="evenodd" d="M1 8a.5.5 0 0 1 .5-.5h11.793l-3.147-3.146a.5.5 0 0 1 .708-.708l4 4a.5.5 0 0 1 0 .708l-4 4a.5.5 0 0 1-.708-.708L13.293 8.5H1.5A.5.5 0 0 1 1 8z"/></svg>
+                            </span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 8. Bleach TYBW -->
+                <div class="anime-card" id="card-116674" data-category="action supernatural" onclick="mountAnimePreset(116674, 1, 'Bleach: TYBW')">
+                    <div class="card-manifest-head">
+                        <span class="manifest-tag">PRESET #08</span>
+                        <span class="manifest-status"><span class="manifest-status-dot"></span>Active Node</span>
+                    </div>
+                    <div class="card-viewport-box">
+                        <img class="card-banner-img" src="https://s4.anilist.co/file/anilistcdn/media/anime/banner/116674-l2YlIyJzvGSV.jpg" alt="BLEACH: Thousand-Year Blood War" loading="lazy">
+                        <span class="card-viewport-badge">EP 01 • 1080p</span>
+                    </div>
+                    <div class="card-meta-body">
+                        <div>
+                            <div class="card-title-line" title="BLEACH: Thousand-Year Blood War">Bleach: TYBW</div>
+                            <div class="card-studio-sub">Studio Pierrot · 2022</div>
+                            <div class="card-specs-group">
+                                <span class="spec-chip">ID: 116674</span>
+                                <span class="spec-chip">OP/ED Markers</span>
+                                <span class="spec-chip">Dual Audio</span>
+                            </div>
+                        </div>
+                        <div class="card-action-row">
+                            <span class="action-node-id">Zozo · Cluster</span>
+                            <span class="action-mount-cta">
+                                <span>Mount in Studio</span>
+                                <svg viewBox="0 0 16 16" fill="currentColor"><path fill-rule="evenodd" d="M1 8a.5.5 0 0 1 .5-.5h11.793l-3.147-3.146a.5.5 0 0 1 .708-.708l4 4a.5.5 0 0 1 0 .708l-4 4a.5.5 0 0 1-.708-.708L13.293 8.5H1.5A.5.5 0 0 1 1 8z"/></svg>
+                            </span>
+                        </div>
+                    </div>
                 </div>
             </div>
         </section>
@@ -1399,6 +1959,48 @@ export function renderLandingHtml(baseUrl = "") {
                 .catch(err => {
                     console.warn('Telemetry ping error:', err);
                 });
+        }
+
+        function mountAnimePreset(aniId, ep, title) {
+            const catInput = document.getElementById('stream-catalog');
+            const idInput = document.getElementById('stream-id');
+            const epInput = document.getElementById('stream-ep');
+
+            if (catInput) catInput.value = 'ani';
+            if (idInput) idInput.value = String(aniId);
+            if (epInput) epInput.value = String(ep || 1);
+
+            mountActiveStream();
+
+            const studioEl = document.getElementById('studio');
+            if (studioEl) {
+                studioEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+
+            document.querySelectorAll('.anime-card').forEach(function(c) {
+                c.classList.remove('is-active-stream');
+            });
+            const activeCard = document.getElementById('card-' + aniId);
+            if (activeCard) {
+                activeCard.classList.add('is-active-stream');
+            }
+        }
+
+        function filterAnimeCards(category, btn) {
+            document.querySelectorAll('.filter-btn').forEach(function(b) {
+                b.classList.remove('active');
+            });
+            if (btn) btn.classList.add('active');
+
+            const cards = document.querySelectorAll('.anime-card');
+            cards.forEach(function(c) {
+                const cat = c.getAttribute('data-category') || '';
+                if (category === 'all' || cat.indexOf(category) !== -1) {
+                    c.style.display = 'flex';
+                } else {
+                    c.style.display = 'none';
+                }
+            });
         }
 
         window.addEventListener('DOMContentLoaded', () => {

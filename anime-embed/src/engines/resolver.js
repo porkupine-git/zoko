@@ -7,6 +7,7 @@ import { resolveMegaPlayStream } from './megaplay.js';
 import { resolveAniNekoStream } from './anineko.js';
 import { resolveZokoStream } from './zoko.js';
 import { getAnimeByAniListId, getAnimeByMalId } from '../metadata/anilist.js';
+import { getAdminConfig } from '../admin/adminStore.js';
 
 export async function resolveStreamWithFailover({
     anilistId,
@@ -35,14 +36,26 @@ export async function resolveStreamWithFailover({
         }
     }
 
-    const order = [preferredServer];
+    const adminConfig = getAdminConfig();
+    const adminPrimary = adminConfig.servers?.primary || 1;
+    const effectivePreferred = preferredServer || adminPrimary;
+
+    const order = [effectivePreferred];
     [1, 2, 3].forEach(s => {
         if (!order.includes(s)) order.push(s);
     });
 
+    // Skip servers in maintenance or disabled, unless all are disabled
+    const activeOrder = order.filter(s => {
+        const isEnabled = adminConfig.servers?.enabled?.[s] !== false;
+        const isMaint = adminConfig.servers?.maintenance?.[s] === true;
+        return isEnabled && !isMaint;
+    });
+    const executionOrder = activeOrder.length > 0 ? activeOrder : order;
+
     const errors = [];
 
-    for (const serverId of order) {
+    for (const serverId of executionOrder) {
         try {
             let result = null;
             if (serverId === 1) {

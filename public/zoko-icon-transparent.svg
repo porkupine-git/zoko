@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40" width="40" height="40" fill="none">
+  <!-- ZOKO Pure Vector Glyph (Transparent Background) -->
+  <!-- Architectural Z-Core (Arctic White #FFFFFF) -->
+  <path d="M2 2 H38 V10 L14 30 H38 V38 H2 V30 L26 10 H2 Z" fill="#FFFFFF"/>
+  
+  <!-- High-Velocity Play Triangle (Studio Crimson #E50914) -->
+  <polygon points="13,11 29,20 13,29" fill="#E50914"/>
+</svg>
