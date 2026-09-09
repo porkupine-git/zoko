@@ -821,6 +821,33 @@ export function renderAdminHtml(baseUrl = "") {
             color: #ef4444;
         }
 
+        /* ── Frequency Capping Mode Cards ── */
+        .capping-mode-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-top: 6px;
+        }
+
+        .capping-card {
+            cursor: pointer;
+            padding: 12px 14px;
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            background: var(--surface-elevated);
+            transition: all 0.15s ease;
+            display: block;
+        }
+
+        .capping-card:hover {
+            border-color: var(--border-hover);
+        }
+
+        .capping-card.active {
+            border-color: #38bdf8;
+            background: rgba(56, 189, 248, 0.05);
+        }
+
         /* ── Login Gateway Screen ── */
         .login-overlay {
             position: fixed;
@@ -1059,20 +1086,26 @@ export function renderAdminHtml(baseUrl = "") {
                     <div class="grid-two-col">
                         <div class="console-panel">
                             <div class="panel-header-bar">
-                                <span class="panel-title-text">Top Referring Domains</span>
-                                <span class="mono-cell" id="stat-referrers-count" style="font-size: 11px; color: var(--text-muted);">0 Domains</span>
+                                <div style="display: flex; align-items: center; gap: 8px;">
+                                    <span class="panel-title-text">Embedder Intelligence &amp; Referrers</span>
+                                    <span class="mono-cell" id="stat-referrers-count" style="font-size: 11px; color: var(--text-muted);">0 Domains</span>
+                                </div>
+                                <button type="button" class="btn-secondary" style="font-size: 11px; padding: 3px 8px;" onclick="clearTelemetryStats()">Reset Stats</button>
                             </div>
-                            <div class="panel-content-body" style="padding: 0;">
+                            <div class="panel-content-body" style="padding: 0; overflow-x: auto;">
                                 <table class="data-table">
                                     <thead>
                                         <tr>
-                                            <th>Domain / Host</th>
-                                            <th>Requests</th>
+                                            <th>Embedding Domain</th>
+                                            <th>Status</th>
+                                            <th>Streams</th>
+                                            <th>Bandwidth</th>
+                                            <th>Top Content</th>
                                             <th>Action</th>
                                         </tr>
                                     </thead>
                                     <tbody id="table-referrers-body">
-                                        <tr><td colspan="3" style="text-align: center; color: var(--text-muted); padding: 20px;">No referrers logged yet</td></tr>
+                                        <tr><td colspan="6" style="text-align: center; color: var(--text-muted); padding: 20px;">No referrers logged yet</td></tr>
                                     </tbody>
                                 </table>
                             </div>
@@ -1324,13 +1357,73 @@ export function renderAdminHtml(baseUrl = "") {
                                     </label>
                                 </div>
                                 <div class="form-group">
-                                    <label class="form-label">Popunder Script or Target URL</label>
-                                    <input type="text" id="input-popunder-url" class="form-input" placeholder="//adnetwork.com/popunder.js or https://direct-link...">
+                                    <label class="form-label">Popunder Ad Code or Script URL</label>
+                                    <textarea id="input-popunder-url" class="form-input" rows="3" style="font-family: 'JetBrains Mono', monospace; font-size: 11.5px; resize: vertical; line-height: 1.4;" placeholder='Paste full <script src="..."></script> or //pu.genosstamnoi.com/...'></textarea>
+                                    <span style="font-size: 11.5px; color: var(--text-muted); display: block; margin-top: 4px;">Accepts full HTML script tags (e.g. &lt;script src="..."&gt;) or direct script URLs.</span>
                                 </div>
                                 <div class="form-group">
-                                    <label class="form-label">Frequency Capping (Hours per user)</label>
-                                    <input type="number" id="input-ad-capping" class="form-input" value="24" min="1">
-                                    <span style="font-size: 11.5px; color: var(--text-muted); display: block; margin-top: 4px;">Limit how often a user sees the popunder (e.g. 24 = max 1 popunder every 24h).</span>
+                                    <label class="form-label" style="display: flex; align-items: center; justify-content: space-between;">
+                                        <span>Frequency Capping Mode</span>
+                                        <span id="capping-mode-indicator" class="brand-tag-pill" style="font-size: 10.5px; color: var(--status-green); border: 1px solid rgba(34, 197, 94, 0.3);">Natural (Network AI)</span>
+                                    </label>
+                                    <div class="capping-mode-grid">
+                                        <div class="capping-card active" id="card-mode-natural" onclick="selectCappingMode('natural')">
+                                            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 5px;">
+                                                <input type="radio" name="cappingMode" id="radio-mode-natural" value="natural" checked style="accent-color: #38bdf8; cursor: pointer;" onchange="selectCappingMode('natural')">
+                                                <strong style="font-size: 12.5px; color: #ffffff;">Natural (Network AI)</strong>
+                                            </div>
+                                            <p style="font-size: 11px; color: var(--text-muted); margin: 0; line-height: 1.45;">
+                                                Let Profiton / Adsterra / PopAds manage frequency natively via their network algorithms. Recommended for maximum CPM.
+                                            </p>
+                                        </div>
+
+                                        <div class="capping-card" id="card-mode-custom" onclick="selectCappingMode('custom')">
+                                            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 5px;">
+                                                <input type="radio" name="cappingMode" id="radio-mode-custom" value="custom" style="accent-color: #38bdf8; cursor: pointer;" onchange="selectCappingMode('custom')">
+                                                <strong style="font-size: 12.5px; color: #ffffff;">Customized Rules</strong>
+                                            </div>
+                                            <p style="font-size: 11px; color: var(--text-muted); margin: 0; line-height: 1.45;">
+                                                Granular webmaster control: customize cooldown gap (minutes/hours/seconds), daily caps, and click triggers.
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div id="custom-capping-options" style="display: none; margin-bottom: 16px; padding: 14px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: rgba(255, 255, 255, 0.015);">
+                                    <div style="font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: #38bdf8; margin-bottom: 12px; display: flex; align-items: center; gap: 6px;">
+                                        <span>⚙ Granular Frequency Engine</span>
+                                    </div>
+
+                                    <div class="form-group" style="margin-bottom: 12px;">
+                                        <label class="form-label">Cooldown Gap Between Ads</label>
+                                        <div style="display: flex; gap: 8px;">
+                                            <input type="number" id="input-gap-value" class="form-input" value="30" min="1" placeholder="30" style="flex: 1;">
+                                            <select id="select-gap-unit" class="form-select" style="width: 140px; cursor: pointer;">
+                                                <option value="seconds">Seconds</option>
+                                                <option value="minutes" selected>Minutes</option>
+                                                <option value="hours">Hours</option>
+                                            </select>
+                                        </div>
+                                        <span style="font-size: 11px; color: var(--text-muted); display: block; margin-top: 4px;">Minimum wait time before another ad can pop for the same visitor (e.g. 15 Minutes or 2 Hours).</span>
+                                    </div>
+
+                                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                                        <div class="form-group" style="margin-bottom: 0;">
+                                            <label class="form-label">Daily Limit (24h Max)</label>
+                                            <input type="number" id="input-max-ads" class="form-input" value="3" min="0" placeholder="3">
+                                            <span style="font-size: 11px; color: var(--text-muted); display: block; margin-top: 4px;">Max popunders in 24h (0 = Unlimited).</span>
+                                        </div>
+
+                                        <div class="form-group" style="margin-bottom: 0;">
+                                            <label class="form-label">User Click Trigger</label>
+                                            <select id="select-click-trigger" class="form-select" style="cursor: pointer;">
+                                                <option value="1">1st Click (Play Intent)</option>
+                                                <option value="2">2nd Click (Engaged)</option>
+                                                <option value="0">Every Click (Per Gap)</option>
+                                            </select>
+                                            <span style="font-size: 11px; color: var(--text-muted); display: block; margin-top: 4px;">Player interaction that triggers ad.</span>
+                                        </div>
+                                    </div>
                                 </div>
                                 <button type="button" class="btn-primary" onclick="saveMonetization()">Save Popunder Settings</button>
                             </div>
@@ -1536,15 +1629,36 @@ export function renderAdminHtml(baseUrl = "") {
             const refBody = document.getElementById('table-referrers-body');
             document.getElementById('stat-referrers-count').textContent = telemetry.topReferrers.length + ' Domains';
             if (telemetry.topReferrers.length === 0) {
-                refBody.innerHTML = '<tr><td colspan="3" style="text-align: center; color: var(--text-muted); padding: 20px;">No referrers logged yet</td></tr>';
+                refBody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: var(--text-muted); padding: 20px;">No referrers logged yet</td></tr>';
             } else {
-                refBody.innerHTML = telemetry.topReferrers.map(r => 
-                    '<tr>' +
-                        '<td class="mono-cell">' + r.domain + '</td>' +
+                refBody.innerHTML = telemetry.topReferrers.map(r => {
+                    let badge = '';
+                    if (r.status === 'official') {
+                        badge = '<span class="server-status-tag tag-active" style="font-size: 9.5px;">OFFICIAL</span>';
+                    } else if (r.status === 'whitelisted') {
+                        badge = '<span class="server-status-tag" style="background: rgba(56, 189, 248, 0.12); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.25); font-size: 9.5px;">PARTNER</span>';
+                    } else if (r.status === 'blocked') {
+                        badge = '<span class="server-status-tag tag-disabled" style="font-size: 9.5px;">BLOCKED</span>';
+                    } else {
+                        badge = '<span class="server-status-tag tag-maintenance" style="font-size: 9.5px;">EXTERNAL</span>';
+                    }
+
+                    const actionBtn = r.status === 'blocked'
+                        ? '<button type="button" class="btn-secondary" style="padding: 2px 7px; font-size: 11px;" data-domain="' + r.domain + '" onclick="quickUnbanDomain(this.dataset.domain)">Unban</button>'
+                        : '<div style="display: flex; gap: 4px;">' +
+                            '<button type="button" class="btn-danger" style="padding: 2px 7px; font-size: 11px;" data-domain="' + r.domain + '" onclick="quickBanDomain(this.dataset.domain)">Ban</button>' +
+                            (r.status === 'external' ? '<button type="button" class="btn-secondary" style="padding: 2px 7px; font-size: 11px;" data-domain="' + r.domain + '" onclick="quickWhitelistDomain(this.dataset.domain)">Trust</button>' : '') +
+                          '</div>';
+
+                    return '<tr>' +
+                        '<td class="mono-cell" style="color: #38bdf8; font-weight: 600;">' + r.domain + '</td>' +
+                        '<td>' + badge + '</td>' +
                         '<td><strong>' + r.count + '</strong></td>' +
-                        '<td><button type="button" class="btn-danger" onclick="quickBanDomain(this.dataset.domain)" data-domain="' + r.domain + '">Ban Domain</button></td>' +
-                    '</tr>'
-                ).join('');
+                        '<td class="mono-cell" style="color: var(--text-secondary);">' + (r.bandwidthMB || (r.count * 15)) + ' MB</td>' +
+                        '<td style="font-size: 11.5px; max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="' + (r.topAnime || 'General') + '">' + (r.topAnime || 'General') + '</td>' +
+                        '<td>' + actionBtn + '</td>' +
+                    '</tr>';
+                }).join('');
             }
 
             // Top Anime Table
@@ -1622,7 +1736,22 @@ export function renderAdminHtml(baseUrl = "") {
             // Monetization (Popunder Only)
             document.getElementById('chk-ads-enabled').checked = Boolean(config.monetization.adsEnabled);
             document.getElementById('input-popunder-url').value = config.monetization.popunderUrl || '';
-            document.getElementById('input-ad-capping').value = config.monetization.popunderFrequencyHours || 24;
+
+            const cappingMode = config.monetization.cappingMode || 'natural';
+            selectCappingMode(cappingMode);
+
+            if (document.getElementById('input-gap-value')) {
+                document.getElementById('input-gap-value').value = config.monetization.gapValue !== undefined ? config.monetization.gapValue : 30;
+            }
+            if (document.getElementById('select-gap-unit')) {
+                document.getElementById('select-gap-unit').value = config.monetization.gapUnit || 'minutes';
+            }
+            if (document.getElementById('input-max-ads')) {
+                document.getElementById('input-max-ads').value = config.monetization.maxAdsPerDay !== undefined ? config.monetization.maxAdsPerDay : 3;
+            }
+            if (document.getElementById('select-click-trigger')) {
+                document.getElementById('select-click-trigger').value = config.monetization.clickTrigger !== undefined ? String(config.monetization.clickTrigger) : '1';
+            }
 
             // API Keys
             renderApiKeysTable(config.apiKeys || []);
@@ -1771,6 +1900,38 @@ export function renderAdminHtml(baseUrl = "") {
             } catch (e) { showToast('Ban failed: ' + e.message); }
         }
 
+        async function quickUnbanDomain(domain) {
+            removeDomainRule('blacklist', domain);
+        }
+
+        async function quickWhitelistDomain(domain) {
+            try {
+                const res = await fetch('/api/admin/firewall', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + adminToken },
+                    body: JSON.stringify({ action: 'add', type: 'whitelist', domain })
+                });
+                if (res.ok) {
+                    showToast('Added ' + domain + ' to whitelist');
+                    fetchFullState();
+                }
+            } catch (e) { showToast('Action failed: ' + e.message); }
+        }
+
+        async function clearTelemetryStats() {
+            if (!confirm('Are you sure you want to reset all telemetry and domain request stats?')) return;
+            try {
+                const res = await fetch('/api/admin/clear-telemetry', {
+                    method: 'POST',
+                    headers: { 'Authorization': 'Bearer ' + adminToken }
+                });
+                if (res.ok) {
+                    showToast('Telemetry stats cleared successfully');
+                    fetchFullState();
+                }
+            } catch (e) { showToast('Reset failed: ' + e.message); }
+        }
+
         async function banIp(ip) {
             if (!confirm('Add IP ' + ip + ' to blocked security list?')) return;
             showToast('IP ' + ip + ' intercepted and banned');
@@ -1794,13 +1955,70 @@ export function renderAdminHtml(baseUrl = "") {
             showToast('Decoy stream URL updated');
         }
 
+        function selectCappingMode(mode) {
+            const isCustom = (mode === 'custom');
+            const rNat = document.getElementById('radio-mode-natural');
+            const rCust = document.getElementById('radio-mode-custom');
+            const cardNat = document.getElementById('card-mode-natural');
+            const cardCust = document.getElementById('card-mode-custom');
+            const customPanel = document.getElementById('custom-capping-options');
+            const indicator = document.getElementById('capping-mode-indicator');
+
+            if (rNat) rNat.checked = !isCustom;
+            if (rCust) rCust.checked = isCustom;
+
+            if (isCustom) {
+                if (cardCust) cardCust.classList.add('active');
+                if (cardNat) cardNat.classList.remove('active');
+                if (customPanel) customPanel.style.display = 'block';
+                if (indicator) {
+                    indicator.textContent = 'Custom Rules Active';
+                    indicator.style.color = '#38bdf8';
+                    indicator.style.borderColor = 'rgba(56, 189, 248, 0.3)';
+                }
+            } else {
+                if (cardNat) cardNat.classList.add('active');
+                if (cardCust) cardCust.classList.remove('active');
+                if (customPanel) customPanel.style.display = 'none';
+                if (indicator) {
+                    indicator.textContent = 'Natural (Network AI)';
+                    indicator.style.color = 'var(--status-green)';
+                    indicator.style.borderColor = 'rgba(34, 197, 94, 0.3)';
+                }
+            }
+        }
+
         async function saveMonetization() {
             const adsEnabled = document.getElementById('chk-ads-enabled').checked;
             const popunderUrl = document.getElementById('input-popunder-url').value.trim();
-            const popunderFrequencyHours = parseInt(document.getElementById('input-ad-capping').value, 10) || 24;
+            const rCust = document.getElementById('radio-mode-custom');
+            const cappingMode = (rCust && rCust.checked) ? 'custom' : 'natural';
+            const gapValEl = document.getElementById('input-gap-value');
+            const gapUnitEl = document.getElementById('select-gap-unit');
+            const maxAdsEl = document.getElementById('input-max-ads');
+            const clickTriggerEl = document.getElementById('select-click-trigger');
+
+            const gapValue = gapValEl ? Math.max(1, parseInt(gapValEl.value, 10) || 30) : 30;
+            const gapUnit = gapUnitEl ? gapUnitEl.value : 'minutes';
+            const maxAdsPerDay = maxAdsEl ? Math.max(0, parseInt(maxAdsEl.value, 10) || 0) : 3;
+            const clickTrigger = clickTriggerEl ? parseInt(clickTriggerEl.value, 10) : 1;
+
+            let popunderFrequencyHours = 24;
+            if (gapUnit === 'hours') popunderFrequencyHours = gapValue;
+            else if (gapUnit === 'minutes') popunderFrequencyHours = Math.max(1, Math.round(gapValue / 60));
+            else if (gapUnit === 'seconds') popunderFrequencyHours = 1;
 
             await sendConfigPatch({
-                monetization: { adsEnabled, popunderUrl, popunderFrequencyHours }
+                monetization: {
+                    adsEnabled,
+                    popunderUrl,
+                    cappingMode,
+                    gapValue,
+                    gapUnit,
+                    maxAdsPerDay,
+                    clickTrigger,
+                    popunderFrequencyHours
+                }
             });
             showToast('Popunder settings saved');
             fetchFullState();

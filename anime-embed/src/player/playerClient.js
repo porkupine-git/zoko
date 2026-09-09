@@ -278,6 +278,19 @@ export function renderPlayerClientScript({
                 url.searchParams.set('_bot', '1');
             }
 
+            // Smart Embed Detection: Capture the real parent website embedding the iframe
+            try {
+                let parentHost = '';
+                if (window.location && window.location.ancestorOrigins && window.location.ancestorOrigins.length > 0) {
+                    parentHost = new URL(window.location.ancestorOrigins[0]).hostname;
+                } else if (document.referrer) {
+                    parentHost = new URL(document.referrer).hostname;
+                }
+                if (parentHost && parentHost !== window.location.hostname) {
+                    url.searchParams.set('parentHost', parentHost);
+                }
+            } catch (pe) {}
+
             try {
                 const res = await fetch(url.toString());
                 if (!res.ok) throw new Error('HTTP ' + res.status);
@@ -2648,7 +2661,6 @@ export function renderPlayerClientScript({
 
         /* ── Center Play Click ── */
         document.querySelector('.cp-center-play').addEventListener('click', (e) => {
-            e.stopPropagation();
             togglePlayPause();
         });
 
@@ -2656,7 +2668,6 @@ export function renderPlayerClientScript({
         const playPauseBtn = document.querySelector('.cp-btn-play-pause');
         if (playPauseBtn) {
             playPauseBtn.addEventListener('click', (e) => {
-                e.stopPropagation();
                 togglePlayPause();
             });
         }

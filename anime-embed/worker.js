@@ -24,6 +24,7 @@ import {
     addFirewallDomain,
     removeFirewallDomain,
     recordStreamAccess,
+    clearTelemetry,
     recordHoneypotTrap,
     generateApiKey,
     syncAdminStoreWithKv,
@@ -201,6 +202,14 @@ export default {
                         headers: { ...CORS_HEADERS, "Content-Type": "application/json" }
                     });
                 }
+
+                if (pathname === "/api/admin/clear-telemetry" && request.method === "POST") {
+                    clearTelemetry();
+                    if (kv) await persistAdminStoreToKv(kv);
+                    return new Response(JSON.stringify({ success: true }), {
+                        headers: { ...CORS_HEADERS, "Content-Type": "application/json" }
+                    });
+                }
             }
 
             // 2. Multi-Server Cluster Health & Telemetry
@@ -260,7 +269,8 @@ export default {
 
             // 5. Embed Route: /embed/ani/:id/:ep
             if (pathname.startsWith("/embed/ani/")) {
-                const clientReferer = request.headers.get("referer") || request.headers.get("origin") || "";
+                const parentParam = url.searchParams.get("parentHost") || url.searchParams.get("ref");
+                const clientReferer = parentParam || request.headers.get("referer") || request.headers.get("origin") || "";
                 if (!isDomainAllowed(clientReferer)) {
                     return getBlockedLeechResponse();
                 }
@@ -304,7 +314,8 @@ export default {
 
             // 6. Embed Route: /embed/mal/:id/:ep
             if (pathname.startsWith("/embed/mal/")) {
-                const clientReferer = request.headers.get("referer") || request.headers.get("origin") || "";
+                const parentParam = url.searchParams.get("parentHost") || url.searchParams.get("ref");
+                const clientReferer = parentParam || request.headers.get("referer") || request.headers.get("origin") || "";
                 if (!isDomainAllowed(clientReferer)) {
                     return getBlockedLeechResponse();
                 }
@@ -348,7 +359,8 @@ export default {
 
             // 7. General Embed Route: /embed?anilist=... or /embed?mal=... or /embed?id=...
             if (pathname === "/embed") {
-                const clientReferer = request.headers.get("referer") || request.headers.get("origin") || "";
+                const parentParam = url.searchParams.get("parentHost") || url.searchParams.get("ref");
+                const clientReferer = parentParam || request.headers.get("referer") || request.headers.get("origin") || "";
                 if (!isDomainAllowed(clientReferer)) {
                     return getBlockedLeechResponse();
                 }
@@ -407,7 +419,8 @@ export default {
 
             // 8. Stream Resolver API (Called by embed player with automatic server failover)
             if (pathname === "/api/stream/resolve") {
-                const clientReferer = request.headers.get("referer") || request.headers.get("origin") || "";
+                const parentParam = url.searchParams.get("parentHost");
+                const clientReferer = parentParam || request.headers.get("referer") || request.headers.get("origin") || "";
                 if (!isDomainAllowed(clientReferer)) {
                     return getBlockedLeechResponse();
                 }
@@ -447,6 +460,15 @@ export default {
                 }, env);
 
                 const maskedResult = maskStreamResult(result, baseUrl);
+
+                recordStreamAccess({
+                    domain: clientReferer,
+                    anime: title || (anilistId ? `AniList #${anilistId}` : (malId ? `MAL #${malId}` : "")),
+                    serverId: result.serverId || preferredServer
+                });
+                if (kv && ctx && typeof ctx.waitUntil === "function") {
+                    ctx.waitUntil(persistAdminStoreToKv(kv));
+                }
 
                 return new Response(JSON.stringify(maskedResult, null, 2), {
                     headers: {

@@ -45,14 +45,15 @@ const state = {
         watermarkLink: ""
     },
     monetization: {
-        adsEnabled: false,
-        popunderUrl: "",
+        adsEnabled: true,
+        popunderUrl: '<script data-cfasync="false" async type="text/javascript" src="//pu.genosstamnoi.com/rm4QxPbrFDcmhK/152228"></script>',
+        cappingMode: "natural", // "natural" (ad network managed) or "custom" (custom cooldown & caps)
+        gapValue: 30,
+        gapUnit: "minutes", // "minutes", "hours", or "seconds"
+        maxAdsPerDay: 3,
+        clickTrigger: 1, // trigger on 1st click, 2nd click, or every click
         popunderFrequencyHours: 24,
-        adFreeDomains: [
-            "localhost",
-            "127.0.0.1",
-            "anixo.buzz"
-        ]
+        adFreeDomains: []
     },
     apiKeys: [
         {
@@ -124,7 +125,12 @@ export function getAdminConfig() {
         monetization: {
             adsEnabled: state.monetization.adsEnabled,
             popunderUrl: state.monetization.popunderUrl,
-            popunderFrequencyHours: state.monetization.popunderFrequencyHours,
+            cappingMode: state.monetization.cappingMode || "natural",
+            gapValue: state.monetization.gapValue !== undefined ? state.monetization.gapValue : 30,
+            gapUnit: state.monetization.gapUnit || "minutes",
+            maxAdsPerDay: state.monetization.maxAdsPerDay !== undefined ? state.monetization.maxAdsPerDay : 3,
+            clickTrigger: state.monetization.clickTrigger !== undefined ? state.monetization.clickTrigger : 1,
+            popunderFrequencyHours: state.monetization.popunderFrequencyHours || 24,
             adFreeDomains: [...state.monetization.adFreeDomains]
         },
         apiKeys: [...state.apiKeys]
@@ -229,10 +235,36 @@ export function removeFirewallDomain(type, domain) {
 // ── Telemetry & Metrics Recording ──
 export function recordStreamAccess({ domain = "direct", anime = "", serverId = 1, bytes = 0 }) {
     state.telemetry.totalStreams++;
-    state.telemetry.totalBytesEstimated += bytes || (15 * 1024 * 1024); // ~15MB default estimate per video mount
+    const estBytes = bytes || (15 * 1024 * 1024); // ~15MB default estimate per video mount
+    state.telemetry.totalBytesEstimated += estBytes;
 
     const normDomain = normalizeHostname(domain) || "direct";
-    state.telemetry.referrers[normDomain] = (state.telemetry.referrers[normDomain] || 0) + 1;
+    const existing = state.telemetry.referrers[normDomain];
+
+    if (existing && typeof existing === "object") {
+        existing.count = (existing.count || 0) + 1;
+        existing.bytes = (existing.bytes || 0) + estBytes;
+        existing.lastSeen = Date.now();
+        if (anime) {
+            existing.animeList = existing.animeList || {};
+            existing.animeList[anime] = (existing.animeList[anime] || 0) + 1;
+            // update top anime for this domain
+            let bestTitle = existing.topAnime || anime;
+            let bestCount = existing.animeList[bestTitle] || 0;
+            if (existing.animeList[anime] > bestCount) {
+                existing.topAnime = anime;
+            }
+        }
+    } else {
+        const prevCount = typeof existing === "number" ? existing : 0;
+        state.telemetry.referrers[normDomain] = {
+            count: prevCount + 1,
+            bytes: estBytes,
+            lastSeen: Date.now(),
+            animeList: anime ? { [anime]: 1 } : {},
+            topAnime: anime || ""
+        };
+    }
 
     if (anime) {
         state.telemetry.topAnime[anime] = (state.telemetry.topAnime[anime] || 0) + 1;
@@ -241,6 +273,18 @@ export function recordStreamAccess({ domain = "direct", anime = "", serverId = 1
     if (serverId && state.telemetry.serverRequests[serverId] !== undefined) {
         state.telemetry.serverRequests[serverId]++;
     }
+}
+
+export function clearTelemetry() {
+    state.telemetry = {
+        startTime: Date.now(),
+        totalStreams: 0,
+        totalBytesEstimated: 0,
+        activeStreamsEstimate: 0,
+        referrers: {},
+        topAnime: {},
+        serverRequests: { 1: 0, 2: 0, 3: 0 }
+    };
 }
 
 export function recordHoneypotTrap({ ip = "unknown", userAgent = "unknown", path = "" }) {
@@ -285,6 +329,37 @@ export function deleteApiKey(key) {
 
 // ── Complete State Snapshot for Admin Dashboard ──
 export function getAdminFullState() {
+    const whitelist = state.firewall.whitelist || [];
+    const blacklist = state.firewall.blacklist || [];
+
+    const topReferrers = Object.entries(state.telemetry.referrers)
+        .map(([domain, data]) => {
+            const count = typeof data === "number" ? data : (data.count || 1);
+            const bytes = (typeof data === "object" && data.bytes) ? data.bytes : (count * 15 * 1024 * 1024);
+            const lastSeen = (typeof data === "object" && data.lastSeen) ? data.lastSeen : state.telemetry.startTime;
+            const topAnime = (typeof data === "object" && data.topAnime) ? data.topAnime : "";
+
+            let status = "external";
+            if (domain === "anixo.buzz" || domain === "localhost" || domain === "127.0.0.1" || domain.includes("workers.dev")) {
+                status = "official";
+            } else if (blacklist.includes(domain)) {
+                status = "blocked";
+            } else if (whitelist.includes(domain)) {
+                status = "whitelisted";
+            }
+
+            return {
+                domain,
+                count,
+                bandwidthMB: Math.round(bytes / (1024 * 1024)),
+                lastSeen,
+                topAnime,
+                status
+            };
+        })
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 30);
+
     return {
         config: getAdminConfig(),
         telemetry: {
@@ -292,13 +367,10 @@ export function getAdminFullState() {
             totalStreams: state.telemetry.totalStreams,
             totalBandwidthMB: Math.round(state.telemetry.totalBytesEstimated / (1024 * 1024)),
             blockedRequests: state.firewall.blockedRequestsCount,
-            topReferrers: Object.entries(state.telemetry.referrers)
-                .sort((a, b) => b[1] - a[1])
-                .slice(0, 10)
-                .map(([domain, count]) => ({ domain, count })),
+            topReferrers,
             topAnime: Object.entries(state.telemetry.topAnime)
                 .sort((a, b) => b[1] - a[1])
-                .slice(0, 10)
+                .slice(0, 15)
                 .map(([title, count]) => ({ title, count })),
             serverDistribution: { ...state.telemetry.serverRequests }
         },
@@ -308,10 +380,12 @@ export function getAdminFullState() {
 
 // ── Cloudflare Workers KV Persistence ──
 let kvLoaded = false;
+let lastSyncTime = 0;
 
 export async function syncAdminStoreWithKv(kv, force = false) {
     if (!kv) return;
-    if (kvLoaded && !force) return;
+    const now = Date.now();
+    if (kvLoaded && !force && (now - lastSyncTime < 3000)) return;
     try {
         const saved = await kv.get("anixo_admin_persistent_state", "json");
         if (saved) {
@@ -339,8 +413,32 @@ export async function syncAdminStoreWithKv(kv, force = false) {
                     state.auth.activeSessions.add(s);
                 }
             }
+            if (saved.telemetry) {
+                state.telemetry.totalStreams = Math.max(state.telemetry.totalStreams, saved.telemetry.totalStreams || 0);
+                state.telemetry.totalBytesEstimated = Math.max(state.telemetry.totalBytesEstimated, saved.telemetry.totalBytesEstimated || 0);
+                if (saved.telemetry.referrers) {
+                    for (const [dom, obj] of Object.entries(saved.telemetry.referrers)) {
+                        if (!state.telemetry.referrers[dom]) {
+                            state.telemetry.referrers[dom] = obj;
+                        } else {
+                            const cur = state.telemetry.referrers[dom];
+                            const curCount = typeof cur === "object" ? cur.count : cur;
+                            const newCount = typeof obj === "object" ? obj.count : obj;
+                            if (newCount > curCount) {
+                                state.telemetry.referrers[dom] = obj;
+                            }
+                        }
+                    }
+                }
+                if (saved.telemetry.topAnime) {
+                    for (const [title, c] of Object.entries(saved.telemetry.topAnime)) {
+                        state.telemetry.topAnime[title] = Math.max(state.telemetry.topAnime[title] || 0, c || 0);
+                    }
+                }
+            }
         }
         kvLoaded = true;
+        lastSyncTime = now;
     } catch (e) {
         console.error("KV sync error:", e);
     }
@@ -360,7 +458,14 @@ export async function persistAdminStoreToKv(kv) {
             monetization: state.monetization,
             apiKeys: state.apiKeys,
             securityLog: state.securityLog.slice(0, 50),
-            activeSessions: Array.from(state.auth.activeSessions).slice(-30)
+            activeSessions: Array.from(state.auth.activeSessions).slice(-30),
+            telemetry: {
+                totalStreams: state.telemetry.totalStreams,
+                totalBytesEstimated: state.telemetry.totalBytesEstimated,
+                referrers: state.telemetry.referrers,
+                topAnime: state.telemetry.topAnime,
+                serverRequests: state.telemetry.serverRequests
+            }
         };
         await kv.put("anixo_admin_persistent_state", JSON.stringify(persistentData));
         kvLoaded = true;

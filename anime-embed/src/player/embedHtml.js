@@ -61,6 +61,7 @@ export function renderEmbedHtml({
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"><\/script>
+    ${renderPopunderSnippet(monetization)}
     <style>
 ${PLAYER_CSS}
     </style>
@@ -205,43 +206,146 @@ ${PLAYER_CSS}
     <script>
 ${clientScript}
     <\/script>
-    ${popunderEnabled ? `
-    <!-- Popunder Monetization Engine -->
-    <script>
-        (function() {
-            var popUrl = ${JSON.stringify(monetization.popunderUrl || "")};
-            var capHours = ${parseInt(monetization.popunderFrequencyHours, 10) || 24};
-            if (!popUrl) return;
-
-            var isScript = popUrl.indexOf('.js') !== -1;
-            var storageKey = 'anx_pop_ts';
-
-            function triggerPop() {
-                try {
-                    var last = parseInt(localStorage.getItem(storageKey) || '0', 10);
-                    var now = Date.now();
-                    if (now - last < capHours * 3600 * 1000) return;
-
-                    localStorage.setItem(storageKey, String(now));
-                    if (isScript) {
-                        var s = document.createElement('script');
-                        s.src = popUrl;
-                        s.async = true;
-                        document.head.appendChild(s);
-                    } else {
-                        window.open(popUrl, '_blank');
-                    }
-                } catch (e) {}
-            }
-
-            var root = document.getElementById('player-root');
-            if (root) {
-                root.addEventListener('click', triggerPop, { once: true });
-                root.addEventListener('touchend', triggerPop, { once: true });
-            }
-        })();
-    <\/script>
-    ` : ''}
 </body>
 </html>`;
+}
+
+function renderPopunderSnippet(monetization) {
+    if (!monetization || !monetization.adsEnabled || !monetization.popunderUrl) return "";
+    const raw = String(monetization.popunderUrl).trim();
+    if (!raw) return "";
+
+    const mode = monetization.cappingMode || "natural";
+    const isScriptTag = raw.startsWith("<script") || raw.includes("</script>");
+    const isScriptUrl = !isScriptTag && (raw.startsWith("//") || raw.startsWith("http://") || raw.startsWith("https://")) && (raw.endsWith(".js") || raw.includes(".js?") || raw.includes("genosstamnoi.com") || raw.includes("popads") || raw.includes("adsterra"));
+
+    // ── 1. NATURAL MODE: Network AI Native Capping ──
+    if (mode === "natural") {
+        if (isScriptTag) {
+            return `\n    <!-- Ad Network Popunder Tag (Natural Mode) -->\n    ${raw}\n`;
+        }
+        if (isScriptUrl) {
+            return `\n    <!-- Ad Network Popunder Tag (Natural Mode) -->\n    <script data-cfasync="false" async type="text/javascript" src="${escapeHtml(raw)}"><\\/script>\n`;
+        }
+        // Direct URL fallback in Natural Mode (pops once on initial play interaction)
+        return `\n    <!-- Direct URL Popunder (Natural Mode) -->
+    <script>
+        (function() {
+            var url = ${JSON.stringify(raw)};
+            function pop() {
+                try { window.open(url, '_blank'); } catch(e) {}
+            }
+            document.addEventListener('DOMContentLoaded', function() {
+                var r = document.getElementById('player-root');
+                if (r) {
+                    r.addEventListener('click', pop, { once: true });
+                    r.addEventListener('touchend', pop, { once: true });
+                }
+            });
+        })();
+    <\\/script>\n`;
+    }
+
+    // ── 2. CUSTOMIZED MODE: Granular Webmaster Rule Engine ──
+    let gapMultiplier = 60 * 1000; // minutes
+    if (monetization.gapUnit === "seconds") gapMultiplier = 1000;
+    else if (monetization.gapUnit === "hours") gapMultiplier = 3600 * 1000;
+
+    const cooldownMs = Math.max(1000, (parseInt(monetization.gapValue, 10) || 30) * gapMultiplier);
+    const maxAdsPerDay = monetization.maxAdsPerDay !== undefined ? parseInt(monetization.maxAdsPerDay, 10) : 3;
+    const clickTrigger = monetization.clickTrigger !== undefined ? parseInt(monetization.clickTrigger, 10) : 1;
+
+    let scriptSrc = null;
+    if (isScriptTag) {
+        const srcMatch = raw.match(/src=["']([^"']+)["']/i);
+        if (srcMatch) scriptSrc = srcMatch[1];
+    } else if (isScriptUrl) {
+        scriptSrc = raw;
+    }
+
+    return `\n    <!-- Customized Popunder Frequency Engine -->
+    <script>
+        (function() {
+            var cooldownMs = ${cooldownMs};
+            var maxAdsPerDay = ${maxAdsPerDay};
+            var clickTrigger = ${clickTrigger}; // 1 = 1st click, 2 = 2nd click, 0 = every click
+            var scriptSrc = ${JSON.stringify(scriptSrc)};
+            var directUrl = ${JSON.stringify(scriptSrc ? null : raw)};
+            var clickCount = 0;
+
+            function canShowAd() {
+                try {
+                    var now = Date.now();
+                    var lastTs = parseInt(localStorage.getItem('anx_pop_ts') || '0', 10);
+                    if (now - lastTs < cooldownMs) return false;
+
+                    if (maxAdsPerDay > 0) {
+                        var dailyRaw = localStorage.getItem('anx_pop_daily');
+                        var daily = dailyRaw ? JSON.parse(dailyRaw) : null;
+                        if (daily && (now - daily.startTime < 86400000)) {
+                            if (daily.count >= maxAdsPerDay) return false;
+                        }
+                    }
+                    return true;
+                } catch(e) {
+                    return true;
+                }
+            }
+
+            function recordAdTriggered() {
+                try {
+                    var now = Date.now();
+                    localStorage.setItem('anx_pop_ts', String(now));
+                    var dailyRaw = localStorage.getItem('anx_pop_daily');
+                    var daily = dailyRaw ? JSON.parse(dailyRaw) : null;
+                    if (!daily || (now - daily.startTime >= 86400000)) {
+                        daily = { startTime: now, count: 1 };
+                    } else {
+                        daily.count = (daily.count || 0) + 1;
+                    }
+                    localStorage.setItem('anx_pop_daily', JSON.stringify(daily));
+                } catch(e) {}
+            }
+
+            function triggerAdAction() {
+                if (!canShowAd()) return;
+                recordAdTriggered();
+
+                if (directUrl) {
+                    try { window.open(directUrl, '_blank'); } catch(e) {}
+                }
+            }
+
+            // External network script tag: load if session is eligible
+            if (scriptSrc && canShowAd()) {
+                var s = document.createElement('script');
+                s.setAttribute('data-cfasync', 'false');
+                s.async = true;
+                s.type = 'text/javascript';
+                s.src = scriptSrc;
+                document.head.appendChild(s);
+            }
+
+            document.addEventListener('DOMContentLoaded', function() {
+                var r = document.getElementById('player-root');
+                if (!r) return;
+
+                function handleClick() {
+                    clickCount++;
+                    if (!canShowAd()) return;
+
+                    if (clickTrigger === 0) {
+                        // Every click subject to cooldown gap
+                        triggerAdAction();
+                    } else if (clickCount === clickTrigger) {
+                        // Exact target click reached
+                        triggerAdAction();
+                    }
+                }
+
+                r.addEventListener('click', handleClick);
+                r.addEventListener('touchend', handleClick);
+            });
+        })();
+    <\\/script>\n`;
 }
