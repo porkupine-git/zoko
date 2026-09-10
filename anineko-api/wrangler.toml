@@ -17,3 +17,6 @@ enabled = true
 [[kv_namespaces]]
 binding = "ANINEKO_CACHE"
 id = "5a4a172d99c04cb286a1cacddcf6e5e6"
+
+[vars]
+TURNSTILE_SECRET_KEY = "0x4AAAAAADGQxcZgLa0ZRtaJbL3mxiKj4RA"

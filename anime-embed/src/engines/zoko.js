@@ -5,6 +5,7 @@
 
 const ZOKO_BACKEND_URL = "https://zoko-stream.rk18109ry.workers.dev";
 const USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
+const CLUSTER_SECRET = "anixo-cluster-auth-9x82k1";
 
 export async function resolveZokoStream({ anilistId, malId, title, episode = 1, track = "sub" }, env = {}) {
     const targetId = malId || anilistId;
@@ -22,7 +23,10 @@ export async function resolveZokoStream({ anilistId, malId, title, episode = 1, 
         : fetch;
 
     const res = await fetcher(url, {
-        headers: { "User-Agent": USER_AGENT }
+        headers: { 
+            "User-Agent": USER_AGENT,
+            "x-cluster-internal": CLUSTER_SECRET
+        }
     });
 
     if (!res.ok) {

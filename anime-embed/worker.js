@@ -42,6 +42,32 @@ const CORS_HEADERS = {
     "Access-Control-Max-Age": "86400"
 };
 
+const CLUSTER_SECRET = "anixo-cluster-auth-9x82k1";
+
+const DATACENTER_ORGS = [
+    "amazon", "aws", "digitalocean", "hetzner", "ovh", "google cloud", "google-cloud",
+    "linode", "akamai", "oracle", "azure", "microsoft", "alicloud", "alibaba",
+    "contabo", "choopa", "vultr", "hostinger", "m247", "datacamp", "cogent", "leaseweb", "fastly"
+];
+
+const DATACENTER_ASNS = new Set([
+    16509, 14618, 14061, 24940, 16276, 15169, 396982, 63949, 31898, 8075,
+    45102, 37963, 51167, 20473, 46652, 22612, 60068, 202425
+]);
+
+function isDatacenterIp(request) {
+    const asn = request.cf?.asn;
+    const org = (request.cf?.asOrganization || "").toLowerCase();
+
+    if (asn && DATACENTER_ASNS.has(asn)) {
+        return true;
+    }
+    for (const dOrg of DATACENTER_ORGS) {
+        if (org.includes(dOrg)) return true;
+    }
+    return false;
+}
+
 function getBlockedLeechResponse() {
     return new Response(
         `<!DOCTYPE html>
@@ -560,8 +586,8 @@ export default {
                     return getBlockedLeechResponse();
                 }
 
-                // Honeypot & Decoy Stream Poisoning for automated scrapers
-                if (isScraperRequest(request)) {
+                // Honeypot & Decoy Stream Poisoning for automated scrapers and datacenter bots
+                if (isScraperRequest(request) || isDatacenterIp(request)) {
                     const clientIp = request.headers.get("cf-connecting-ip") || request.headers.get("x-forwarded-for") || "127.0.0.1";
                     const userAgent = request.headers.get("user-agent") || "automated-scraper";
                     recordHoneypotTrap({ ip: clientIp, userAgent, path: pathname });
@@ -622,8 +648,8 @@ export default {
                     return getBlockedLeechResponse();
                 }
 
-                // Honeypot & Decoy Stream Poisoning for automated scrapers
-                if (isScraperRequest(request)) {
+                // Honeypot & Decoy Stream Poisoning for automated scrapers and datacenter bots
+                if (isScraperRequest(request) || isDatacenterIp(request)) {
                     const honeypotData = getHoneypotStreamResponse(baseUrl);
                     return new Response(JSON.stringify(honeypotData, null, 2), {
                         headers: {
@@ -680,7 +706,7 @@ export default {
                     return new Response("Leech domain blocked by Anixo Shield", { status: 403, headers: CORS_HEADERS });
                 }
                 const isHoneypotParam = url.searchParams.get("h") === "1";
-                const isBot = isScraperRequest(request);
+                const isBot = isScraperRequest(request) || isDatacenterIp(request);
                 const isHoneypot = isHoneypotParam || isBot;
 
                 const token = url.searchParams.get("t") || url.searchParams.get("token");
@@ -708,7 +734,8 @@ export default {
 
                 const forwardHeaders = {
                     "User-Agent": request.headers.get("User-Agent") || "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/124.0.0.0",
-                    "Accept": request.headers.get("Accept") || "*/*"
+                    "Accept": request.headers.get("Accept") || "*/*",
+                    "x-cluster-internal": CLUSTER_SECRET
                 };
                 if (request.headers.get("Range")) {
                     forwardHeaders["Range"] = request.headers.get("Range");
@@ -817,7 +844,8 @@ export default {
 
                 const upstreamRes = await fetcher(targetUrl, {
                     headers: {
-                        "User-Agent": request.headers.get("User-Agent") || "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
+                        "User-Agent": request.headers.get("User-Agent") || "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
+                        "x-cluster-internal": CLUSTER_SECRET
                     }
                 });
 

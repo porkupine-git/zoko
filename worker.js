@@ -82,6 +82,82 @@ function isOriginAllowed(request) {
     return false;
 }
 
+const DATACENTER_ORGS = [
+    "amazon", "aws", "digitalocean", "hetzner", "ovh", "google cloud", "google-cloud",
+    "linode", "akamai", "oracle", "azure", "microsoft", "alicloud", "alibaba",
+    "contabo", "choopa", "vultr", "hostinger", "m247", "datacamp", "cogent", "leaseweb", "fastly"
+];
+
+const DATACENTER_ASNS = new Set([
+    16509, 14618, 14061, 24940, 16276, 15169, 396982, 63949, 31898, 8075,
+    45102, 37963, 51167, 20473, 46652, 22612, 60068, 202425
+]);
+
+const CLUSTER_SECRET = "anixo-cluster-auth-9x82k1";
+
+function isInternalClusterCall(request) {
+    if (request.headers.get("cf-worker")) return true;
+    if (request.headers.get("x-cluster-internal") === CLUSTER_SECRET) return true;
+    return false;
+}
+
+function isDatacenterIp(request) {
+    if (isInternalClusterCall(request)) {
+        return false;
+    }
+
+    const asn = request.cf?.asn;
+    const org = (request.cf?.asOrganization || "").toLowerCase();
+
+    if (asn && DATACENTER_ASNS.has(asn)) {
+        return true;
+    }
+    for (const dOrg of DATACENTER_ORGS) {
+        if (org.includes(dOrg)) return true;
+    }
+    return false;
+}
+
+async function verifyTurnstileToken(request, env) {
+    if (isInternalClusterCall(request)) {
+        return { valid: true, reason: "internal_service" };
+    }
+
+    const token = request.headers.get("cf-turnstile-token") || new URL(request.url).searchParams.get("turnstileToken");
+    if (!token) {
+        return { valid: false, error: "Cloudflare Turnstile token required" };
+    }
+
+    if (env?.TURNSTILE_SECRET_KEY) {
+        try {
+            const formData = new FormData();
+            formData.append("secret", env.TURNSTILE_SECRET_KEY);
+            formData.append("response", token);
+            const clientIp = request.headers.get("CF-Connecting-IP");
+            if (clientIp) formData.append("remoteip", clientIp);
+
+            const res = await fetch("https://challenges.cloudflare.com/turnstile/v0/siteverify", {
+                method: "POST",
+                body: formData
+            });
+            const data = await res.json();
+            if (data.success) {
+                return { valid: true };
+            } else {
+                return { valid: false, error: "Turnstile bot challenge failed" };
+            }
+        } catch (e) {
+            return { valid: false, error: `Turnstile verification error: ${e.message}` };
+        }
+    }
+
+    if (typeof token === "string" && token.length > 20) {
+        return { valid: true, staging: true };
+    }
+
+    return { valid: false, error: "Invalid Turnstile token" };
+}
+
 // -------------------------------------------------------------
 // TIER 1: In-Memory Isolate Micro-Cache (0ms, 0 CPU, 0 KV Ops)
 // -------------------------------------------------------------
@@ -517,6 +593,14 @@ export default {
             });
         }
 
+        // Security: Datacenter & Cloud Hosting IP Blocker (Blocks automated scraping servers)
+        if (isDatacenterIp(request)) {
+            return new Response("Access Denied: Datacenter & Cloud hosting networks are blocked by Anixo Shield.", {
+                status: 403,
+                headers: { ...CORS_HEADERS, "Content-Type": "text/plain" }
+            });
+        }
+
         // -------------------------------------------------------------
         // TIER 0: Free Cloudflare Cache API (caches.default)
         // Instant Edge RAM match (< 0.2ms CPU, 0 KV reads, 0 KV writes)
@@ -524,8 +608,6 @@ export default {
         const cache = caches.default;
         const isGet = request.method === "GET";
         const isCacheable = isGet && (
-            url.pathname.startsWith("/api/stream") ||
-            url.pathname.startsWith("/api/watch") ||
             url.pathname.startsWith("/api/proxy") ||
             url.pathname.startsWith("/api/download")
         );
@@ -549,14 +631,7 @@ export default {
 
         // 1. Health Endpoint
         if (url.pathname === "/health") {
-            response = new Response(JSON.stringify({
-                status: "online",
-                platform: "cloudflare-workers-edge",
-                plan: "workers-paid",
-                colo,
-                kv_active: !!env.ZOKO_CACHE,
-                mem_cache_items: MEM_CACHE.size
-            }), {
+            response = new Response(JSON.stringify({ status: "ok" }), {
                 headers: { ...CORS_HEADERS, "Content-Type": "application/json" }
             });
         }
@@ -564,6 +639,13 @@ export default {
         // 2. Stream Resolver Endpoint: /api/stream
         else if (url.pathname === "/api/stream") {
             try {
+                const turnstile = await verifyTurnstileToken(request, env);
+                if (!turnstile.valid) {
+                    return new Response(JSON.stringify({ success: false, error: `Access Denied: ${turnstile.error || "Turnstile verification required"}` }), {
+                        status: 403,
+                        headers: { ...CORS_HEADERS, "Content-Type": "application/json" }
+                    });
+                }
                 let id = url.searchParams.get("id");
                 let malId = url.searchParams.get("malId");
                 const title = url.searchParams.get("title");
@@ -669,6 +751,13 @@ export default {
         // 2b. Anigo2 Compatible Watch Route: /api/watch/:id/:lang/:ep
         else if (url.pathname.startsWith("/api/watch")) {
             try {
+                const turnstile = await verifyTurnstileToken(request, env);
+                if (!turnstile.valid) {
+                    return new Response(JSON.stringify({ success: false, error: `Access Denied: ${turnstile.error || "Turnstile verification required"}` }), {
+                        status: 403,
+                        headers: { ...CORS_HEADERS, "Content-Type": "application/json" }
+                    });
+                }
                 const parts = url.pathname.replace('/api/watch', '').split('/').filter(Boolean);
                 let id = parts[0] || url.searchParams.get("id");
                 let lang = (parts[1] || url.searchParams.get("lang") || "sub").toLowerCase();
@@ -856,65 +945,9 @@ export default {
             }
         }
 
-        // 7. Pure API Discovery & Documentation Index (Root /)
+        // 7. Root / API Index: Redirect to main website to eliminate open documentation & endpoint leaks
         else if (url.pathname === "/" || url.pathname === "/api") {
-            response = new Response(JSON.stringify({
-                name: "Zoko Pure Edge Anime Streaming & Scraper API",
-                version: "5.0.0 (Cloudflare Paid Optimized)",
-                platform: "Cloudflare Workers Edge (Paid V8 Runtime)",
-                cors_enabled: true,
-                status: "ONLINE",
-                optimizations: {
-                    kv_storage: "Cloudflare KV Multi-tier Caching (12-hr TTL, 1M write protection)",
-                    edge_cdn_cache: "Cloudflare Cache API (caches.default < 0.2ms CPU)",
-                    smart_segment_bypass: "Direct open CDN routing saves 99% of Worker requests",
-                    isolate_memory_cache: "V8 Global Scope Micro-Cache (0ms latency)",
-                    async_non_blocking_writes: "ctx.waitUntil for maximum throughput",
-                    colo: colo
-                },
-                endpoints: {
-                    stream: {
-                        method: "GET",
-                        path: "/api/stream",
-                        summary: "Extract HLS stream, proxy URLs, VTT subtitles, and skip markers (Cached in KV & Edge)",
-                        params: {
-                            id: "AniList ID or MAL ID (e.g. ?id=21)",
-                            malId: "Direct MyAnimeList ID (e.g. ?malId=21)",
-                            title: "Anime title fallback (e.g. ?title=Mushoku Tensei)",
-                            ep: "Episode number (default 1)",
-                            track: "'sub' or 'dub' (default: 'sub')"
-                        },
-                        example: `${baseUrl}/api/stream?id=21&ep=1`
-                    },
-                    download: {
-                        method: "GET",
-                        path: "/api/download/:id/:ep",
-                        summary: "Direct 302 redirect or JSON download links (Pahe / NekoStream CDN)",
-                        example: `${baseUrl}/api/download/21/1`
-                    },
-                    proxy_m3u8: {
-                        method: "GET",
-                        path: "/api/proxy/m3u8?url=...",
-                        summary: "HLS Master/Media playlist rewriter with Edge Caching"
-                    },
-                    proxy_ts: {
-                        method: "GET",
-                        path: "/api/proxy/ts?url=...",
-                        summary: "Zero-copy edge video chunk proxy with 7-day Cloudflare CDN Edge Cache"
-                    },
-                    proxy_vtt: {
-                        method: "GET",
-                        path: "/api/proxy/vtt?url=...",
-                        summary: "Subtitle proxy with 7-day Edge Cache and tag cleaning"
-                    },
-                    health: {
-                        method: "GET",
-                        path: "/health"
-                    }
-                }
-            }, null, 2), {
-                headers: { ...CORS_HEADERS, "Content-Type": "application/json" }
-            });
+            return Response.redirect("https://anixo.online", 302);
         }
 
         if (!response) {

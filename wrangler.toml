@@ -16,3 +16,6 @@ id = "b77a4adff5014a8d89516a290add396a"
 # Enable Cloudflare Edge Observability & Real-Time Logs
 [observability]
 enabled = true
+
+[vars]
+TURNSTILE_SECRET_KEY = "0x4AAAAAADGQxcZgLa0ZRtaJbL3mxiKj4RA"
