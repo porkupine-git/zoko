@@ -136,8 +136,6 @@ async function verifyTurnstileToken(request, env) {
             const formData = new FormData();
             formData.append("secret", env.TURNSTILE_SECRET_KEY);
             formData.append("response", token);
-            const clientIp = request.headers.get("CF-Connecting-IP");
-            if (clientIp) formData.append("remoteip", clientIp);
 
             const res = await fetch("https://challenges.cloudflare.com/turnstile/v0/siteverify", {
                 method: "POST",
@@ -147,7 +145,8 @@ async function verifyTurnstileToken(request, env) {
             if (data.success) {
                 return { valid: true };
             } else {
-                return { valid: false, error: "Turnstile bot challenge failed" };
+                const errCodes = (data["error-codes"] || []).join(", ");
+                return { valid: false, error: `Turnstile verification failed: ${errCodes || 'invalid token'}` };
             }
         } catch (e) {
             return { valid: false, error: `Turnstile verification error: ${e.message}` };
