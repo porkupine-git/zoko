@@ -652,11 +652,17 @@ export function renderAdminHtml(baseUrl = "") {
             display: flex;
             flex-direction: column;
             justify-content: space-between;
-            transition: border-color 0.15s ease;
+            transition: border-color 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
         }
 
         .server-card.is-primary {
             border-color: #ffffff;
+            box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.15);
+        }
+
+        .server-card.is-maintenance {
+            border-color: rgba(245, 158, 11, 0.4);
+            background: rgba(245, 158, 11, 0.02);
         }
 
         .server-card-top {
@@ -1153,12 +1159,12 @@ export function renderAdminHtml(baseUrl = "") {
                     <div class="console-panel" style="margin-bottom: 24px;">
                         <div class="panel-header-bar">
                             <span class="panel-title-text">Multi-Node Stream Engines</span>
-                            <button type="button" class="btn-primary" onclick="testClusterHealth()">Run Live Cluster Ping Test</button>
+                            <button type="button" class="btn-primary" id="btn-cluster-ping" onclick="testClusterHealth(true)">Run Live Cluster Ping Test</button>
                         </div>
                         <div class="panel-content-body">
                             <div class="servers-deck" id="servers-deck-container">
                                 <!-- Server 1 -->
-                                <div class="server-card" id="card-srv-1">
+                                <div class="server-card is-primary" id="card-srv-1">
                                     <div>
                                         <div class="server-card-top">
                                             <div>
@@ -1170,16 +1176,16 @@ export function renderAdminHtml(baseUrl = "") {
                                         <div class="server-metrics-row">
                                             <div class="server-metric-item">
                                                 <div class="server-metric-k">LATENCY</div>
-                                                <div class="server-metric-v" id="ping-srv-1">~120ms</div>
+                                                <div class="server-metric-v" id="ping-srv-1">Live checking...</div>
                                             </div>
                                             <div class="server-metric-item">
                                                 <div class="server-metric-k">FAILOVER PRIORITY</div>
-                                                <div class="server-metric-v" id="prio-srv-1">#1 (Primary)</div>
+                                                <div class="server-metric-v" id="prio-srv-1">#1 (Active Primary)</div>
                                             </div>
                                         </div>
                                     </div>
                                     <div class="server-actions-row">
-                                        <button type="button" class="btn-secondary" style="flex: 1;" onclick="setPrimaryServer(1)">Set as Primary</button>
+                                        <button type="button" class="btn-primary" id="btn-primary-srv-1" style="flex: 1; cursor: default;" onclick="setPrimaryServer(1)">✓ Active Primary</button>
                                         <button type="button" class="btn-danger" id="btn-maint-1" onclick="toggleServerMaintenance(1)">Maintenance</button>
                                     </div>
                                 </div>
@@ -1192,12 +1198,12 @@ export function renderAdminHtml(baseUrl = "") {
                                                 <div class="server-name">Server 2 (Neko)</div>
                                                 <div class="server-engine-id">ENGINE: AniNeko Multi-Source CDN</div>
                                             </div>
-                                            <span class="server-status-tag tag-active" id="badge-srv-2">BACKUP #1</span>
+                                            <span class="server-status-tag tag-active" id="badge-srv-2">STANDBY</span>
                                         </div>
                                         <div class="server-metrics-row">
                                             <div class="server-metric-item">
                                                 <div class="server-metric-k">LATENCY</div>
-                                                <div class="server-metric-v" id="ping-srv-2">~180ms</div>
+                                                <div class="server-metric-v" id="ping-srv-2">Live checking...</div>
                                             </div>
                                             <div class="server-metric-item">
                                                 <div class="server-metric-k">FAILOVER PRIORITY</div>
@@ -1206,7 +1212,7 @@ export function renderAdminHtml(baseUrl = "") {
                                         </div>
                                     </div>
                                     <div class="server-actions-row">
-                                        <button type="button" class="btn-secondary" style="flex: 1;" onclick="setPrimaryServer(2)">Set as Primary</button>
+                                        <button type="button" class="btn-secondary" id="btn-primary-srv-2" style="flex: 1;" onclick="setPrimaryServer(2)">Set as Primary</button>
                                         <button type="button" class="btn-danger" id="btn-maint-2" onclick="toggleServerMaintenance(2)">Maintenance</button>
                                     </div>
                                 </div>
@@ -1219,12 +1225,12 @@ export function renderAdminHtml(baseUrl = "") {
                                                 <div class="server-name">Server 3 (Zozo)</div>
                                                 <div class="server-engine-id">ENGINE: Zoko Direct Streaming Node</div>
                                             </div>
-                                            <span class="server-status-tag tag-active" id="badge-srv-3">BACKUP #2</span>
+                                            <span class="server-status-tag tag-active" id="badge-srv-3">STANDBY</span>
                                         </div>
                                         <div class="server-metrics-row">
                                             <div class="server-metric-item">
                                                 <div class="server-metric-k">LATENCY</div>
-                                                <div class="server-metric-v" id="ping-srv-3">~210ms</div>
+                                                <div class="server-metric-v" id="ping-srv-3">Live checking...</div>
                                             </div>
                                             <div class="server-metric-item">
                                                 <div class="server-metric-k">FAILOVER PRIORITY</div>
@@ -1233,7 +1239,7 @@ export function renderAdminHtml(baseUrl = "") {
                                         </div>
                                     </div>
                                     <div class="server-actions-row">
-                                        <button type="button" class="btn-secondary" style="flex: 1;" onclick="setPrimaryServer(3)">Set as Primary</button>
+                                        <button type="button" class="btn-secondary" id="btn-primary-srv-3" style="flex: 1;" onclick="setPrimaryServer(3)">Set as Primary</button>
                                         <button type="button" class="btn-danger" id="btn-maint-3" onclick="toggleServerMaintenance(3)">Maintenance</button>
                                     </div>
                                 </div>
@@ -1607,6 +1613,9 @@ export function renderAdminHtml(baseUrl = "") {
             if (titleEl && TAB_TITLES[tabId]) {
                 titleEl.textContent = TAB_TITLES[tabId];
             }
+            if (tabId === 'tab-servers') {
+                testClusterHealth(false);
+            }
         }
 
         function toggleAutoRefresh(enabled) {
@@ -1649,6 +1658,9 @@ export function renderAdminHtml(baseUrl = "") {
                         if (!isAutoRefresh) {
                             currentState.config = data.config;
                         } else if (currentState.config && data.config) {
+                            if (data.config.servers) {
+                                currentState.config.servers = data.config.servers;
+                            }
                             if (data.config.firewall) {
                                 currentState.config.firewall.whitelist = data.config.firewall.whitelist;
                                 currentState.config.firewall.blacklist = data.config.firewall.blacklist;
@@ -1662,6 +1674,9 @@ export function renderAdminHtml(baseUrl = "") {
                     }
                 }
                 renderDashboard(currentState, isAutoRefresh);
+                if (!isAutoRefresh) {
+                    testClusterHealth(false);
+                }
                 if (showToastNotice) showToast('Dashboard metrics refreshed');
             } catch (err) {
                 console.error('State fetch failed:', err);
@@ -1852,6 +1867,7 @@ export function renderAdminHtml(baseUrl = "") {
                 const card = document.getElementById('card-srv-' + id);
                 const badge = document.getElementById('badge-srv-' + id);
                 const prio = document.getElementById('prio-srv-' + id);
+                const primBtn = document.getElementById('btn-primary-srv-' + id);
                 const maintBtn = document.getElementById('btn-maint-' + id);
 
                 if (card && badge && prio && maintBtn) {
@@ -1860,14 +1876,56 @@ export function renderAdminHtml(baseUrl = "") {
 
                     if (isPrim) {
                         card.classList.add('is-primary');
-                        badge.className = 'server-status-tag tag-active';
-                        badge.textContent = 'PRIMARY';
-                        prio.textContent = '#1 (Primary)';
+                        if (isMaint) {
+                            card.classList.add('is-maintenance');
+                            badge.className = 'server-status-tag tag-maintenance';
+                            badge.textContent = 'PRIMARY (PAUSED)';
+                            prio.textContent = 'Bypassed (In Maintenance)';
+                            prio.style.color = 'var(--status-amber)';
+                        } else {
+                            card.classList.remove('is-maintenance');
+                            badge.className = 'server-status-tag tag-active';
+                            badge.textContent = 'PRIMARY';
+                            prio.textContent = '#1 (Active Primary)';
+                            prio.style.color = 'var(--text-primary)';
+                        }
                     } else {
                         card.classList.remove('is-primary');
-                        badge.className = 'server-status-tag ' + (isMaint ? 'tag-maintenance' : 'tag-active');
-                        badge.textContent = isMaint ? 'MAINTENANCE' : 'STANDBY';
-                        prio.textContent = 'Fallback';
+                        if (isMaint) {
+                            card.classList.add('is-maintenance');
+                            badge.className = 'server-status-tag tag-maintenance';
+                            badge.textContent = 'MAINTENANCE';
+                            prio.textContent = 'Offline (Excluded)';
+                            prio.style.color = 'var(--status-amber)';
+                        } else {
+                            card.classList.remove('is-maintenance');
+                            badge.className = 'server-status-tag tag-active';
+                            badge.textContent = 'STANDBY';
+                            prio.textContent = 'Fallback';
+                            prio.style.color = 'var(--text-secondary)';
+                        }
+                    }
+
+                    if (primBtn) {
+                        if (isPrim && !isMaint) {
+                            primBtn.textContent = '✓ Active Primary';
+                            primBtn.className = 'btn-primary';
+                            primBtn.disabled = true;
+                            primBtn.style.cursor = 'default';
+                            primBtn.style.opacity = '1';
+                        } else if (isPrim && isMaint) {
+                            primBtn.textContent = 'Resume & Make Primary';
+                            primBtn.className = 'btn-secondary';
+                            primBtn.disabled = false;
+                            primBtn.style.cursor = 'pointer';
+                            primBtn.style.opacity = '1';
+                        } else {
+                            primBtn.textContent = 'Set as Primary';
+                            primBtn.className = 'btn-secondary';
+                            primBtn.disabled = false;
+                            primBtn.style.cursor = 'pointer';
+                            primBtn.style.opacity = isMaint ? '0.7' : '1';
+                        }
                     }
 
                     if (isMaint) {
@@ -1963,25 +2021,54 @@ export function renderAdminHtml(baseUrl = "") {
 
         // ── Actions ──
         async function setPrimaryServer(serverId) {
+            const btn = document.getElementById('btn-primary-srv-' + serverId);
+            if (btn) {
+                btn.textContent = 'Promoting...';
+                btn.disabled = true;
+            }
+
             try {
+                const isCurrentlyMaint = Boolean(currentState?.config?.servers?.maintenance?.[serverId]);
+                const payload = { primary: serverId };
+                if (isCurrentlyMaint) {
+                    payload.maintenance = { [serverId]: false };
+                }
+
                 const res = await fetch('/api/admin/servers', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + adminToken },
-                    body: JSON.stringify({ primary: serverId })
+                    body: JSON.stringify(payload)
                 });
                 if (res.ok) {
+                    const data = await res.json();
                     showToast('Server ' + serverId + ' promoted to Primary');
-                    if (currentState && currentState.config && currentState.config.servers) {
-                        currentState.config.servers.primary = serverId;
+                    if (currentState && currentState.config) {
+                        currentState.config.servers = data.servers || {
+                            ...currentState.config.servers,
+                            primary: serverId,
+                            maintenance: { ...(currentState.config.servers?.maintenance || {}), [serverId]: false }
+                        };
                         renderServerCards(currentState.config);
                     }
+                } else {
+                    showToast('Failed to promote Server ' + serverId);
+                    if (currentState?.config) renderServerCards(currentState.config);
                 }
-            } catch (e) { showToast('Action failed: ' + e.message); }
+            } catch (e) {
+                showToast('Action failed: ' + e.message);
+                if (currentState?.config) renderServerCards(currentState.config);
+            }
         }
 
         async function toggleServerMaintenance(serverId) {
+            const maintBtn = document.getElementById('btn-maint-' + serverId);
             const isMaint = Boolean(currentState && currentState.config && currentState.config.servers && currentState.config.servers.maintenance && currentState.config.servers.maintenance[serverId]);
             const nextState = !isMaint;
+            if (maintBtn) {
+                maintBtn.textContent = nextState ? 'Pausing...' : 'Resuming...';
+                maintBtn.disabled = true;
+            }
+
             try {
                 const res = await fetch('/api/admin/servers', {
                     method: 'POST',
@@ -1989,22 +2076,36 @@ export function renderAdminHtml(baseUrl = "") {
                     body: JSON.stringify({ maintenance: { [serverId]: nextState } })
                 });
                 if (res.ok) {
-                    showToast('Server ' + serverId + ' maintenance set to ' + nextState);
-                    if (currentState && currentState.config && currentState.config.servers) {
-                        if (!currentState.config.servers.maintenance) currentState.config.servers.maintenance = {};
-                        currentState.config.servers.maintenance[serverId] = nextState;
+                    const data = await res.json();
+                    showToast('Server ' + serverId + (nextState ? ' placed in Maintenance' : ' Resumed to Cluster'));
+                    if (currentState && currentState.config) {
+                        currentState.config.servers = data.servers || {
+                            ...currentState.config.servers,
+                            maintenance: { ...(currentState.config.servers?.maintenance || {}), [serverId]: nextState }
+                        };
                         renderServerCards(currentState.config);
                     }
+                } else {
+                    showToast('Failed to update maintenance state');
+                    if (currentState?.config) renderServerCards(currentState.config);
                 }
-            } catch (e) { showToast('Action failed: ' + e.message); }
+            } catch (e) {
+                showToast('Action failed: ' + e.message);
+                if (currentState?.config) renderServerCards(currentState.config);
+            }
         }
 
-        async function testClusterHealth() {
-            showToast('Running live cluster ping test...');
+        async function testClusterHealth(showToastNotice = true) {
+            const pingBtn = document.getElementById('btn-cluster-ping');
+            if (pingBtn) {
+                pingBtn.disabled = true;
+                pingBtn.textContent = 'Probing Nodes...';
+            }
+            if (showToastNotice) showToast('Running live cluster ping test...');
             try {
                 const res = await fetch('/health?fresh=1');
                 const health = await res.json();
-                if (health.servers) {
+                if (health && health.servers) {
                     health.servers.forEach(s => {
                         const pingEl = document.getElementById('ping-srv-' + s.id);
                         if (pingEl) {
@@ -2014,8 +2115,15 @@ export function renderAdminHtml(baseUrl = "") {
                         }
                     });
                 }
-                showToast('Cluster health checks completed');
-            } catch (e) { showToast('Ping failed: ' + e.message); }
+                if (showToastNotice) showToast('Cluster health checks completed');
+            } catch (e) {
+                if (showToastNotice) showToast('Ping failed: ' + e.message);
+            } finally {
+                if (pingBtn) {
+                    pingBtn.disabled = false;
+                    pingBtn.textContent = 'Run Live Cluster Ping Test';
+                }
+            }
         }
 
         async function updateFirewallMode(isWhitelist) {

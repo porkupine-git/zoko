@@ -566,7 +566,9 @@ export default {
                 const anilistId = parseInt(parts[0], 10);
                 const ep = parseInt(parts[1] || "1", 10) || 1;
                 const track = ((parts[2] && (parts[2] === "sub" || parts[2] === "dub")) ? parts[2] : (url.searchParams.get("track") || "sub")).toLowerCase();
-                const server = parseInt(url.searchParams.get("server") || "1", 10) || 1;
+                const defaultServer = getAdminConfig().servers?.primary || 1;
+                const serverParam = url.searchParams.get("server");
+                const server = serverParam ? (parseInt(serverParam, 10) || defaultServer) : defaultServer;
                 const autoPlay = url.searchParams.get("autoPlay") !== "0" ? 1 : 0;
                 const autoNext = url.searchParams.get("autoNext") !== "0" ? 1 : 0;
                 const autoSkip = url.searchParams.get("autoSkip") !== "0" ? 1 : 0;
@@ -613,7 +615,9 @@ export default {
                 const malId = parseInt(parts[0], 10);
                 const ep = parseInt(parts[1] || "1", 10) || 1;
                 const track = ((parts[2] && (parts[2] === "sub" || parts[2] === "dub")) ? parts[2] : (url.searchParams.get("track") || "sub")).toLowerCase();
-                const server = parseInt(url.searchParams.get("server") || "1", 10) || 1;
+                const defaultServer = getAdminConfig().servers?.primary || 1;
+                const serverParam = url.searchParams.get("server");
+                const server = serverParam ? (parseInt(serverParam, 10) || defaultServer) : defaultServer;
                 const autoPlay = url.searchParams.get("autoPlay") !== "0" ? 1 : 0;
                 const autoNext = url.searchParams.get("autoNext") !== "0" ? 1 : 0;
                 const autoSkip = url.searchParams.get("autoSkip") !== "0" ? 1 : 0;
@@ -663,7 +667,9 @@ export default {
 
                 const ep = parseInt(url.searchParams.get("ep") || url.searchParams.get("episode") || "1", 10) || 1;
                 const track = (url.searchParams.get("track") || "sub").toLowerCase();
-                const server = parseInt(url.searchParams.get("server") || "1", 10) || 1;
+                const defaultServer = getAdminConfig().servers?.primary || 1;
+                const serverParam = url.searchParams.get("server");
+                const server = serverParam ? (parseInt(serverParam, 10) || defaultServer) : defaultServer;
                 const autoPlay = url.searchParams.get("autoPlay") !== "0" ? 1 : 0;
                 const autoNext = url.searchParams.get("autoNext") !== "0" ? 1 : 0;
                 const autoSkip = url.searchParams.get("autoSkip") !== "0" ? 1 : 0;
@@ -780,7 +786,9 @@ export default {
                 const title = url.searchParams.get("title");
                 const episode = parseInt(url.searchParams.get("episode") || "1", 10) || 1;
                 const track = (url.searchParams.get("track") || "sub").toLowerCase();
-                const preferredServer = parseInt(url.searchParams.get("server") || "1", 10) || 1;
+                const defaultServer = getAdminConfig().servers?.primary || 1;
+                const serverParam = url.searchParams.get("server");
+                const preferredServer = serverParam ? (parseInt(serverParam, 10) || defaultServer) : defaultServer;
 
                 const result = await resolveStreamWithFailover({
                     anilistId,

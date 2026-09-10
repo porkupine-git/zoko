@@ -3,6 +3,8 @@
  * Probes and benchmarks all 3 streaming engines and metadata upstreams in parallel
  */
 
+import { getAdminConfig } from '../admin/adminStore.js';
+
 export const SERVERS_CONFIG = [
     {
         id: 1,
@@ -175,6 +177,14 @@ export async function checkClusterHealth(env = {}, forceFresh = false) {
         ? Math.round(validLatencies.reduce((a, b) => a + b, 0) / validLatencies.length)
         : 0;
 
+    const adminConfig = getAdminConfig();
+    const prim = adminConfig?.servers?.primary || 1;
+    const cascadeOrder = [prim, ...[1, 2, 3].filter(s => s !== prim)];
+    const cascadeNames = cascadeOrder.map(s => {
+        const isMaint = adminConfig?.servers?.maintenance?.[s] === true;
+        return `Server ${s}${s === prim ? ' (Primary)' : ''}${isMaint ? ' [Paused]' : ''}`;
+    }).join(' -> ');
+
     const report = {
         status: clusterStatus,
         service: "Anixo Cluster Health Monitor",
@@ -186,7 +196,7 @@ export async function checkClusterHealth(env = {}, forceFresh = false) {
             totalServers: totalCount,
             averageLatencyMs: avgLatencyMs,
             failoverReady: operationalCount >= 2,
-            strategy: "Failover Cascade (Server 1 -> Server 2 -> Server 3)"
+            strategy: `Failover Cascade (${cascadeNames})`
         },
         servers: serversResults,
         metadata: metaResult,

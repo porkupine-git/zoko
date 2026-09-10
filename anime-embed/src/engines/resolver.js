@@ -15,7 +15,7 @@ export async function resolveStreamWithFailover({
     title,
     episode = 1,
     track = "sub",
-    preferredServer = 1
+    preferredServer = null
 }, env = {}) {
     let resolvedAniId = anilistId;
     let resolvedMalId = malId;
