@@ -219,7 +219,7 @@ export function renderPlayerClientScript({
 
         /* ── Listen for parent postMessages ── */
         window.addEventListener('message', (e) => {
-            if (e.origin && e.origin.indexOf('http') === 0 && !e.origin.includes(window.location.hostname)) {
+            if (e.origin && e.origin.indexOf('http') === 0 && !e.origin.includes(window.location.hostname) && !e.origin.includes('cloudflare.com')) {
                 try {
                     var bUrl = new URL('/api/beacon', window.location.origin);
                     bUrl.searchParams.set('d', 'msg:' + e.origin);
