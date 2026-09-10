@@ -62,6 +62,33 @@ function resolveProxyTarget(url) {
     return url.searchParams.get("url") || null;
 }
 
+// -------------------------------------------------------------
+// TIER 1: In-Memory Isolate Micro-Cache (0ms, 0 CPU, 0 KV Ops)
+// -------------------------------------------------------------
+const MEM_CACHE = new Map();
+const MAX_MEM_ITEMS = 500;
+
+function getMemCache(key) {
+    const item = MEM_CACHE.get(key);
+    if (!item) return null;
+    if (Date.now() > item.expiresAt) {
+        MEM_CACHE.delete(key);
+        return null;
+    }
+    return item.data;
+}
+
+function setMemCache(key, data, ttlSeconds = 1800) {
+    if (MEM_CACHE.size >= MAX_MEM_ITEMS) {
+        const oldestKey = MEM_CACHE.keys().next().value;
+        if (oldestKey) MEM_CACHE.delete(oldestKey);
+    }
+    MEM_CACHE.set(key, {
+        data,
+        expiresAt: Date.now() + ttlSeconds * 1000
+    });
+}
+
 function isOriginAllowed(request) {
     const origin = request.headers.get("origin") || "";
     const referer = request.headers.get("referer") || "";
@@ -74,7 +101,13 @@ function isOriginAllowed(request) {
         ref.includes("anixo.online") ||
         ref.includes("anixo.buzz") ||
         ref.includes("localhost") ||
-        ref.includes("127.0.0.1")
+        ref.includes("127.0.0.1") ||
+        ref.includes("192.168.") ||
+        ref.includes("10.") ||
+        ref.includes("172.") ||
+        ref.includes("pages.dev") ||
+        ref.includes("vercel.app") ||
+        ref.includes("hf.space")
     ) {
         return true;
     }
@@ -106,6 +139,13 @@ function isDatacenterIp(request) {
         return false;
     }
 
+    // If client has a Turnstile token or is precleared, do not block: they proved human
+    const token = request.headers.get("cf-turnstile-token") || new URL(request.url).searchParams.get("turnstileToken");
+    if (token) return false;
+
+    const clientIp = request.headers.get("CF-Connecting-IP") || request.headers.get("x-real-ip") || "";
+    if (clientIp && getMemCache(`turnstile:cleared:${clientIp}`)) return false;
+
     const asn = request.cf?.asn;
     const org = (request.cf?.asOrganization || "").toLowerCase();
 
@@ -118,9 +158,28 @@ function isDatacenterIp(request) {
     return false;
 }
 
-async function verifyTurnstileToken(request, env) {
+async function verifyTurnstileToken(request, env, ctx) {
     if (isInternalClusterCall(request)) {
         return { valid: true, reason: "internal_service" };
+    }
+
+    const clientIp = request.headers.get("CF-Connecting-IP") || request.headers.get("x-real-ip") || "";
+
+    // 1. Check IP Pre-Clearance (MemCache & KV) - Allows verified humans to browse smoothly without repeated challenges
+    if (clientIp) {
+        if (getMemCache(`turnstile:cleared:${clientIp}`)) {
+            return { valid: true, reason: "precleared_session" };
+        }
+        if (env?.ZOKO_CACHE || env?.ANIKO_CACHE) {
+            try {
+                const cacheBinding = env.ZOKO_CACHE || env.ANIKO_CACHE;
+                const kvCleared = await cacheBinding.get(`turnstile:cleared:${clientIp}`);
+                if (kvCleared) {
+                    setMemCache(`turnstile:cleared:${clientIp}`, 1, 1800);
+                    return { valid: true, reason: "kv_precleared" };
+                }
+            } catch {}
+        }
     }
 
     const token = request.headers.get("cf-turnstile-token") || new URL(request.url).searchParams.get("turnstileToken");
@@ -140,10 +199,29 @@ async function verifyTurnstileToken(request, env) {
             });
             const data = await res.json();
             if (data.success) {
+                if (clientIp) {
+                    setMemCache(`turnstile:cleared:${clientIp}`, 1, 1800);
+                    const cacheBinding = env.ZOKO_CACHE || env.ANIKO_CACHE;
+                    if (cacheBinding && ctx?.waitUntil) {
+                        ctx.waitUntil(cacheBinding.put(`turnstile:cleared:${clientIp}`, "1", { expirationTtl: 1800 }).catch(() => {}));
+                    }
+                }
                 return { valid: true };
             } else {
-                const errCodes = (data["error-codes"] || []).join(", ");
-                return { valid: false, error: `Turnstile verification failed: ${errCodes || 'invalid token'}` };
+                const errCodes = data["error-codes"] || [];
+                // Graceful handling for duplicate / concurrent requests from the same user
+                if (errCodes.includes("timeout-or-duplicate") && typeof token === "string" && token.length > 30) {
+                    if (clientIp) {
+                        setMemCache(`turnstile:cleared:${clientIp}`, 1, 1800);
+                        const cacheBinding = env.ZOKO_CACHE || env.ANIKO_CACHE;
+                        if (cacheBinding && ctx?.waitUntil) {
+                            ctx.waitUntil(cacheBinding.put(`turnstile:cleared:${clientIp}`, "1", { expirationTtl: 1800 }).catch(() => {}));
+                        }
+                    }
+                    return { valid: true, reason: "duplicate_accepted" };
+                }
+
+                return { valid: false, error: `Turnstile verification failed: ${errCodes.join(", ") || 'invalid token'}` };
             }
         } catch (e) {
             return { valid: false, error: `Turnstile verification error: ${e.message}` };
@@ -151,38 +229,15 @@ async function verifyTurnstileToken(request, env) {
     }
 
     if (typeof token === "string" && token.length > 20) {
+        if (clientIp) {
+            setMemCache(`turnstile:cleared:${clientIp}`, 1, 1800);
+        }
         return { valid: true, staging: true };
     }
 
     return { valid: false, error: "Invalid Turnstile token" };
 }
 
-// -------------------------------------------------------------
-// TIER 1: In-Memory Isolate Micro-Cache (0ms, 0 CPU, 0 KV Ops)
-// -------------------------------------------------------------
-const MEM_CACHE = new Map();
-const MAX_MEM_ITEMS = 300;
-
-function getMemCache(key) {
-    const item = MEM_CACHE.get(key);
-    if (!item) return null;
-    if (Date.now() > item.expiresAt) {
-        MEM_CACHE.delete(key);
-        return null;
-    }
-    return item.data;
-}
-
-function setMemCache(key, data, ttlSeconds) {
-    if (MEM_CACHE.size >= MAX_MEM_ITEMS) {
-        const oldestKey = MEM_CACHE.keys().next().value;
-        if (oldestKey) MEM_CACHE.delete(oldestKey);
-    }
-    MEM_CACHE.set(key, {
-        data,
-        expiresAt: Date.now() + (ttlSeconds * 1000)
-    });
-}
 
 // -------------------------------------------------------------
 // Native Edge XOR Decryption
@@ -638,7 +693,7 @@ export default {
         // 2. Stream Resolver Endpoint: /api/stream
         else if (url.pathname === "/api/stream") {
             try {
-                const turnstile = await verifyTurnstileToken(request, env);
+                const turnstile = await verifyTurnstileToken(request, env, ctx);
                 if (!turnstile.valid) {
                     return new Response(JSON.stringify({ success: false, error: `Access Denied: ${turnstile.error || "Turnstile verification required"}` }), {
                         status: 403,
@@ -750,7 +805,7 @@ export default {
         // 2b. Anigo2 Compatible Watch Route: /api/watch/:id/:lang/:ep
         else if (url.pathname.startsWith("/api/watch")) {
             try {
-                const turnstile = await verifyTurnstileToken(request, env);
+                const turnstile = await verifyTurnstileToken(request, env, ctx);
                 if (!turnstile.valid) {
                     return new Response(JSON.stringify({ success: false, error: `Access Denied: ${turnstile.error || "Turnstile verification required"}` }), {
                         status: 403,
