@@ -61,6 +61,7 @@ export function renderEmbedHtml({
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"><\/script>
+    <script src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit" async defer><\/script>
     ${renderPopunderSnippet(monetization)}
     <style>
 ${PLAYER_CSS}
@@ -114,6 +115,17 @@ ${PLAYER_CSS}
         <div id="cp-sandbox-overlay" class="cp-sandbox-overlay cp-hidden">
             <div class="cp-sandbox-content">
                 <div class="cp-sandbox-msg">Please remove sandbox from embed code. Sandbox is not allowed.</div>
+            </div>
+        </div>
+
+        <!-- Cloudflare Turnstile Verification Overlay (Centered directly over video player) -->
+        <div id="cp-turnstile-overlay" class="cp-turnstile-overlay">
+            <div class="cp-turnstile-card">
+                <div class="cp-turnstile-header">
+                    <span class="cp-turnstile-dot"></span>
+                    <span id="cp-turnstile-title">Security Check</span>
+                </div>
+                <div id="cp-turnstile-container" class="cp-turnstile-container"></div>
             </div>
         </div>
 

@@ -1638,4 +1638,105 @@ export const PLAYER_CSS = `
             line-height: 1.6;
             font-weight: 500;
         }
+
+        /* ── Turnstile Player Center Overlay (Centered directly over video player) ── */
+        .cp-turnstile-overlay {
+            position: absolute;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.72);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            z-index: 20000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 16px;
+            transition: opacity 0.35s ease, visibility 0.35s ease;
+        }
+
+        .cp-turnstile-overlay.cp-hidden {
+            opacity: 0 !important;
+            visibility: hidden !important;
+            pointer-events: none !important;
+        }
+
+        .cp-turnstile-card {
+            background: #14151a;
+            border: 1px solid rgba(255, 255, 255, 0.09);
+            border-radius: 12px;
+            padding: 12px 14px 14px;
+            box-shadow: 0 16px 40px rgba(0, 0, 0, 0.75), 0 0 0 1px rgba(255, 255, 255, 0.04);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+            width: auto;
+            max-width: 330px;
+            text-align: center;
+            animation: cpTurnstilePop 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        @keyframes cpTurnstilePop {
+            from { opacity: 0; transform: scale(0.96); }
+            to { opacity: 1; transform: scale(1); }
+        }
+
+        .cp-turnstile-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 12px;
+            font-weight: 500;
+            color: #94a3b8;
+            letter-spacing: 0.2px;
+        }
+
+        .cp-turnstile-dot {
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            background: #60a5fa;
+            box-shadow: 0 0 8px rgba(96, 165, 250, 0.7);
+            animation: cpPulse 1.8s infinite ease-in-out;
+            transition: background 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .cp-turnstile-dot.success {
+            background: #22c55e !important;
+            box-shadow: 0 0 8px rgba(34, 197, 94, 0.8) !important;
+            animation: none !important;
+        }
+
+        @keyframes cpPulse {
+            0% { transform: scale(0.9); opacity: 0.6; }
+            50% { transform: scale(1.15); opacity: 1; }
+            100% { transform: scale(0.9); opacity: 0.6; }
+        }
+
+        .cp-turnstile-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 65px;
+            width: 300px;
+            border-radius: 6px;
+            overflow: hidden;
+        }
+
+        .cp-turnstile-container iframe {
+            border: none !important;
+            outline: none !important;
+            border-radius: 6px !important;
+        }
+
+        @media (max-width: 480px), (max-height: 420px) {
+            .cp-turnstile-card {
+                padding: 10px 12px 12px;
+                gap: 8px;
+                max-width: 310px;
+            }
+            .cp-turnstile-header {
+                font-size: 11.5px;
+            }
+        }
 `;

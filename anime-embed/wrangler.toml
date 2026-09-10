@@ -33,3 +33,8 @@ service = "zoko-stream"
 [[kv_namespaces]]
 binding = "ANIXO_ADMIN_STORE"
 id = "d8743d081b64441099d52e9e175268b1"
+
+[vars]
+TURNSTILE_SECRET_KEY = "0x4AAAAAADGQxcZgLa0ZRtaJbL3mxiKj4RA"
+TURNSTILE_SITE_KEY = "0x4AAAAAADGQxfMRQroxFG6O"
+

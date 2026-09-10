@@ -368,12 +368,102 @@ export function renderPlayerClientScript({
 
         initSandboxDetector();
 
+        /* ── Turnstile Player Verification Engine (Centered directly over player) ── */
+        var turnstileToken = null;
+        var turnstileWidgetId = null;
+        var turnstileSiteKey = '0x4AAAAAADGQxfMRQroxFG6O';
+        var turnstilePromise = null;
+
+        function obtainTurnstileToken() {
+            if (turnstileToken) return Promise.resolve(turnstileToken);
+            if (turnstilePromise) return turnstilePromise;
+
+            var overlay = document.getElementById('cp-turnstile-overlay');
+            var container = document.getElementById('cp-turnstile-container');
+            var titleEl = document.getElementById('cp-turnstile-title');
+            var dotEl = overlay ? overlay.querySelector('.cp-turnstile-dot') : null;
+
+            if (!container) return Promise.resolve(null);
+
+            turnstilePromise = new Promise(function(resolve) {
+                var isResolved = false;
+                function finish(token) {
+                    if (isResolved) return;
+                    isResolved = true;
+                    turnstileToken = token;
+                    resolve(token);
+                }
+
+                var checkCount = 0;
+                var checkTimer = setInterval(function() {
+                    checkCount++;
+                    if (window.turnstile && typeof window.turnstile.render === 'function') {
+                        clearInterval(checkTimer);
+                        if (turnstileWidgetId !== null) {
+                            if (turnstileToken) finish(turnstileToken);
+                            return;
+                        }
+                        try {
+                            turnstileWidgetId = window.turnstile.render(container, {
+                                sitekey: turnstileSiteKey,
+                                action: 'embed_watch',
+                                theme: 'dark',
+                                callback: function(token) {
+                                    if (titleEl) titleEl.textContent = 'Verified';
+                                    if (dotEl) dotEl.classList.add('success');
+                                    setTimeout(function() {
+                                        if (overlay) overlay.classList.add('cp-hidden');
+                                    }, 400);
+                                    finish(token);
+                                },
+                                'error-callback': function(err) {
+                                    console.warn('[Turnstile] Embed verification challenge:', err);
+                                    setTimeout(function() {
+                                        if (overlay) overlay.classList.add('cp-hidden');
+                                    }, 1200);
+                                    finish(null);
+                                },
+                                'expired-callback': function() {
+                                    turnstileToken = null;
+                                    turnstilePromise = null;
+                                    if (turnstileWidgetId !== null && window.turnstile) {
+                                        try { window.turnstile.reset(turnstileWidgetId); } catch(e){}
+                                    }
+                                }
+                            });
+                        } catch(renderErr) {
+                            console.warn('[Turnstile] Render failed:', renderErr);
+                            if (overlay) overlay.classList.add('cp-hidden');
+                            finish(null);
+                        }
+                    } else if (checkCount > 50) { // 5s timeout fallback
+                        clearInterval(checkTimer);
+                        if (overlay) overlay.classList.add('cp-hidden');
+                        finish(null);
+                    }
+                }, 100);
+            });
+
+            return turnstilePromise;
+        }
+
+        // Trigger early verification immediately on load
+        if (typeof window !== 'undefined') {
+            setTimeout(obtainTurnstileToken, 50);
+        }
+
         /* ── Stream Loader ── */
         async function initStream() {
             if (isSandboxRestricted) {
                 triggerSandboxBlock('stream-blocked');
                 return;
             }
+
+            // Ensure Turnstile token is obtained before resolving stream
+            if (!turnstileToken) {
+                await obtainTurnstileToken();
+            }
+
             showToast('Connecting to Server ' + STATE.server + '...', 'yellow', 2500);
             try {
                 console.log('%c[Anixo Notice] This is a scraper relay for megaplay.buzz and anikototv. There is no benefit in scraping this proxy — scrape the original sources (megaplay.buzz / anikototv) directly, they will be much faster.', 'color: #facc15; font-weight: bold;');
@@ -516,8 +606,36 @@ export function renderPlayerClientScript({
 
 
             try {
-                const res = await fetch(url.toString());
-                if (!res.ok) throw new Error('HTTP ' + res.status);
+                const reqHeaders = {};
+                if (turnstileToken) {
+                    reqHeaders['cf-turnstile-token'] = turnstileToken;
+                }
+                const res = await fetch(url.toString(), { headers: reqHeaders });
+                if (!res.ok) {
+                    if (res.status === 403) {
+                        try {
+                            const errData = await res.json();
+                            if (errData && errData.verificationRequired) {
+                                turnstileToken = null;
+                                turnstilePromise = null;
+                                if (turnstileWidgetId !== null && window.turnstile) {
+                                    try { window.turnstile.reset(turnstileWidgetId); } catch(e){}
+                                }
+                                var overlay = document.getElementById('cp-turnstile-overlay');
+                                if (overlay) overlay.classList.remove('cp-hidden');
+                                var titleEl = document.getElementById('cp-turnstile-title');
+                                if (titleEl) titleEl.textContent = 'Security Check';
+                                var dotEl = overlay ? overlay.querySelector('.cp-turnstile-dot') : null;
+                                if (dotEl) dotEl.classList.remove('success');
+                                var newToken = await obtainTurnstileToken();
+                                if (newToken) {
+                                    return initStream();
+                                }
+                            }
+                        } catch(e) {}
+                    }
+                    throw new Error('HTTP ' + res.status);
+                }
                 const data = await res.json();
                 if (!data.streamUrl) throw new Error('No playable stream URL returned from resolver');
 

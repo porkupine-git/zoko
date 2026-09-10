@@ -55,7 +55,41 @@ const DATACENTER_ASNS = new Set([
     45102, 37963, 51167, 20473, 46652, 22612, 60068, 202425
 ]);
 
+// -------------------------------------------------------------
+// TIER 1: In-Memory Isolate Micro-Cache (0ms CPU, 0 KV Ops)
+// -------------------------------------------------------------
+const MEM_CACHE = new Map();
+const MAX_MEM_ITEMS = 500;
+
+function getMemCache(key) {
+    const item = MEM_CACHE.get(key);
+    if (!item) return null;
+    if (Date.now() > item.expiresAt) {
+        MEM_CACHE.delete(key);
+        return null;
+    }
+    return item.data;
+}
+
+function setMemCache(key, data, ttlSeconds = 1800) {
+    if (MEM_CACHE.size >= MAX_MEM_ITEMS) {
+        const oldestKey = MEM_CACHE.keys().next().value;
+        if (oldestKey) MEM_CACHE.delete(oldestKey);
+    }
+    MEM_CACHE.set(key, {
+        data,
+        expiresAt: Date.now() + ttlSeconds * 1000
+    });
+}
+
 function isDatacenterIp(request) {
+    // If client has a Turnstile token or is precleared, do not block: they proved human
+    const token = request.headers.get("cf-turnstile-token") || new URL(request.url).searchParams.get("turnstileToken");
+    if (token) return false;
+
+    const clientIp = request.headers.get("CF-Connecting-IP") || request.headers.get("x-real-ip") || "";
+    if (clientIp && getMemCache(`turnstile:cleared:${clientIp}`)) return false;
+
     const asn = request.cf?.asn;
     const org = (request.cf?.asOrganization || "").toLowerCase();
 
@@ -66,6 +100,76 @@ function isDatacenterIp(request) {
         if (org.includes(dOrg)) return true;
     }
     return false;
+}
+
+async function verifyTurnstileToken(request, env, ctx) {
+    const clientIp = request.headers.get("CF-Connecting-IP") || request.headers.get("x-real-ip") || "";
+
+    // 1. Check IP Pre-Clearance (MemCache & KV) - Allows verified humans to browse smoothly without repeated challenges
+    if (clientIp) {
+        if (getMemCache(`turnstile:cleared:${clientIp}`)) {
+            return { valid: true, reason: "precleared_session" };
+        }
+        if (env?.ANIXO_ADMIN_STORE) {
+            try {
+                const kvCleared = await env.ANIXO_ADMIN_STORE.get(`turnstile:cleared:${clientIp}`);
+                if (kvCleared) {
+                    setMemCache(`turnstile:cleared:${clientIp}`, 1, 1800);
+                    return { valid: true, reason: "kv_precleared" };
+                }
+            } catch {}
+        }
+    }
+
+    const token = request.headers.get("cf-turnstile-token") || new URL(request.url).searchParams.get("turnstileToken");
+    if (!token) {
+        return { valid: false, error: "Cloudflare Turnstile token required" };
+    }
+
+    if (env?.TURNSTILE_SECRET_KEY) {
+        try {
+            const formData = new FormData();
+            formData.append("secret", env.TURNSTILE_SECRET_KEY);
+            formData.append("response", token);
+
+            const res = await fetch("https://challenges.cloudflare.com/turnstile/v0/siteverify", {
+                method: "POST",
+                body: formData
+            });
+            const data = await res.json();
+            if (data.success) {
+                if (clientIp) {
+                    setMemCache(`turnstile:cleared:${clientIp}`, 1, 1800);
+                    if (env.ANIXO_ADMIN_STORE && ctx?.waitUntil) {
+                        ctx.waitUntil(env.ANIXO_ADMIN_STORE.put(`turnstile:cleared:${clientIp}`, "1", { expirationTtl: 1800 }).catch(() => {}));
+                    }
+                }
+                return { valid: true };
+            } else {
+                const errCodes = data["error-codes"] || [];
+                // Graceful handling for duplicate / concurrent requests from the same user
+                if (errCodes.includes("timeout-or-duplicate") && typeof token === "string" && token.length > 30) {
+                    if (clientIp) {
+                        setMemCache(`turnstile:cleared:${clientIp}`, 1, 1800);
+                        if (env.ANIXO_ADMIN_STORE && ctx?.waitUntil) {
+                            ctx.waitUntil(env.ANIXO_ADMIN_STORE.put(`turnstile:cleared:${clientIp}`, "1", { expirationTtl: 1800 }).catch(() => {}));
+                        }
+                    }
+                    return { valid: true, reason: "duplicate_accepted" };
+                }
+                return { valid: false, error: `Turnstile verification failed: ${errCodes.join(", ") || "invalid token"}` };
+            }
+        } catch (e) {
+            return { valid: false, error: `Turnstile verification error: ${e.message}` };
+        }
+    }
+
+    if (typeof token === "string" && token.length > 20) {
+        if (clientIp) setMemCache(`turnstile:cleared:${clientIp}`, 1, 1800);
+        return { valid: true, staging: true };
+    }
+
+    return { valid: false, error: "Invalid Turnstile token" };
 }
 
 function getBlockedLeechResponse() {
@@ -586,20 +690,34 @@ export default {
                     return getBlockedLeechResponse();
                 }
 
-                // Honeypot & Decoy Stream Poisoning for automated scrapers and datacenter bots
-                if (isScraperRequest(request) || isDatacenterIp(request)) {
-                    const clientIp = request.headers.get("cf-connecting-ip") || request.headers.get("x-forwarded-for") || "127.0.0.1";
-                    const userAgent = request.headers.get("user-agent") || "automated-scraper";
-                    recordHoneypotTrap({ ip: clientIp, userAgent, path: pathname });
+                // Turnstile Human Verification Check
+                const turnstile = await verifyTurnstileToken(request, env, ctx);
+                if (!turnstile.valid) {
+                    if (isScraperRequest(request) || isDatacenterIp(request)) {
+                        const clientIp = request.headers.get("cf-connecting-ip") || request.headers.get("x-forwarded-for") || "127.0.0.1";
+                        const userAgent = request.headers.get("user-agent") || "automated-scraper";
+                        recordHoneypotTrap({ ip: clientIp, userAgent, path: pathname });
 
-                    const honeypotData = getHoneypotStreamResponse(baseUrl);
-                    return new Response(JSON.stringify(honeypotData, null, 2), {
+                        const honeypotData = getHoneypotStreamResponse(baseUrl);
+                        return new Response(JSON.stringify(honeypotData, null, 2), {
+                            headers: {
+                                ...CORS_HEADERS,
+                                "Content-Type": "application/json",
+                                "Cache-Control": "no-cache, no-store",
+                                "X-Honeypot-Engaged": "1",
+                                "X-Scraper-Advisory": SCRAPER_NOTICE_HEADER
+                            }
+                        });
+                    }
+                    return new Response(JSON.stringify({
+                        success: false,
+                        error: `Access Denied: ${turnstile.error || "Turnstile verification required"}`,
+                        verificationRequired: true
+                    }), {
+                        status: 403,
                         headers: {
                             ...CORS_HEADERS,
-                            "Content-Type": "application/json",
-                            "Cache-Control": "no-cache, no-store",
-                            "X-Honeypot-Engaged": "1",
-                            "X-Scraper-Advisory": SCRAPER_NOTICE_HEADER
+                            "Content-Type": "application/json"
                         }
                     });
                 }
@@ -648,16 +766,30 @@ export default {
                     return getBlockedLeechResponse();
                 }
 
-                // Honeypot & Decoy Stream Poisoning for automated scrapers and datacenter bots
-                if (isScraperRequest(request) || isDatacenterIp(request)) {
-                    const honeypotData = getHoneypotStreamResponse(baseUrl);
-                    return new Response(JSON.stringify(honeypotData, null, 2), {
+                // Turnstile Human Verification Check
+                const turnstile = await verifyTurnstileToken(request, env, ctx);
+                if (!turnstile.valid) {
+                    if (isScraperRequest(request) || isDatacenterIp(request)) {
+                        const honeypotData = getHoneypotStreamResponse(baseUrl);
+                        return new Response(JSON.stringify(honeypotData, null, 2), {
+                            headers: {
+                                ...CORS_HEADERS,
+                                "Content-Type": "application/json",
+                                "Cache-Control": "no-cache, no-store",
+                                "X-Honeypot-Engaged": "1",
+                                "X-Scraper-Advisory": SCRAPER_NOTICE_HEADER
+                            }
+                        });
+                    }
+                    return new Response(JSON.stringify({
+                        success: false,
+                        error: `Access Denied: ${turnstile.error || "Turnstile verification required"}`,
+                        verificationRequired: true
+                    }), {
+                        status: 403,
                         headers: {
                             ...CORS_HEADERS,
-                            "Content-Type": "application/json",
-                            "Cache-Control": "no-cache, no-store",
-                            "X-Honeypot-Engaged": "1",
-                            "X-Scraper-Advisory": SCRAPER_NOTICE_HEADER
+                            "Content-Type": "application/json"
                         }
                     });
                 }
