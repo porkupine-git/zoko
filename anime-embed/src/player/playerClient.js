@@ -893,6 +893,16 @@ export function renderPlayerClientScript({
                     ppBtn.setAttribute('aria-label', 'Play');
                     ppBtn.setAttribute('title', 'Play');
                 }
+
+                // Guard against premature stream interruptions / network drops
+                const cur = video.currentTime || 0;
+                const dur = video.duration || 0;
+                if (dur > 60 && (dur - cur) > 20) {
+                    console.warn('[Playback] Stream ended prematurely at', cur, 'of', dur);
+                    attemptFailover('Playback interrupted before completion');
+                    return;
+                }
+
                 postToParent('aniembed:ended', { episode: STATE.currentEp });
                 if (STATE.autoNext) {
                     const nextEp = STATE.currentEp + 1;
@@ -958,8 +968,10 @@ export function renderPlayerClientScript({
             const intro = STATE.streamData && STATE.streamData.intro;
             const outro = STATE.streamData && STATE.streamData.outro;
 
+            // 1. Intro Skip: Auto-skip opening theme if valid intro marker (duration <= 150s, start < 300s)
             const btnIntro = document.getElementById('btn-skip-intro');
-            if (intro && intro.end > 0 && cur >= (intro.start || 0) && cur < (intro.end - 1)) {
+            const isValidIntro = intro && intro.end > 0 && (intro.end - (intro.start || 0) <= 150) && (intro.start || 0) < 300;
+            if (isValidIntro && cur >= (intro.start || 0) && cur < (intro.end - 1)) {
                 if (STATE.autoSkip && cur >= (intro.start || 0) && cur <= (intro.start + 2)) {
                     video.currentTime = intro.end;
                     showToast('Auto-Skipped Intro', 'info', 2000);
@@ -971,15 +983,13 @@ export function renderPlayerClientScript({
                 btnIntro.style.display = 'none';
             }
 
+            // 2. Outro Skip: Display "Skip Outro" button for user to optionally click.
+            // NEVER auto-skip the outro automatically because doing so abruptly terminates the episode,
+            // skips post-credit scenes/dialog, and prematurely triggers auto-next!
             const btnOutro = document.getElementById('btn-skip-outro');
-            if (outro && outro.end > 0 && cur >= (outro.start || 0) && cur < (outro.end - 1)) {
-                if (STATE.autoSkip && cur >= (outro.start || 0) && cur <= (outro.start + 2)) {
-                    video.currentTime = outro.end;
-                    showToast('Auto-Skipped Outro', 'info', 2000);
-                    btnOutro.style.display = 'none';
-                } else {
-                    btnOutro.style.display = 'inline-flex';
-                }
+            const isValidOutro = outro && outro.end > 0 && (outro.start || 0) > 300 && (outro.end > (outro.start || 0));
+            if (isValidOutro && cur >= (outro.start || 0) && cur < (outro.end - 1)) {
+                btnOutro.style.display = 'inline-flex';
             } else {
                 btnOutro.style.display = 'none';
             }
@@ -2638,6 +2648,11 @@ export function renderPlayerClientScript({
             if (epNum === STATE.currentEp) return;
             STATE.currentEp = epNum;
             document.title = (STATE.title ? STATE.title + ' - ' : '') + 'Episode ' + epNum;
+            turnstileToken = null;
+            turnstilePromise = null;
+            if (turnstileWidgetId !== null && window.turnstile) {
+                try { window.turnstile.reset(turnstileWidgetId); } catch(e){}
+            }
             initStream();
             postToParent('aniembed:episode_change', { episode: epNum });
         }
