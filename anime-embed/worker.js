@@ -30,8 +30,13 @@ import {
     markReferrerSandboxed,
     recordHoneypotTrap,
     generateApiKey,
+    toggleApiKey,
+    deleteApiKey,
     syncAdminStoreWithKv,
-    persistAdminStoreToKv
+    persistAdminStoreToKv,
+    addBlockedIp,
+    removeBlockedIp,
+    isIpBlocked
 } from './src/admin/adminStore.js';
 
 const CORS_HEADERS = {
@@ -416,6 +421,12 @@ export default {
                     if (body.newApiKey) {
                         generateApiKey(body.newApiKey);
                     }
+                    if (body.toggleApiKey) {
+                        toggleApiKey(body.toggleApiKey);
+                    }
+                    if (body.deleteApiKey) {
+                        deleteApiKey(body.deleteApiKey);
+                    }
                     const updated = updateAdminConfig(body);
                     if (kv) await persistAdminStoreToKv(kv);
                     return new Response(JSON.stringify({ success: true, config: updated }), {
@@ -429,9 +440,35 @@ export default {
                         addFirewallDomain(body.type, body.domain);
                     } else if (body.action === "remove" && body.domain && body.type) {
                         removeFirewallDomain(body.type, body.domain);
+                    } else if (body.action === "ban-ip" && body.ip) {
+                        addBlockedIp(body.ip);
+                    } else if (body.action === "unban-ip" && body.ip) {
+                        removeBlockedIp(body.ip);
                     }
                     if (kv) await persistAdminStoreToKv(kv);
                     return new Response(JSON.stringify({ success: true, firewall: getAdminConfig().firewall }), {
+                        headers: { ...CORS_HEADERS, "Content-Type": "application/json" }
+                    });
+                }
+
+                if (pathname === "/api/admin/ban-ip" && request.method === "POST") {
+                    const body = await request.json().catch(() => ({}));
+                    if (body.ip) {
+                        addBlockedIp(body.ip);
+                        if (kv) await persistAdminStoreToKv(kv);
+                    }
+                    return new Response(JSON.stringify({ success: true, blockedIps: getAdminConfig().firewall.blockedIps }), {
+                        headers: { ...CORS_HEADERS, "Content-Type": "application/json" }
+                    });
+                }
+
+                if (pathname === "/api/admin/unban-ip" && request.method === "POST") {
+                    const body = await request.json().catch(() => ({}));
+                    if (body.ip) {
+                        removeBlockedIp(body.ip);
+                        if (kv) await persistAdminStoreToKv(kv);
+                    }
+                    return new Response(JSON.stringify({ success: true, blockedIps: getAdminConfig().firewall.blockedIps }), {
                         headers: { ...CORS_HEADERS, "Content-Type": "application/json" }
                     });
                 }
@@ -690,36 +727,52 @@ export default {
                     return getBlockedLeechResponse();
                 }
 
-                // Turnstile Human Verification Check
-                const turnstile = await verifyTurnstileToken(request, env, ctx);
-                if (!turnstile.valid) {
-                    if (isScraperRequest(request) || isDatacenterIp(request)) {
-                        const clientIp = request.headers.get("cf-connecting-ip") || request.headers.get("x-forwarded-for") || "127.0.0.1";
-                        const userAgent = request.headers.get("user-agent") || "automated-scraper";
-                        recordHoneypotTrap({ ip: clientIp, userAgent, path: pathname });
+                // Check if client IP is manually banned in Admin Panel
+                const clientIpForCheck = request.headers.get("cf-connecting-ip") || request.headers.get("x-forwarded-for") || "";
+                if (clientIpForCheck && isIpBlocked(clientIpForCheck)) {
+                    const honeypotData = getHoneypotStreamResponse(baseUrl);
+                    return new Response(JSON.stringify(honeypotData, null, 2), {
+                        headers: {
+                            ...CORS_HEADERS,
+                            "Content-Type": "application/json",
+                            "Cache-Control": "no-cache, no-store",
+                            "X-Honeypot-Engaged": "1"
+                        }
+                    });
+                }
 
-                        const honeypotData = getHoneypotStreamResponse(baseUrl);
-                        return new Response(JSON.stringify(honeypotData, null, 2), {
+                // Turnstile Human Verification Check (Configurable from Admin Panel)
+                if (getAdminConfig().firewall?.turnstileEnabled !== false) {
+                    const turnstile = await verifyTurnstileToken(request, env, ctx);
+                    if (!turnstile.valid) {
+                        if (isScraperRequest(request) || isDatacenterIp(request)) {
+                            const clientIp = request.headers.get("cf-connecting-ip") || request.headers.get("x-forwarded-for") || "127.0.0.1";
+                            const userAgent = request.headers.get("user-agent") || "automated-scraper";
+                            recordHoneypotTrap({ ip: clientIp, userAgent, path: pathname });
+
+                            const honeypotData = getHoneypotStreamResponse(baseUrl);
+                            return new Response(JSON.stringify(honeypotData, null, 2), {
+                                headers: {
+                                    ...CORS_HEADERS,
+                                    "Content-Type": "application/json",
+                                    "Cache-Control": "no-cache, no-store",
+                                    "X-Honeypot-Engaged": "1",
+                                    "X-Scraper-Advisory": SCRAPER_NOTICE_HEADER
+                                }
+                            });
+                        }
+                        return new Response(JSON.stringify({
+                            success: false,
+                            error: `Access Denied: ${turnstile.error || "Turnstile verification required"}`,
+                            verificationRequired: true
+                        }), {
+                            status: 403,
                             headers: {
                                 ...CORS_HEADERS,
-                                "Content-Type": "application/json",
-                                "Cache-Control": "no-cache, no-store",
-                                "X-Honeypot-Engaged": "1",
-                                "X-Scraper-Advisory": SCRAPER_NOTICE_HEADER
+                                "Content-Type": "application/json"
                             }
                         });
                     }
-                    return new Response(JSON.stringify({
-                        success: false,
-                        error: `Access Denied: ${turnstile.error || "Turnstile verification required"}`,
-                        verificationRequired: true
-                    }), {
-                        status: 403,
-                        headers: {
-                            ...CORS_HEADERS,
-                            "Content-Type": "application/json"
-                        }
-                    });
                 }
 
                 const anilistId = url.searchParams.get("anilistId");
@@ -766,32 +819,48 @@ export default {
                     return getBlockedLeechResponse();
                 }
 
-                // Turnstile Human Verification Check
-                const turnstile = await verifyTurnstileToken(request, env, ctx);
-                if (!turnstile.valid) {
-                    if (isScraperRequest(request) || isDatacenterIp(request)) {
-                        const honeypotData = getHoneypotStreamResponse(baseUrl);
-                        return new Response(JSON.stringify(honeypotData, null, 2), {
+                // Check if client IP is manually banned in Admin Panel
+                const clientIpForCheck = request.headers.get("cf-connecting-ip") || request.headers.get("x-forwarded-for") || "";
+                if (clientIpForCheck && isIpBlocked(clientIpForCheck)) {
+                    const honeypotData = getHoneypotStreamResponse(baseUrl);
+                    return new Response(JSON.stringify(honeypotData, null, 2), {
+                        headers: {
+                            ...CORS_HEADERS,
+                            "Content-Type": "application/json",
+                            "Cache-Control": "no-cache, no-store",
+                            "X-Honeypot-Engaged": "1"
+                        }
+                    });
+                }
+
+                // Turnstile Human Verification Check (Configurable from Admin Panel)
+                if (getAdminConfig().firewall?.turnstileEnabled !== false) {
+                    const turnstile = await verifyTurnstileToken(request, env, ctx);
+                    if (!turnstile.valid) {
+                        if (isScraperRequest(request) || isDatacenterIp(request)) {
+                            const honeypotData = getHoneypotStreamResponse(baseUrl);
+                            return new Response(JSON.stringify(honeypotData, null, 2), {
+                                headers: {
+                                    ...CORS_HEADERS,
+                                    "Content-Type": "application/json",
+                                    "Cache-Control": "no-cache, no-store",
+                                    "X-Honeypot-Engaged": "1",
+                                    "X-Scraper-Advisory": SCRAPER_NOTICE_HEADER
+                                }
+                            });
+                        }
+                        return new Response(JSON.stringify({
+                            success: false,
+                            error: `Access Denied: ${turnstile.error || "Turnstile verification required"}`,
+                            verificationRequired: true
+                        }), {
+                            status: 403,
                             headers: {
                                 ...CORS_HEADERS,
-                                "Content-Type": "application/json",
-                                "Cache-Control": "no-cache, no-store",
-                                "X-Honeypot-Engaged": "1",
-                                "X-Scraper-Advisory": SCRAPER_NOTICE_HEADER
+                                "Content-Type": "application/json"
                             }
                         });
                     }
-                    return new Response(JSON.stringify({
-                        success: false,
-                        error: `Access Denied: ${turnstile.error || "Turnstile verification required"}`,
-                        verificationRequired: true
-                    }), {
-                        status: 403,
-                        headers: {
-                            ...CORS_HEADERS,
-                            "Content-Type": "application/json"
-                        }
-                    });
                 }
 
                 const serverId = parseInt(pathname.replace("/api/stream/server/", "").split("/")[0], 10) || 1;

@@ -1263,6 +1263,17 @@ export function renderAdminHtml(baseUrl = "") {
 
                                 <div class="toggle-row">
                                     <div class="toggle-info">
+                                        <h4>Cloudflare Turnstile Bot Gate</h4>
+                                        <p>Enforces dark Turnstile security verification directly over player canvas.</p>
+                                    </div>
+                                    <label class="switch-input">
+                                        <input type="checkbox" id="chk-turnstile-enabled" onchange="updateTurnstileMode(this.checked)">
+                                        <span class="slider"></span>
+                                    </label>
+                                </div>
+
+                                <div class="toggle-row">
+                                    <div class="toggle-info">
                                         <h4>Raw M3U8 Hotlink Shield</h4>
                                         <p>Block direct browser visits to stream tokens outside legitimate iframes.</p>
                                     </div>
@@ -1309,6 +1320,31 @@ export function renderAdminHtml(baseUrl = "") {
                             </div>
                             <div class="panel-content-body">
                                 <div class="chips-container" id="chips-blacklist"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="grid-two-col" style="margin-top: 24px;">
+                        <div class="console-panel">
+                            <div class="panel-header-bar">
+                                <span class="panel-title-text">Blocked IP Addresses (Banned Scrapers)</span>
+                                <span class="mono-cell" id="count-blocked-ips" style="font-size: 11px; color: var(--text-muted);">0</span>
+                            </div>
+                            <div class="panel-content-body">
+                                <div class="chips-container" id="chips-blocked-ips"></div>
+                            </div>
+                        </div>
+
+                        <div class="console-panel">
+                            <div class="panel-header-bar">
+                                <span class="panel-title-text">Manual IP Ban / Firewall Block</span>
+                            </div>
+                            <div class="panel-content-body">
+                                <div class="form-group">
+                                    <label class="form-label">Client IP Address</label>
+                                    <input type="text" id="input-firewall-ip" class="form-input" placeholder="e.g. 198.51.100.23">
+                                </div>
+                                <button type="button" class="btn-danger" onclick="manualBlockIp()">Ban IP Address</button>
                             </div>
                         </div>
                     </div>
@@ -1367,7 +1403,7 @@ export function renderAdminHtml(baseUrl = "") {
                                         <p>Triggers a popunder ad tab upon the user's initial play click.</p>
                                     </div>
                                     <label class="switch-input">
-                                        <input type="checkbox" id="chk-ads-enabled">
+                                        <input type="checkbox" id="chk-ads-enabled" onchange="toggleAdsEnabled(this.checked)">
                                         <span class="slider"></span>
                                     </label>
                                 </div>
@@ -1382,9 +1418,9 @@ export function renderAdminHtml(baseUrl = "") {
                                         <span id="capping-mode-indicator" class="brand-tag-pill" style="font-size: 10.5px; color: var(--status-green); border: 1px solid rgba(34, 197, 94, 0.3);">Natural (Network AI)</span>
                                     </label>
                                     <div class="capping-mode-grid">
-                                        <div class="capping-card active" id="card-mode-natural" onclick="selectCappingMode('natural')">
+                                        <div class="capping-card active" id="card-mode-natural" onclick="selectCappingMode('natural', true)">
                                             <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 5px;">
-                                                <input type="radio" name="cappingMode" id="radio-mode-natural" value="natural" checked style="accent-color: #38bdf8; cursor: pointer;" onchange="selectCappingMode('natural')">
+                                                <input type="radio" name="cappingMode" id="radio-mode-natural" value="natural" checked style="accent-color: #38bdf8; cursor: pointer;" onchange="selectCappingMode('natural', true)">
                                                 <strong style="font-size: 12.5px; color: #ffffff;">Natural (Network AI)</strong>
                                             </div>
                                             <p style="font-size: 11px; color: var(--text-muted); margin: 0; line-height: 1.45;">
@@ -1392,9 +1428,9 @@ export function renderAdminHtml(baseUrl = "") {
                                             </p>
                                         </div>
 
-                                        <div class="capping-card" id="card-mode-custom" onclick="selectCappingMode('custom')">
+                                        <div class="capping-card" id="card-mode-custom" onclick="selectCappingMode('custom', true)">
                                             <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 5px;">
-                                                <input type="radio" name="cappingMode" id="radio-mode-custom" value="custom" style="accent-color: #38bdf8; cursor: pointer;" onchange="selectCappingMode('custom')">
+                                                <input type="radio" name="cappingMode" id="radio-mode-custom" value="custom" style="accent-color: #38bdf8; cursor: pointer;" onchange="selectCappingMode('custom', true)">
                                                 <strong style="font-size: 12.5px; color: #ffffff;">Customized Rules</strong>
                                             </div>
                                             <p style="font-size: 11px; color: var(--text-muted); margin: 0; line-height: 1.45;">
@@ -1582,7 +1618,7 @@ export function renderAdminHtml(baseUrl = "") {
         function startAutoRefresh() {
             stopAutoRefresh();
             autoRefreshInterval = setInterval(() => {
-                fetchFullState(false);
+                fetchFullState(false, true);
             }, 10000);
         }
 
@@ -1593,7 +1629,7 @@ export function renderAdminHtml(baseUrl = "") {
             }
         }
 
-        async function fetchFullState(showToastNotice = false) {
+        async function fetchFullState(showToastNotice = false, isAutoRefresh = false) {
             if (!adminToken) return;
             try {
                 const res = await fetch('/api/admin/state', {
@@ -1604,126 +1640,213 @@ export function renderAdminHtml(baseUrl = "") {
                     return;
                 }
                 const data = await res.json();
-                currentState = data;
-                renderDashboard(data);
+                if (data && data.config) {
+                    if (!currentState) {
+                        currentState = data;
+                    } else {
+                        currentState.telemetry = data.telemetry;
+                        currentState.securityLog = data.securityLog;
+                        if (!isAutoRefresh) {
+                            currentState.config = data.config;
+                        } else if (currentState.config && data.config) {
+                            if (data.config.firewall) {
+                                currentState.config.firewall.whitelist = data.config.firewall.whitelist;
+                                currentState.config.firewall.blacklist = data.config.firewall.blacklist;
+                                currentState.config.firewall.blockedIps = data.config.firewall.blockedIps;
+                                currentState.config.firewall.blockedRequestsCount = data.config.firewall.blockedRequestsCount;
+                            }
+                            if (data.config.apiKeys) {
+                                currentState.config.apiKeys = data.config.apiKeys;
+                            }
+                        }
+                    }
+                }
+                renderDashboard(currentState, isAutoRefresh);
                 if (showToastNotice) showToast('Dashboard metrics refreshed');
             } catch (err) {
                 console.error('State fetch failed:', err);
             }
         }
 
-        function renderDashboard(data) {
+        function renderDashboard(data, isAutoRefresh = false) {
             if (!data) return;
             const { config, telemetry, securityLog } = data;
 
             // Overview Metrics
-            document.getElementById('stat-total-streams').textContent = Number(telemetry.totalStreams).toLocaleString();
-            document.getElementById('stat-bandwidth').textContent = telemetry.totalBandwidthMB + ' MB';
-            document.getElementById('stat-blocked').textContent = Number(telemetry.blockedRequests).toLocaleString();
-            document.getElementById('stat-honeypot').textContent = (securityLog ? securityLog.length : 0);
+            if (telemetry) {
+                document.getElementById('stat-total-streams').textContent = Number(telemetry.totalStreams || 0).toLocaleString();
+                document.getElementById('stat-bandwidth').textContent = (telemetry.totalBandwidthMB || 0) + ' MB';
+                document.getElementById('stat-blocked').textContent = Number(telemetry.blockedRequests || 0).toLocaleString();
+                document.getElementById('stat-honeypot').textContent = (securityLog ? securityLog.length : 0);
 
-            // Server Traffic Split Bar
-            const srvDist = telemetry.serverDistribution || { 1: 0, 2: 0, 3: 0 };
-            const totalSrvReq = (srvDist[1] || 0) + (srvDist[2] || 0) + (srvDist[3] || 0);
-            if (totalSrvReq > 0) {
-                const p1 = Math.round(((srvDist[1] || 0) / totalSrvReq) * 100);
-                const p2 = Math.round(((srvDist[2] || 0) / totalSrvReq) * 100);
-                const p3 = Math.max(0, 100 - p1 - p2);
-                document.getElementById('dist-bar-1').style.width = p1 + '%';
-                document.getElementById('dist-bar-2').style.width = p2 + '%';
-                document.getElementById('dist-bar-3').style.width = p3 + '%';
-                document.getElementById('dist-total-ratio').textContent = 'Sora ' + p1 + '% · Neko ' + p2 + '% · Zozo ' + p3 + '%';
-            } else {
-                document.getElementById('dist-bar-1').style.width = '100%';
-                document.getElementById('dist-bar-2').style.width = '0%';
-                document.getElementById('dist-bar-3').style.width = '0%';
-                document.getElementById('dist-total-ratio').textContent = 'Sora 100% · Neko 0% · Zozo 0%';
-            }
+                // Server Traffic Split Bar
+                const srvDist = telemetry.serverDistribution || { 1: 0, 2: 0, 3: 0 };
+                const totalSrvReq = (srvDist[1] || 0) + (srvDist[2] || 0) + (srvDist[3] || 0);
+                if (totalSrvReq > 0) {
+                    const p1 = Math.round(((srvDist[1] || 0) / totalSrvReq) * 100);
+                    const p2 = Math.round(((srvDist[2] || 0) / totalSrvReq) * 100);
+                    const p3 = Math.max(0, 100 - p1 - p2);
+                    document.getElementById('dist-bar-1').style.width = p1 + '%';
+                    document.getElementById('dist-bar-2').style.width = p2 + '%';
+                    document.getElementById('dist-bar-3').style.width = p3 + '%';
+                    document.getElementById('dist-total-ratio').textContent = 'Sora ' + p1 + '% · Neko ' + p2 + '% · Zozo ' + p3 + '%';
+                } else {
+                    document.getElementById('dist-bar-1').style.width = '100%';
+                    document.getElementById('dist-bar-2').style.width = '0%';
+                    document.getElementById('dist-bar-3').style.width = '0%';
+                    document.getElementById('dist-total-ratio').textContent = 'Sora 100% · Neko 0% · Zozo 0%';
+                }
 
-            // Referrers Table (Full Width Left to Right)
-            const refBody = document.getElementById('table-referrers-body');
-            document.getElementById('stat-referrers-count').textContent = telemetry.topReferrers.length + ' Domains';
-            if (telemetry.topReferrers.length === 0) {
-                refBody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: var(--text-muted); padding: 24px;">No referrers logged yet</td></tr>';
-            } else {
-                refBody.innerHTML = telemetry.topReferrers.map(r => {
-                    let badge = '';
-                    if (r.status === 'official') {
-                        badge = '<span class="server-status-tag tag-active" style="font-size: 9.5px;">OFFICIAL</span>';
-                    } else if (r.status === 'whitelisted') {
-                        badge = '<span class="server-status-tag" style="background: rgba(56, 189, 248, 0.12); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.25); font-size: 9.5px;">PARTNER</span>';
-                    } else if (r.status === 'blocked') {
-                        badge = '<span class="server-status-tag tag-disabled" style="font-size: 9.5px;">BLOCKED</span>';
-                    } else {
-                        badge = '<span class="server-status-tag tag-maintenance" style="font-size: 9.5px;">EXTERNAL</span>';
+                // Referrers Table
+                const refBody = document.getElementById('table-referrers-body');
+                const referrers = telemetry.topReferrers || [];
+                document.getElementById('stat-referrers-count').textContent = referrers.length + ' Domains';
+                if (referrers.length === 0) {
+                    refBody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: var(--text-muted); padding: 24px;">No referrers logged yet</td></tr>';
+                } else {
+                    refBody.innerHTML = referrers.map(r => {
+                        let badge = '';
+                        if (r.status === 'official') {
+                            badge = '<span class="server-status-tag tag-active" style="font-size: 9.5px;">OFFICIAL</span>';
+                        } else if (r.status === 'whitelisted') {
+                            badge = '<span class="server-status-tag" style="background: rgba(56, 189, 248, 0.12); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.25); font-size: 9.5px;">PARTNER</span>';
+                        } else if (r.status === 'blocked') {
+                            badge = '<span class="server-status-tag tag-disabled" style="font-size: 9.5px;">BLOCKED</span>';
+                        } else {
+                            badge = '<span class="server-status-tag tag-maintenance" style="font-size: 9.5px;">EXTERNAL</span>';
+                        }
+
+                        const sandboxTag = r.isSandboxed ? ' <span class="server-status-tag tag-disabled" style="font-size: 9px; background: rgba(239, 68, 68, 0.2); color: #f87171; border-color: rgba(239, 68, 68, 0.4); margin-left: 6px;" title="Sandbox Detected: ' + (r.sandboxReason || 'Ad-stripping sandbox') + '">SANDBOXED</span>' : '';
+
+                        const actionBtn = r.status === 'blocked'
+                            ? '<button type="button" class="btn-secondary" style="padding: 3px 9px; font-size: 11px;" data-domain="' + r.domain + '" onclick="quickUnbanDomain(this.dataset.domain)">Unban</button>'
+                            : '<div style="display: flex; justify-content: flex-end; gap: 6px;">' +
+                                '<button type="button" class="btn-danger" style="padding: 3px 9px; font-size: 11px;" data-domain="' + r.domain + '" onclick="quickBanDomain(this.dataset.domain)">Ban</button>' +
+                                (r.status === 'external' ? '<button type="button" class="btn-secondary" style="padding: 3px 9px; font-size: 11px;" data-domain="' + r.domain + '" onclick="quickWhitelistDomain(this.dataset.domain)">Trust</button>' : '') +
+                              '</div>';
+
+                        return '<tr>' +
+                            '<td class="mono-cell" style="color: #38bdf8; font-weight: 600; font-size: 12.5px;">' + r.domain + sandboxTag + '</td>' +
+                            '<td>' + badge + '</td>' +
+                            '<td class="mono-cell" style="font-size: 13px; font-weight: 700; color: #ffffff;">' + r.count.toLocaleString() + '</td>' +
+                            '<td class="mono-cell" style="color: var(--text-secondary); font-size: 12px;">' + (r.bandwidthMB || (r.count * 15)).toLocaleString() + ' MB</td>' +
+                            '<td style="font-size: 12px; color: var(--text-primary); font-weight: 500;" title="' + (r.topAnime || 'General') + '">' + (r.topAnime || '<span style="color: var(--text-muted); font-weight: 400;">General Stream</span>') + '</td>' +
+                            '<td style="text-align: right;">' + actionBtn + '</td>' +
+                        '</tr>';
+                    }).join('');
+
+                    const searchInput = document.getElementById('ref-search-input');
+                    if (searchInput && searchInput.value) {
+                        filterReferrersTable(searchInput.value);
                     }
+                }
 
-                    const sandboxTag = r.isSandboxed ? ' <span class="server-status-tag tag-disabled" style="font-size: 9px; background: rgba(239, 68, 68, 0.2); color: #f87171; border-color: rgba(239, 68, 68, 0.4); margin-left: 6px;" title="Sandbox Detected: ' + (r.sandboxReason || 'Ad-stripping sandbox') + '">SANDBOXED</span>' : '';
+                // Top Anime Table
+                const animeBody = document.getElementById('table-anime-body');
+                const topAnime = telemetry.topAnime || [];
+                document.getElementById('stat-anime-count').textContent = topAnime.length + ' Titles';
+                if (topAnime.length === 0) {
+                    animeBody.innerHTML = '<tr><td colspan="4" style="text-align: center; color: var(--text-muted); padding: 24px;">No streaming requests recorded yet</td></tr>';
+                } else {
+                    const maxCount = (topAnime[0] && topAnime[0].count) || 1;
+                    const totalAnimeStreams = topAnime.reduce((acc, a) => acc + (a.count || 0), 0) || 1;
 
-                    const actionBtn = r.status === 'blocked'
-                        ? '<button type="button" class="btn-secondary" style="padding: 3px 9px; font-size: 11px;" data-domain="' + r.domain + '" onclick="quickUnbanDomain(this.dataset.domain)">Unban</button>'
-                        : '<div style="display: flex; justify-content: flex-end; gap: 6px;">' +
-                            '<button type="button" class="btn-danger" style="padding: 3px 9px; font-size: 11px;" data-domain="' + r.domain + '" onclick="quickBanDomain(this.dataset.domain)">Ban</button>' +
-                            (r.status === 'external' ? '<button type="button" class="btn-secondary" style="padding: 3px 9px; font-size: 11px;" data-domain="' + r.domain + '" onclick="quickWhitelistDomain(this.dataset.domain)">Trust</button>' : '') +
-                          '</div>';
+                    animeBody.innerHTML = topAnime.map((a, idx) => {
+                        const rank = idx + 1;
+                        const rankStr = rank < 10 ? '0' + rank : String(rank);
+                        let rankBadge = '<span class="mono-cell" style="color: var(--text-muted); font-size: 11px; font-weight: 500;">' + rankStr + '</span>';
+                        if (rank === 1) {
+                            rankBadge = '<span class="mono-cell" style="background: rgba(56, 189, 248, 0.12); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.3); font-weight: 700; font-size: 11px; padding: 2px 7px; border-radius: 4px;">01</span>';
+                        } else if (rank === 2) {
+                            rankBadge = '<span class="mono-cell" style="background: rgba(255, 255, 255, 0.07); color: #f4f4f5; border: 1px solid rgba(255, 255, 255, 0.16); font-weight: 600; font-size: 11px; padding: 2px 7px; border-radius: 4px;">02</span>';
+                        } else if (rank === 3) {
+                            rankBadge = '<span class="mono-cell" style="background: rgba(255, 255, 255, 0.04); color: #d4d4d8; border: 1px solid rgba(255, 255, 255, 0.1); font-weight: 600; font-size: 11px; padding: 2px 7px; border-radius: 4px;">03</span>';
+                        }
 
-                    return '<tr>' +
-                        '<td class="mono-cell" style="color: #38bdf8; font-weight: 600; font-size: 12.5px;">' + r.domain + sandboxTag + '</td>' +
-                        '<td>' + badge + '</td>' +
-                        '<td class="mono-cell" style="font-size: 13px; font-weight: 700; color: #ffffff;">' + r.count.toLocaleString() + '</td>' +
-                        '<td class="mono-cell" style="color: var(--text-secondary); font-size: 12px;">' + (r.bandwidthMB || (r.count * 15)).toLocaleString() + ' MB</td>' +
-                        '<td style="font-size: 12px; color: var(--text-primary); font-weight: 500;" title="' + (r.topAnime || 'General') + '">' + (r.topAnime || '<span style="color: var(--text-muted); font-weight: 400;">General Stream</span>') + '</td>' +
-                        '<td style="text-align: right;">' + actionBtn + '</td>' +
-                    '</tr>';
-                }).join('');
+                        const pct = Math.round((a.count / totalAnimeStreams) * 100);
+                        const barWidth = Math.max(3, Math.round((a.count / maxCount) * 100));
 
-                const searchInput = document.getElementById('ref-search-input');
-                if (searchInput && searchInput.value) {
-                    filterReferrersTable(searchInput.value);
+                        return '<tr>' +
+                            '<td style="text-align: center;">' + rankBadge + '</td>' +
+                            '<td style="font-weight: 600; color: #ffffff; font-size: 13px;">' + a.title + '</td>' +
+                            '<td class="mono-cell" style="font-size: 13px; font-weight: 700; color: #38bdf8;">' + a.count.toLocaleString() + ' <span style="font-size: 11px; font-weight: 400; color: var(--text-muted);">plays</span></td>' +
+                            '<td>' +
+                                '<div style="display: flex; align-items: center; gap: 10px;">' +
+                                    '<div style="flex: 1; height: 6px; background: rgba(255, 255, 255, 0.06); border-radius: 99px; overflow: hidden;">' +
+                                        '<div style="height: 100%; width: ' + barWidth + '%; background: linear-gradient(90deg, #38bdf8, #818cf8); border-radius: 99px;"></div>' +
+                                    '</div>' +
+                                    '<span class="mono-cell" style="font-size: 11px; color: var(--text-secondary); width: 38px; text-align: right;">' + pct + '%</span>' +
+                                '</div>' +
+                            '</td>' +
+                        '</tr>';
+                    }).join('');
                 }
             }
 
-            // Top Anime Table (Full Width Below with Traffic Share Progress Bars)
-            const animeBody = document.getElementById('table-anime-body');
-            document.getElementById('stat-anime-count').textContent = telemetry.topAnime.length + ' Titles';
-            if (telemetry.topAnime.length === 0) {
-                animeBody.innerHTML = '<tr><td colspan="4" style="text-align: center; color: var(--text-muted); padding: 24px;">No streaming requests recorded yet</td></tr>';
-            } else {
-                const maxCount = (telemetry.topAnime[0] && telemetry.topAnime[0].count) || 1;
-                const totalAnimeStreams = telemetry.topAnime.reduce((acc, a) => acc + (a.count || 0), 0) || 1;
+            // Honeypot Bot Traps Log
+            renderHoneypotTable(securityLog || []);
 
-                animeBody.innerHTML = telemetry.topAnime.map((a, idx) => {
-                    const rank = idx + 1;
-                    const rankStr = rank < 10 ? '0' + rank : String(rank);
-                    let rankBadge = '<span class="mono-cell" style="color: var(--text-muted); font-size: 11px; font-weight: 500;">' + rankStr + '</span>';
-                    if (rank === 1) {
-                        rankBadge = '<span class="mono-cell" style="background: rgba(56, 189, 248, 0.12); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.3); font-weight: 700; font-size: 11px; padding: 2px 7px; border-radius: 4px;">01</span>';
-                    } else if (rank === 2) {
-                        rankBadge = '<span class="mono-cell" style="background: rgba(255, 255, 255, 0.07); color: #f4f4f5; border: 1px solid rgba(255, 255, 255, 0.16); font-weight: 600; font-size: 11px; padding: 2px 7px; border-radius: 4px;">02</span>';
-                    } else if (rank === 3) {
-                        rankBadge = '<span class="mono-cell" style="background: rgba(255, 255, 255, 0.04); color: #d4d4d8; border: 1px solid rgba(255, 255, 255, 0.1); font-weight: 600; font-size: 11px; padding: 2px 7px; border-radius: 4px;">03</span>';
-                    }
-
-                    const pct = Math.round((a.count / totalAnimeStreams) * 100);
-                    const barWidth = Math.max(3, Math.round((a.count / maxCount) * 100));
-
-                    return '<tr>' +
-                        '<td style="text-align: center;">' + rankBadge + '</td>' +
-                        '<td style="font-weight: 600; color: #ffffff; font-size: 13px;">' + a.title + '</td>' +
-                        '<td class="mono-cell" style="font-size: 13px; font-weight: 700; color: #38bdf8;">' + a.count.toLocaleString() + ' <span style="font-size: 11px; font-weight: 400; color: var(--text-muted);">plays</span></td>' +
-                        '<td>' +
-                            '<div style="display: flex; align-items: center; gap: 10px;">' +
-                                '<div style="flex: 1; height: 6px; background: rgba(255, 255, 255, 0.06); border-radius: 99px; overflow: hidden;">' +
-                                    '<div style="height: 100%; width: ' + barWidth + '%; background: linear-gradient(90deg, #38bdf8, #818cf8); border-radius: 99px;"></div>' +
-                                '</div>' +
-                                '<span class="mono-cell" style="font-size: 11px; color: var(--text-secondary); width: 38px; text-align: right;">' + pct + '%</span>' +
-                            '</div>' +
-                        '</td>' +
-                    '</tr>';
-                }).join('');
+            // Firewall Chips & Blocked IPs
+            if (config && config.firewall) {
+                renderFirewallChips(config.firewall.whitelist, 'chips-whitelist', 'whitelist');
+                renderFirewallChips(config.firewall.blacklist, 'chips-blacklist', 'blacklist');
+                renderBlockedIpChips(config.firewall.blockedIps || []);
+                const cWl = document.getElementById('count-whitelist');
+                if (cWl) cWl.textContent = (config.firewall.whitelist || []).length;
+                const cBl = document.getElementById('count-blacklist');
+                if (cBl) cBl.textContent = (config.firewall.blacklist || []).length;
             }
 
             // Server Cards
+            if (config && config.servers) {
+                renderServerCards(config);
+            }
+
+            // API Keys Table
+            if (!isAutoRefresh && config && config.apiKeys) {
+                renderApiKeysTable(config.apiKeys);
+            }
+
+            // ── FORM CONTROLS: ONLY updated on initial load (never overwritten during background auto-refresh) ──
+            if (!isAutoRefresh && config) {
+                if (config.firewall) {
+                    const wlMode = document.getElementById('chk-whitelist-mode');
+                    if (wlMode) wlMode.checked = (config.firewall.mode === 'whitelist');
+                    const tsGate = document.getElementById('chk-turnstile-enabled');
+                    if (tsGate) tsGate.checked = (config.firewall.turnstileEnabled !== false);
+                    const hlShield = document.getElementById('chk-hotlink-shield');
+                    if (hlShield) hlShield.checked = Boolean(config.firewall.hotlinkProtection);
+                }
+
+                if (config.honeypot) {
+                    const decoyEl = document.getElementById('input-decoy-url');
+                    if (decoyEl && config.honeypot.decoyStreamUrl) {
+                        decoyEl.value = config.honeypot.decoyStreamUrl;
+                    }
+                }
+
+                if (config.monetization) {
+                    const adsChk = document.getElementById('chk-ads-enabled');
+                    if (adsChk) adsChk.checked = Boolean(config.monetization.adsEnabled);
+                    const popUrl = document.getElementById('input-popunder-url');
+                    if (popUrl) popUrl.value = config.monetization.popunderUrl || '';
+
+                    selectCappingMode(config.monetization.cappingMode || 'natural', false);
+
+                    const gapVal = document.getElementById('input-gap-value');
+                    if (gapVal) gapVal.value = config.monetization.gapValue !== undefined ? config.monetization.gapValue : 30;
+                    const gapUnit = document.getElementById('select-gap-unit');
+                    if (gapUnit) gapUnit.value = config.monetization.gapUnit || 'minutes';
+                    const maxAds = document.getElementById('input-max-ads');
+                    if (maxAds) maxAds.value = config.monetization.maxAdsPerDay !== undefined ? config.monetization.maxAdsPerDay : 3;
+                    const clickTrig = document.getElementById('select-click-trigger');
+                    if (clickTrig) clickTrig.value = config.monetization.clickTrigger !== undefined ? String(config.monetization.clickTrigger) : '1';
+                }
+            }
+        }
+
+        function renderServerCards(config) {
+            if (!config || !config.servers) return;
             const primarySrv = config.servers.primary || 1;
             [1, 2, 3].forEach(id => {
                 const card = document.getElementById('card-srv-' + id);
@@ -1733,7 +1856,7 @@ export function renderAdminHtml(baseUrl = "") {
 
                 if (card && badge && prio && maintBtn) {
                     const isPrim = (primarySrv === id);
-                    const isMaint = config.servers.maintenance && config.servers.maintenance[id];
+                    const isMaint = Boolean(config.servers.maintenance && config.servers.maintenance[id]);
 
                     if (isPrim) {
                         card.classList.add('is-primary');
@@ -1756,53 +1879,46 @@ export function renderAdminHtml(baseUrl = "") {
                     }
                 }
             });
+        }
 
-            // Firewall
-            document.getElementById('chk-whitelist-mode').checked = (config.firewall.mode === 'whitelist');
-            document.getElementById('chk-hotlink-shield').checked = Boolean(config.firewall.hotlinkProtection);
-            renderFirewallChips(config.firewall.whitelist, 'chips-whitelist', 'whitelist');
-            renderFirewallChips(config.firewall.blacklist, 'chips-blacklist', 'blacklist');
-            document.getElementById('count-whitelist').textContent = config.firewall.whitelist.length;
-            document.getElementById('count-blacklist').textContent = config.firewall.blacklist.length;
-
-            // Honeypot Logs
+        function renderHoneypotTable(securityLog) {
             const hpBody = document.getElementById('table-honeypot-body');
+            if (!hpBody) return;
             if (!securityLog || securityLog.length === 0) {
                 hpBody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: var(--text-muted); padding: 20px;">No bots intercepted recently</td></tr>';
-            } else {
-                hpBody.innerHTML = securityLog.map(item =>
-                    '<tr>' +
-                        '<td class="mono-cell">' + new Date(item.timestamp).toLocaleTimeString() + '</td>' +
-                        '<td class="mono-cell">' + item.ip + '</td>' +
-                        '<td style="color: var(--text-secondary);">' + item.userAgent + '</td>' +
-                        '<td class="mono-cell">' + item.path + '</td>' +
-                        '<td><button type="button" class="btn-danger" onclick="banIp(this.dataset.ip)" data-ip="' + item.ip + '">Ban IP</button></td>' +
-                    '</tr>'
-                ).join('');
+                return;
             }
+            const blockedIps = (currentState && currentState.config && currentState.config.firewall && currentState.config.firewall.blockedIps) || [];
+            hpBody.innerHTML = securityLog.map(item => {
+                const isBlocked = blockedIps.includes(item.ip);
+                const actionBtn = isBlocked
+                    ? '<div style="display: flex; align-items: center; gap: 6px;"><span class="brand-tag-pill" style="color: var(--status-red); border-color: rgba(239, 68, 68, 0.4);">BLOCKED</span><button type="button" class="btn-secondary" style="padding: 2px 7px; font-size: 11px;" onclick="unbanIp(this.dataset.ip)" data-ip="' + item.ip + '">Unban</button></div>'
+                    : '<button type="button" class="btn-danger" style="padding: 2px 7px; font-size: 11px;" onclick="banIp(this.dataset.ip)" data-ip="' + item.ip + '">Ban IP</button>';
+                return '<tr>' +
+                    '<td class="mono-cell">' + new Date(item.timestamp).toLocaleTimeString() + '</td>' +
+                    '<td class="mono-cell">' + item.ip + '</td>' +
+                    '<td style="color: var(--text-secondary);">' + item.userAgent + '</td>' +
+                    '<td class="mono-cell">' + item.path + '</td>' +
+                    '<td>' + actionBtn + '</td>' +
+                '</tr>';
+            }).join('');
+        }
 
-            // Monetization (Popunder Only)
-            document.getElementById('chk-ads-enabled').checked = Boolean(config.monetization.adsEnabled);
-            document.getElementById('input-popunder-url').value = config.monetization.popunderUrl || '';
-
-            const cappingMode = config.monetization.cappingMode || 'natural';
-            selectCappingMode(cappingMode);
-
-            if (document.getElementById('input-gap-value')) {
-                document.getElementById('input-gap-value').value = config.monetization.gapValue !== undefined ? config.monetization.gapValue : 30;
+        function renderBlockedIpChips(list) {
+            const el = document.getElementById('chips-blocked-ips');
+            const countEl = document.getElementById('count-blocked-ips');
+            if (countEl) countEl.textContent = (list ? list.length : 0);
+            if (!el) return;
+            if (!list || list.length === 0) {
+                el.innerHTML = '<span style="font-size: 12px; color: var(--text-muted);">No blocked IPs</span>';
+                return;
             }
-            if (document.getElementById('select-gap-unit')) {
-                document.getElementById('select-gap-unit').value = config.monetization.gapUnit || 'minutes';
-            }
-            if (document.getElementById('input-max-ads')) {
-                document.getElementById('input-max-ads').value = config.monetization.maxAdsPerDay !== undefined ? config.monetization.maxAdsPerDay : 3;
-            }
-            if (document.getElementById('select-click-trigger')) {
-                document.getElementById('select-click-trigger').value = config.monetization.clickTrigger !== undefined ? String(config.monetization.clickTrigger) : '1';
-            }
-
-            // API Keys
-            renderApiKeysTable(config.apiKeys || []);
+            el.innerHTML = list.map(ip =>
+                '<span class="domain-chip" style="border-color: rgba(239, 68, 68, 0.35); background: rgba(239, 68, 68, 0.08);">' +
+                    '<span style="color: #fca5a5;">' + ip + '</span>' +
+                    '<span class="domain-chip-del" onclick="unbanIp(this.dataset.ip)" data-ip="' + ip + '" title="Unban IP">&times;</span>' +
+                '</span>'
+            ).join('');
         }
 
         function renderFirewallChips(list, containerId, type) {
@@ -1823,7 +1939,7 @@ export function renderAdminHtml(baseUrl = "") {
         function renderApiKeysTable(keys) {
             const body = document.getElementById('table-keys-body');
             if (!body) return;
-            if (keys.length === 0) {
+            if (!keys || keys.length === 0) {
                 body.innerHTML = '<tr><td colspan="6" style="text-align: center; color: var(--text-muted); padding: 20px;">No API keys issued</td></tr>';
                 return;
             }
@@ -1834,7 +1950,13 @@ export function renderAdminHtml(baseUrl = "") {
                     '<td class="mono-cell">' + k.domain + '</td>' +
                     '<td><span class="brand-tag-pill">' + k.tier + '</span></td>' +
                     '<td><span class="pulse-dot" style="background: ' + (k.active ? 'var(--status-green)' : 'var(--status-red)') + '; display: inline-block; vertical-align: middle; margin-right: 4px;"></span>' + (k.active ? 'Active' : 'Revoked') + '</td>' +
-                    '<td><button type="button" class="btn-secondary" style="padding: 3px 8px; font-size: 11px;" onclick="copyApiKey(this.dataset.key)" data-key="' + k.key + '">Copy</button></td>' +
+                    '<td>' +
+                        '<div style="display: flex; gap: 6px;">' +
+                            '<button type="button" class="btn-secondary" style="padding: 3px 8px; font-size: 11px;" onclick="copyApiKey(this.dataset.key)" data-key="' + k.key + '">Copy</button>' +
+                            '<button type="button" class="' + (k.active ? 'btn-danger' : 'btn-primary') + '" style="padding: 3px 8px; font-size: 11px;" onclick="toggleApiKeyStatus(this.dataset.key)" data-key="' + k.key + '">' + (k.active ? 'Revoke' : 'Activate') + '</button>' +
+                            '<button type="button" class="btn-secondary" style="padding: 3px 8px; font-size: 11px; color: var(--status-red);" onclick="removeApiKey(this.dataset.key)" data-key="' + k.key + '" title="Delete Key">&times;</button>' +
+                        '</div>' +
+                    '</td>' +
                 '</tr>'
             ).join('');
         }
@@ -1849,13 +1971,16 @@ export function renderAdminHtml(baseUrl = "") {
                 });
                 if (res.ok) {
                     showToast('Server ' + serverId + ' promoted to Primary');
-                    fetchFullState();
+                    if (currentState && currentState.config && currentState.config.servers) {
+                        currentState.config.servers.primary = serverId;
+                        renderServerCards(currentState.config);
+                    }
                 }
             } catch (e) { showToast('Action failed: ' + e.message); }
         }
 
         async function toggleServerMaintenance(serverId) {
-            const isMaint = currentState && currentState.config.servers.maintenance && currentState.config.servers.maintenance[serverId];
+            const isMaint = Boolean(currentState && currentState.config && currentState.config.servers && currentState.config.servers.maintenance && currentState.config.servers.maintenance[serverId]);
             const nextState = !isMaint;
             try {
                 const res = await fetch('/api/admin/servers', {
@@ -1865,7 +1990,11 @@ export function renderAdminHtml(baseUrl = "") {
                 });
                 if (res.ok) {
                     showToast('Server ' + serverId + ' maintenance set to ' + nextState);
-                    fetchFullState();
+                    if (currentState && currentState.config && currentState.config.servers) {
+                        if (!currentState.config.servers.maintenance) currentState.config.servers.maintenance = {};
+                        currentState.config.servers.maintenance[serverId] = nextState;
+                        renderServerCards(currentState.config);
+                    }
                 }
             } catch (e) { showToast('Action failed: ' + e.message); }
         }
@@ -1879,8 +2008,9 @@ export function renderAdminHtml(baseUrl = "") {
                     health.servers.forEach(s => {
                         const pingEl = document.getElementById('ping-srv-' + s.id);
                         if (pingEl) {
-                            pingEl.textContent = s.latencyMs ? s.latencyMs + 'ms' : (s.status === 'ok' ? 'Online' : 'Offline');
-                            pingEl.style.color = s.status === 'ok' ? 'var(--status-green)' : 'var(--status-red)';
+                            const isHealthy = (s.status === 'operational' || s.status === 'ok');
+                            pingEl.textContent = s.latencyMs ? s.latencyMs + 'ms' : (isHealthy ? 'Online' : 'Offline');
+                            pingEl.style.color = isHealthy ? 'var(--status-green)' : 'var(--status-red)';
                         }
                     });
                 }
@@ -1890,20 +2020,72 @@ export function renderAdminHtml(baseUrl = "") {
 
         async function updateFirewallMode(isWhitelist) {
             const mode = isWhitelist ? 'whitelist' : 'public';
-            await sendConfigPatch({ firewall: { mode } });
-            showToast('Firewall mode set to ' + mode);
-            fetchFullState();
+            if (currentState && currentState.config && currentState.config.firewall) {
+                currentState.config.firewall.mode = mode;
+            }
+            const ok = await sendConfigPatch({ firewall: { mode } });
+            if (ok) {
+                showToast('Firewall mode set to ' + (isWhitelist ? 'Strict Whitelist' : 'Public'));
+            } else {
+                const el = document.getElementById('chk-whitelist-mode');
+                if (el) el.checked = !isWhitelist;
+                if (currentState && currentState.config && currentState.config.firewall) {
+                    currentState.config.firewall.mode = !isWhitelist ? 'whitelist' : 'public';
+                }
+            }
+        }
+
+        async function updateTurnstileMode(enabled) {
+            if (currentState && currentState.config && currentState.config.firewall) {
+                currentState.config.firewall.turnstileEnabled = enabled;
+            }
+            const ok = await sendConfigPatch({ firewall: { turnstileEnabled: enabled } });
+            if (ok) {
+                showToast('Turnstile Bot Gate ' + (enabled ? 'Enabled' : 'Disabled'));
+            } else {
+                const el = document.getElementById('chk-turnstile-enabled');
+                if (el) el.checked = !enabled;
+                if (currentState && currentState.config && currentState.config.firewall) {
+                    currentState.config.firewall.turnstileEnabled = !enabled;
+                }
+            }
         }
 
         async function updateHotlinkShield(enabled) {
-            await sendConfigPatch({ firewall: { hotlinkProtection: enabled } });
-            showToast('Hotlink protection ' + (enabled ? 'Enabled' : 'Disabled'));
-            fetchFullState();
+            if (currentState && currentState.config && currentState.config.firewall) {
+                currentState.config.firewall.hotlinkProtection = enabled;
+            }
+            const ok = await sendConfigPatch({ firewall: { hotlinkProtection: enabled } });
+            if (ok) {
+                showToast('Hotlink protection ' + (enabled ? 'Enabled' : 'Disabled'));
+            } else {
+                const el = document.getElementById('chk-hotlink-shield');
+                if (el) el.checked = !enabled;
+                if (currentState && currentState.config && currentState.config.firewall) {
+                    currentState.config.firewall.hotlinkProtection = !enabled;
+                }
+            }
+        }
+
+        async function toggleAdsEnabled(enabled) {
+            if (currentState && currentState.config && currentState.config.monetization) {
+                currentState.config.monetization.adsEnabled = enabled;
+            }
+            const ok = await sendConfigPatch({ monetization: { adsEnabled: enabled } });
+            if (ok) {
+                showToast('Popunder ads ' + (enabled ? 'Enabled' : 'Disabled'));
+            } else {
+                const el = document.getElementById('chk-ads-enabled');
+                if (el) el.checked = !enabled;
+                if (currentState && currentState.config && currentState.config.monetization) {
+                    currentState.config.monetization.adsEnabled = !enabled;
+                }
+            }
         }
 
         async function addDomainRule(type) {
             const input = document.getElementById('input-firewall-domain');
-            const domain = input.value.trim();
+            const domain = input ? input.value.trim().toLowerCase() : '';
             if (!domain) return;
             try {
                 const res = await fetch('/api/admin/firewall', {
@@ -1914,7 +2096,14 @@ export function renderAdminHtml(baseUrl = "") {
                 if (res.ok) {
                     input.value = '';
                     showToast('Added ' + domain + ' to ' + type);
-                    fetchFullState();
+                    if (currentState && currentState.config && currentState.config.firewall) {
+                        const targetList = type === 'whitelist' ? currentState.config.firewall.whitelist : currentState.config.firewall.blacklist;
+                        if (!targetList.includes(domain)) targetList.push(domain);
+                        renderFirewallChips(currentState.config.firewall.whitelist, 'chips-whitelist', 'whitelist');
+                        renderFirewallChips(currentState.config.firewall.blacklist, 'chips-blacklist', 'blacklist');
+                        document.getElementById('count-whitelist').textContent = currentState.config.firewall.whitelist.length;
+                        document.getElementById('count-blacklist').textContent = currentState.config.firewall.blacklist.length;
+                    }
                 }
             } catch (e) { showToast('Add failed: ' + e.message); }
         }
@@ -1928,7 +2117,17 @@ export function renderAdminHtml(baseUrl = "") {
                 });
                 if (res.ok) {
                     showToast('Removed ' + domain + ' from ' + type);
-                    fetchFullState();
+                    if (currentState && currentState.config && currentState.config.firewall) {
+                        if (type === 'whitelist') {
+                            currentState.config.firewall.whitelist = currentState.config.firewall.whitelist.filter(d => d !== domain);
+                        } else {
+                            currentState.config.firewall.blacklist = currentState.config.firewall.blacklist.filter(d => d !== domain);
+                        }
+                        renderFirewallChips(currentState.config.firewall.whitelist, 'chips-whitelist', 'whitelist');
+                        renderFirewallChips(currentState.config.firewall.blacklist, 'chips-blacklist', 'blacklist');
+                        document.getElementById('count-whitelist').textContent = currentState.config.firewall.whitelist.length;
+                        document.getElementById('count-blacklist').textContent = currentState.config.firewall.blacklist.length;
+                    }
                 }
             } catch (e) { showToast('Remove failed: ' + e.message); }
         }
@@ -1943,7 +2142,7 @@ export function renderAdminHtml(baseUrl = "") {
                 });
                 if (res.ok) {
                     showToast('Banned ' + domain);
-                    fetchFullState();
+                    fetchFullState(false, false);
                 }
             } catch (e) { showToast('Ban failed: ' + e.message); }
         }
@@ -1961,7 +2160,7 @@ export function renderAdminHtml(baseUrl = "") {
                 });
                 if (res.ok) {
                     showToast('Added ' + domain + ' to whitelist');
-                    fetchFullState();
+                    fetchFullState(false, false);
                 }
             } catch (e) { showToast('Action failed: ' + e.message); }
         }
@@ -1975,7 +2174,7 @@ export function renderAdminHtml(baseUrl = "") {
                 });
                 if (res.ok) {
                     showToast('Telemetry stats cleared successfully');
-                    fetchFullState();
+                    fetchFullState(false, false);
                 }
             } catch (e) { showToast('Reset failed: ' + e.message); }
         }
@@ -1994,9 +2193,51 @@ export function renderAdminHtml(baseUrl = "") {
             });
         }
 
+        async function manualBlockIp() {
+            const input = document.getElementById('input-firewall-ip');
+            const ip = input ? input.value.trim() : '';
+            if (!ip) return;
+            await banIp(ip);
+            if (input) input.value = '';
+        }
+
         async function banIp(ip) {
-            if (!confirm('Add IP ' + ip + ' to blocked security list?')) return;
-            showToast('IP ' + ip + ' intercepted and banned');
+            if (!ip) return;
+            try {
+                const res = await fetch('/api/admin/ban-ip', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + adminToken },
+                    body: JSON.stringify({ ip })
+                });
+                if (res.ok) {
+                    showToast('IP ' + ip + ' added to blocked list');
+                    if (currentState && currentState.config && currentState.config.firewall) {
+                        if (!currentState.config.firewall.blockedIps) currentState.config.firewall.blockedIps = [];
+                        if (!currentState.config.firewall.blockedIps.includes(ip)) currentState.config.firewall.blockedIps.push(ip);
+                        renderBlockedIpChips(currentState.config.firewall.blockedIps);
+                        renderHoneypotTable(currentState.securityLog || []);
+                    }
+                }
+            } catch (e) { showToast('Ban failed: ' + e.message); }
+        }
+
+        async function unbanIp(ip) {
+            if (!ip) return;
+            try {
+                const res = await fetch('/api/admin/unban-ip', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + adminToken },
+                    body: JSON.stringify({ ip })
+                });
+                if (res.ok) {
+                    showToast('IP ' + ip + ' unblocked');
+                    if (currentState && currentState.config && currentState.config.firewall && currentState.config.firewall.blockedIps) {
+                        currentState.config.firewall.blockedIps = currentState.config.firewall.blockedIps.filter(x => x !== ip);
+                        renderBlockedIpChips(currentState.config.firewall.blockedIps);
+                        renderHoneypotTable(currentState.securityLog || []);
+                    }
+                }
+            } catch (e) { showToast('Unban failed: ' + e.message); }
         }
 
         async function clearSecurityLogs() {
@@ -2007,17 +2248,23 @@ export function renderAdminHtml(baseUrl = "") {
                 });
                 if (res.ok) {
                     showToast('Security logs cleared');
-                    fetchFullState();
+                    if (currentState) currentState.securityLog = [];
+                    renderHoneypotTable([]);
                 }
             } catch (e) { showToast('Action failed: ' + e.message); }
         }
 
         async function saveDecoyUrl() {
-            const url = document.getElementById('input-decoy-url').value.trim();
-            showToast('Decoy stream URL updated');
+            const input = document.getElementById('input-decoy-url');
+            const url = input ? input.value.trim() : '';
+            if (!url) return;
+            const ok = await sendConfigPatch({ honeypot: { decoyStreamUrl: url } });
+            if (ok) {
+                showToast('Decoy stream URL updated successfully');
+            }
         }
 
-        function selectCappingMode(mode) {
+        function selectCappingMode(mode, userInitiated = false) {
             const isCustom = (mode === 'custom');
             const rNat = document.getElementById('radio-mode-natural');
             const rCust = document.getElementById('radio-mode-custom');
@@ -2048,6 +2295,12 @@ export function renderAdminHtml(baseUrl = "") {
                     indicator.style.borderColor = 'rgba(34, 197, 94, 0.3)';
                 }
             }
+
+            if (userInitiated) {
+                sendConfigPatch({ monetization: { cappingMode: mode } }).then(ok => {
+                    if (ok) showToast('Capping mode set to ' + (isCustom ? 'Custom' : 'Natural AI'));
+                });
+            }
         }
 
         async function saveMonetization() {
@@ -2070,7 +2323,7 @@ export function renderAdminHtml(baseUrl = "") {
             else if (gapUnit === 'minutes') popunderFrequencyHours = Math.max(1, Math.round(gapValue / 60));
             else if (gapUnit === 'seconds') popunderFrequencyHours = 1;
 
-            await sendConfigPatch({
+            const ok = await sendConfigPatch({
                 monetization: {
                     adsEnabled,
                     popunderUrl,
@@ -2082,8 +2335,9 @@ export function renderAdminHtml(baseUrl = "") {
                     popunderFrequencyHours
                 }
             });
-            showToast('Popunder settings saved');
-            fetchFullState();
+            if (ok) {
+                showToast('Popunder settings saved successfully');
+            }
         }
 
         async function promptCreateApiKey() {
@@ -2101,13 +2355,60 @@ export function renderAdminHtml(baseUrl = "") {
                 });
                 if (res.ok) {
                     showToast('Client API key generated successfully');
-                    fetchFullState();
+                    const data = await res.json();
+                    if (data && data.config && data.config.apiKeys) {
+                        if (!currentState) currentState = {};
+                        if (!currentState.config) currentState.config = {};
+                        currentState.config.apiKeys = data.config.apiKeys;
+                        renderApiKeysTable(currentState.config.apiKeys);
+                    }
                 }
             } catch (e) { showToast('Key generation failed: ' + e.message); }
         }
 
         function copyApiKey(key) {
             navigator.clipboard.writeText(key).then(() => showToast('Copied API Key to clipboard'));
+        }
+
+        async function toggleApiKeyStatus(key) {
+            try {
+                const res = await fetch('/api/admin/config', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + adminToken },
+                    body: JSON.stringify({ toggleApiKey: key })
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data && data.config && data.config.apiKeys) {
+                        if (!currentState) currentState = {};
+                        if (!currentState.config) currentState.config = {};
+                        currentState.config.apiKeys = data.config.apiKeys;
+                        renderApiKeysTable(currentState.config.apiKeys);
+                    }
+                    showToast('API Key status updated');
+                }
+            } catch (e) { showToast('Action failed: ' + e.message); }
+        }
+
+        async function removeApiKey(key) {
+            if (!confirm('Are you sure you want to permanently delete API key ' + key + '?')) return;
+            try {
+                const res = await fetch('/api/admin/config', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + adminToken },
+                    body: JSON.stringify({ deleteApiKey: key })
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data && data.config && data.config.apiKeys) {
+                        if (!currentState) currentState = {};
+                        if (!currentState.config) currentState.config = {};
+                        currentState.config.apiKeys = data.config.apiKeys;
+                        renderApiKeysTable(currentState.config.apiKeys);
+                    }
+                    showToast('API Key deleted');
+                }
+            } catch (e) { showToast('Delete failed: ' + e.message); }
         }
 
         async function sendConfigPatch(patch) {
@@ -2117,7 +2418,20 @@ export function renderAdminHtml(baseUrl = "") {
                     headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + adminToken },
                     body: JSON.stringify(patch)
                 });
-                return res.ok;
+                if (res.ok) {
+                    const data = await res.json().catch(() => ({}));
+                    if (data && data.config) {
+                        if (!currentState) currentState = {};
+                        currentState.config = {
+                            ...currentState.config,
+                            ...data.config,
+                            firewall: { ...(currentState.config ? currentState.config.firewall : {}), ...data.config.firewall },
+                            monetization: { ...(currentState.config ? currentState.config.monetization : {}), ...data.config.monetization }
+                        };
+                    }
+                    return true;
+                }
+                return false;
             } catch (err) {
                 showToast('Save failed: ' + err.message);
                 return false;
@@ -2129,7 +2443,7 @@ export function renderAdminHtml(baseUrl = "") {
             if (adminToken) {
                 document.getElementById('login-modal').style.display = 'none';
                 document.getElementById('dashboard-root').style.display = 'flex';
-                fetchFullState();
+                fetchFullState(false, false);
                 startAutoRefresh();
             } else {
                 document.getElementById('login-modal').style.display = 'flex';

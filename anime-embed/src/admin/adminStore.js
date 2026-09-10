@@ -25,6 +25,7 @@ const state = {
         },
         lastTested: null
     },
+    updatedAt: Date.now(),
     firewall: {
         mode: "public", // "public" (allow all except blacklist) or "whitelist" (allow only whitelist)
         whitelist: [
@@ -34,8 +35,13 @@ const state = {
             "anime-embed.rk18109ry.workers.dev"
         ],
         blacklist: [],
+        blockedIps: [],
+        turnstileEnabled: true,
         hotlinkProtection: false, // Block direct stream URL access outside iframe
         blockedRequestsCount: 0
+    },
+    honeypot: {
+        decoyStreamUrl: "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8"
     },
     branding: {
         watermarkEnabled: false,
@@ -118,8 +124,13 @@ export function getAdminConfig() {
             mode: state.firewall.mode,
             whitelist: [...state.firewall.whitelist],
             blacklist: [...state.firewall.blacklist],
+            blockedIps: [...(state.firewall.blockedIps || [])],
+            turnstileEnabled: state.firewall.turnstileEnabled !== false,
             hotlinkProtection: state.firewall.hotlinkProtection,
             blockedRequestsCount: state.firewall.blockedRequestsCount
+        },
+        honeypot: {
+            decoyStreamUrl: state.honeypot?.decoyStreamUrl || "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8"
         },
         branding: { ...state.branding },
         monetization: {
@@ -133,11 +144,15 @@ export function getAdminConfig() {
             popunderFrequencyHours: state.monetization.popunderFrequencyHours || 24,
             adFreeDomains: [...state.monetization.adFreeDomains]
         },
-        apiKeys: [...state.apiKeys]
+        apiKeys: [...state.apiKeys],
+        updatedAt: state.updatedAt || 0
     };
 }
 
 export function updateAdminConfig(patch = {}) {
+    state.updatedAt = Date.now();
+    lastSyncTime = Date.now();
+
     if (patch.servers) {
         if (patch.servers.primary) state.servers.primary = parseInt(patch.servers.primary, 10);
         if (patch.servers.enabled) state.servers.enabled = { ...state.servers.enabled, ...patch.servers.enabled };
@@ -147,7 +162,12 @@ export function updateAdminConfig(patch = {}) {
         if (patch.firewall.mode) state.firewall.mode = patch.firewall.mode;
         if (Array.isArray(patch.firewall.whitelist)) state.firewall.whitelist = patch.firewall.whitelist.map(normalizeHostname).filter(Boolean);
         if (Array.isArray(patch.firewall.blacklist)) state.firewall.blacklist = patch.firewall.blacklist.map(normalizeHostname).filter(Boolean);
+        if (Array.isArray(patch.firewall.blockedIps)) state.firewall.blockedIps = patch.firewall.blockedIps.map(s => String(s).trim()).filter(Boolean);
         if (typeof patch.firewall.hotlinkProtection === "boolean") state.firewall.hotlinkProtection = patch.firewall.hotlinkProtection;
+        if (typeof patch.firewall.turnstileEnabled === "boolean") state.firewall.turnstileEnabled = patch.firewall.turnstileEnabled;
+    }
+    if (patch.honeypot) {
+        state.honeypot = { ...(state.honeypot || {}), ...patch.honeypot };
     }
     if (patch.branding) {
         state.branding = { ...state.branding, ...patch.branding };
@@ -156,6 +176,31 @@ export function updateAdminConfig(patch = {}) {
         state.monetization = { ...state.monetization, ...patch.monetization };
     }
     return getAdminConfig();
+}
+
+export function addBlockedIp(ip) {
+    if (!ip) return;
+    const clean = String(ip).trim();
+    if (!clean) return;
+    if (!state.firewall.blockedIps) state.firewall.blockedIps = [];
+    if (!state.firewall.blockedIps.includes(clean)) {
+        state.firewall.blockedIps.push(clean);
+        state.updatedAt = Date.now();
+        lastSyncTime = Date.now();
+    }
+}
+
+export function removeBlockedIp(ip) {
+    if (!ip || !state.firewall.blockedIps) return;
+    const clean = String(ip).trim();
+    state.firewall.blockedIps = state.firewall.blockedIps.filter(item => item !== clean);
+    state.updatedAt = Date.now();
+    lastSyncTime = Date.now();
+}
+
+export function isIpBlocked(ip) {
+    if (!ip || !state.firewall.blockedIps) return false;
+    return state.firewall.blockedIps.includes(String(ip).trim());
 }
 
 // ── Firewall Enforcement ──
@@ -398,11 +443,15 @@ export function toggleApiKey(key) {
     const target = state.apiKeys.find(k => k.key === key);
     if (target) {
         target.active = !target.active;
+        state.updatedAt = Date.now();
+        lastSyncTime = Date.now();
     }
 }
 
 export function deleteApiKey(key) {
     state.apiKeys = state.apiKeys.filter(k => k.key !== key);
+    state.updatedAt = Date.now();
+    lastSyncTime = Date.now();
 }
 
 // ── Complete State Snapshot for Admin Dashboard ──
@@ -469,10 +518,16 @@ let lastSyncTime = 0;
 export async function syncAdminStoreWithKv(kv, force = false) {
     if (!kv) return;
     const now = Date.now();
-    if (kvLoaded && !force && (now - lastSyncTime < 3000)) return;
+    // Do not sync if state was updated locally in this isolate within last 5s
+    if (state.updatedAt && (now - state.updatedAt < 5000)) return;
+    if (kvLoaded && !force && (now - lastSyncTime < 5000)) return;
     try {
         const saved = await kv.get("anixo_admin_persistent_state", "json");
         if (saved) {
+            // Guard: If saved data in KV is older than current in-memory state, ignore it!
+            if (state.updatedAt && (!saved.updatedAt || saved.updatedAt < state.updatedAt)) {
+                return;
+            }
             if (saved.servers) {
                 state.servers = { ...state.servers, ...saved.servers };
             }
@@ -480,8 +535,13 @@ export async function syncAdminStoreWithKv(kv, force = false) {
                 state.firewall = {
                     ...state.firewall,
                     ...saved.firewall,
+                    blockedIps: Array.isArray(saved.firewall.blockedIps) ? saved.firewall.blockedIps : (state.firewall.blockedIps || []),
+                    turnstileEnabled: saved.firewall.turnstileEnabled !== false,
                     blockedRequestsCount: state.firewall.blockedRequestsCount
                 };
+            }
+            if (saved.honeypot) {
+                state.honeypot = { ...(state.honeypot || {}), ...saved.honeypot };
             }
             if (saved.monetization) {
                 state.monetization = { ...state.monetization, ...saved.monetization };
@@ -496,6 +556,9 @@ export async function syncAdminStoreWithKv(kv, force = false) {
                 for (const s of saved.activeSessions) {
                     state.auth.activeSessions.add(s);
                 }
+            }
+            if (saved.updatedAt) {
+                state.updatedAt = saved.updatedAt;
             }
             if (saved.telemetry) {
                 state.telemetry.totalStreams = Math.max(state.telemetry.totalStreams, saved.telemetry.totalStreams || 0);
@@ -535,14 +598,20 @@ export async function syncAdminStoreWithKv(kv, force = false) {
 export async function persistAdminStoreToKv(kv) {
     if (!kv) return;
     try {
+        state.updatedAt = Date.now();
+        lastSyncTime = Date.now();
         const persistentData = {
+            updatedAt: state.updatedAt,
             servers: state.servers,
             firewall: {
                 mode: state.firewall.mode,
                 whitelist: state.firewall.whitelist,
                 blacklist: state.firewall.blacklist,
+                blockedIps: state.firewall.blockedIps || [],
+                turnstileEnabled: state.firewall.turnstileEnabled !== false,
                 hotlinkProtection: state.firewall.hotlinkProtection
             },
+            honeypot: state.honeypot || { decoyStreamUrl: "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8" },
             monetization: state.monetization,
             apiKeys: state.apiKeys,
             securityLog: state.securityLog.slice(0, 50),
