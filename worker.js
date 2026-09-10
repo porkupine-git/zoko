@@ -1,13 +1,3 @@
-/**
- * ZOKO STREAMING SCRAPER & PROXY ENGINE - CLOUDFLARE WORKER (PAID PLAN EDITION)
- * 
- * Optimized for Cloudflare Workers Paid ($5/mo):
- *  - 10M KV Reads & 1M Writes/month: Multi-tier stream and AniList ID caching (ZOKO_CACHE)
- *  - Edge CDN Caching (caches.default + cf options): Video chunks (.ts) & subtitles (.vtt)
- *  - Isolate In-Memory Micro-Cache: 0ms latency, zero CPU time for ultra-hot requests
- *  - ctx.waitUntil: Non-blocking background writes for ultra-fast response dispatch
- *  - Full CORS (*) on all routes
- */
 
 const ZOKO_BASE_URL = "https://zokoanime.video";
 const OBF_KEY = 'otaku-embed-v1';
@@ -95,7 +85,7 @@ async function resolveMalId(aniId, title, env, ctx) {
                 setMemCache(cacheKey, parsed, 86400); // 24hr memory
                 return parsed;
             }
-        } catch {}
+        } catch { }
     }
 
     let resolvedId = null;
@@ -114,7 +104,7 @@ async function resolveMalId(aniId, title, env, ctx) {
                 const j = await aRes.json();
                 if (j?.data?.Media?.idMal) resolvedId = j.data.Media.idMal;
             }
-        } catch {}
+        } catch { }
 
         // 4. Try Kitsu mapping fallback if AniList is down or missing
         if (!resolvedId) {
@@ -141,7 +131,7 @@ async function resolveMalId(aniId, title, env, ctx) {
                         }
                     }
                 }
-            } catch {}
+            } catch { }
         }
     }
 
@@ -157,7 +147,7 @@ async function resolveMalId(aniId, title, env, ctx) {
                 const mal = mappings.find(m => m.attributes?.externalSite === 'myanimelist/anime');
                 if (mal?.attributes?.externalId) resolvedId = parseInt(mal.attributes.externalId);
             }
-        } catch {}
+        } catch { }
     }
 
     const finalId = resolvedId || numId || null;
@@ -167,7 +157,7 @@ async function resolveMalId(aniId, title, env, ctx) {
         setMemCache(cacheKey, finalId, 86400);
         if (env?.ZOKO_CACHE && ctx?.waitUntil) {
             ctx.waitUntil(
-                env.ZOKO_CACHE.put(cacheKey, finalId.toString(), { expirationTtl: 2592000 }).catch(() => {})
+                env.ZOKO_CACHE.put(cacheKey, finalId.toString(), { expirationTtl: 2592000 }).catch(() => { })
             );
         }
     }
@@ -324,7 +314,7 @@ async function handleM3U8Proxy(targetUrl, baseUrl, request, ctx) {
         if (absUrl.includes('.m3u8') || absUrl.includes('playlist') || absUrl.includes('master')) {
             return `${baseUrl}/api/proxy/m3u8?url=${encodeURIComponent(absUrl)}`;
         }
-        
+
         // SMART SEGMENT ROUTING: Open CDNs bypass Worker proxy entirely!
         // Drops Worker requests per episode from ~300 to ~2 (saves 99% of Worker invocations!)
         if (isDirectCdn(absUrl)) {
@@ -480,7 +470,7 @@ export default {
                         headers: hitHeaders
                     });
                 }
-            } catch {}
+            } catch { }
         }
 
         let response = null;
@@ -568,7 +558,7 @@ export default {
                                 }
                             });
                         }
-                    } catch {}
+                    } catch { }
                 }
 
                 // --- CACHE MISS: Scrape Upstream & Decrypt ---
@@ -582,7 +572,7 @@ export default {
                         ctx.waitUntil(
                             env.ZOKO_CACHE.put(streamCacheKey, JSON.stringify(streamData), {
                                 expirationTtl: 43200
-                            }).catch(() => {})
+                            }).catch(() => { })
                         );
                     }
 
@@ -642,7 +632,7 @@ export default {
                             streamData = JSON.parse(kvDataStr);
                             cacheStatus = "KV-HIT";
                         }
-                    } catch {}
+                    } catch { }
                 }
 
                 if (!streamData) {
@@ -651,7 +641,7 @@ export default {
                     setMemCache(streamCacheKey, streamData, 1800);
                     if (env.ZOKO_CACHE && ctx?.waitUntil) {
                         ctx.waitUntil(
-                            env.ZOKO_CACHE.put(streamCacheKey, JSON.stringify(streamData), { expirationTtl: 43200 }).catch(() => {})
+                            env.ZOKO_CACHE.put(streamCacheKey, JSON.stringify(streamData), { expirationTtl: 43200 }).catch(() => { })
                         );
                     }
                 }
@@ -771,7 +761,7 @@ export default {
                     // Cache in KV for 24 hours
                     if (env.ZOKO_CACHE && ctx?.waitUntil) {
                         ctx.waitUntil(
-                            env.ZOKO_CACHE.put(dlCacheKey, JSON.stringify(dlData), { expirationTtl: 86400 }).catch(() => {})
+                            env.ZOKO_CACHE.put(dlCacheKey, JSON.stringify(dlData), { expirationTtl: 86400 }).catch(() => { })
                         );
                     }
 
@@ -867,7 +857,7 @@ export default {
 
         // Store successful cacheable responses in L1 Edge Cache for 0-CPU repeats
         if (isCacheable && response.status === 200 && ctx?.waitUntil) {
-            ctx.waitUntil(cache.put(request, response.clone()).catch(() => {}));
+            ctx.waitUntil(cache.put(request, response.clone()).catch(() => { }));
         }
 
         return response;
