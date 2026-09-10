@@ -22,6 +22,70 @@ const DEFAULT_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKi
 const ANINEKO_BASE = "https://anineko.to";
 
 // -------------------------------------------------------------
+// Security & Token Cipher (Zero DevTools leaks of upstream CDNs)
+// -------------------------------------------------------------
+const CIPHER_KEY = 0x5a;
+
+function encryptStreamToken(str) {
+    if (!str) return "";
+    const bytes = new TextEncoder().encode(str);
+    const xor = new Uint8Array(bytes.length);
+    for (let i = 0; i < bytes.length; i++) {
+        xor[i] = bytes[i] ^ ((CIPHER_KEY + (i % 31)) & 0xff);
+    }
+    let binary = "";
+    for (let i = 0; i < xor.length; i++) {
+        binary += String.fromCharCode(xor[i]);
+    }
+    return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+function decryptStreamToken(token) {
+    try {
+        if (!token) return null;
+        let base64 = token.replace(/-/g, "+").replace(/_/g, "/");
+        while (base64.length % 4) base64 += "=";
+        const binary = atob(base64);
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) {
+            bytes[i] = binary.charCodeAt(i) ^ ((CIPHER_KEY + (i % 31)) & 0xff);
+        }
+        return new TextDecoder().decode(bytes);
+    } catch {
+        return null;
+    }
+}
+
+function resolveProxyTarget(url) {
+    const token = url.searchParams.get("token") || url.searchParams.get("t");
+    if (token) {
+        const decrypted = decryptStreamToken(token);
+        if (decrypted) return decrypted;
+    }
+    return url.searchParams.get("url") || null;
+}
+
+function isOriginAllowed(request) {
+    const origin = request.headers.get("origin") || "";
+    const referer = request.headers.get("referer") || "";
+    const ref = (origin || referer).toLowerCase();
+
+    // Direct / server-to-server / service binding calls without browser origin/referer
+    if (!ref) return true;
+
+    if (
+        ref.includes("anixo.online") ||
+        ref.includes("anixo.buzz") ||
+        ref.includes("localhost") ||
+        ref.includes("127.0.0.1")
+    ) {
+        return true;
+    }
+
+    return false;
+}
+
+// -------------------------------------------------------------
 // TIER 1: In-Memory Isolate Micro-Cache (0ms CPU, 0 KV Ops)
 // -------------------------------------------------------------
 const MEM_CACHE = new Map();
@@ -267,14 +331,14 @@ async function resolveBibiemb(input, baseUrl) {
         streams: [
             {
                 server: 'BibiEmb Edge (Primary)',
-                url: baseUrl + '/api/proxy?url=' + encodeURIComponent(bibiUrl),
+                url: baseUrl ? `${baseUrl}/api/proxy?token=${encryptStreamToken(bibiUrl)}` : bibiUrl,
                 rawUrl: bibiUrl,
                 type: 'hls',
                 priority: 1
             },
             {
                 server: 'VibePlayer Direct (Backup)',
-                url: baseUrl + '/api/proxy?url=' + encodeURIComponent(rawSrc),
+                url: baseUrl ? `${baseUrl}/api/proxy?token=${encryptStreamToken(rawSrc)}` : rawSrc,
                 rawUrl: rawSrc,
                 type: 'hls',
                 priority: 2
@@ -318,7 +382,7 @@ async function resolveOtakuhg(input, baseUrl) {
                 const absHls4 = parsedLinks.hls4.startsWith('/') ? `https://otakuhg.site${parsedLinks.hls4}` : parsedLinks.hls4;
                 streams.push({
                     server: 'OtakuHG Edge (Primary / HLS4)',
-                    url: baseUrl ? `${baseUrl}/api/proxy?url=${encodeURIComponent(absHls4)}` : absHls4,
+                    url: baseUrl ? `${baseUrl}/api/proxy?token=${encryptStreamToken(absHls4)}` : absHls4,
                     rawUrl: absHls4,
                     type: 'hls',
                     quality: '1080p / Auto',
@@ -328,7 +392,7 @@ async function resolveOtakuhg(input, baseUrl) {
             if (parsedLinks.hls3) {
                 streams.push({
                     server: 'SolutionPortal CDN (Backup / HLS3)',
-                    url: baseUrl ? `${baseUrl}/api/proxy?url=${encodeURIComponent(parsedLinks.hls3)}` : parsedLinks.hls3,
+                    url: baseUrl ? `${baseUrl}/api/proxy?token=${encryptStreamToken(parsedLinks.hls3)}` : parsedLinks.hls3,
                     rawUrl: parsedLinks.hls3,
                     type: 'hls',
                     quality: 'auto',
@@ -338,7 +402,7 @@ async function resolveOtakuhg(input, baseUrl) {
             if (parsedLinks.hls2) {
                 streams.push({
                     server: 'Centaurus CDN (Backup / HLS2)',
-                    url: baseUrl ? `${baseUrl}/api/proxy?url=${encodeURIComponent(parsedLinks.hls2)}` : parsedLinks.hls2,
+                    url: baseUrl ? `${baseUrl}/api/proxy?token=${encryptStreamToken(parsedLinks.hls2)}` : parsedLinks.hls2,
                     rawUrl: parsedLinks.hls2,
                     type: 'hls',
                     quality: 'auto',
@@ -354,7 +418,7 @@ async function resolveOtakuhg(input, baseUrl) {
         for (const m of m3u8Matches) {
             streams.push({
                 server: 'StreamHG HLS',
-                url: baseUrl ? `${baseUrl}/api/proxy?url=${encodeURIComponent(m[1])}` : m[1],
+                url: baseUrl ? `${baseUrl}/api/proxy?token=${encryptStreamToken(m[1])}` : m[1],
                 rawUrl: m[1],
                 type: 'hls',
                 priority: 1
@@ -395,7 +459,7 @@ async function resolveOtakuVid(input, baseUrl) {
             if (parsedLinks.hls3) {
                 streams.push({
                     server: 'OtakuVid SolutionPortal (1080p / HLS3)',
-                    url: baseUrl ? `${baseUrl}/api/proxy?url=${encodeURIComponent(parsedLinks.hls3)}` : parsedLinks.hls3,
+                    url: baseUrl ? `${baseUrl}/api/proxy?token=${encryptStreamToken(parsedLinks.hls3)}` : parsedLinks.hls3,
                     rawUrl: parsedLinks.hls3,
                     type: 'hls',
                     quality: '1080p Multi-Quality',
@@ -407,7 +471,7 @@ async function resolveOtakuVid(input, baseUrl) {
                 const absHls4 = parsedLinks.hls4.startsWith('/') ? `https://otakuvid.online${parsedLinks.hls4}` : parsedLinks.hls4;
                 streams.push({
                     server: 'OtakuVid Edge (Backup / HLS4)',
-                    url: baseUrl ? `${baseUrl}/api/proxy?url=${encodeURIComponent(absHls4)}` : absHls4,
+                    url: baseUrl ? `${baseUrl}/api/proxy?token=${encryptStreamToken(absHls4)}` : absHls4,
                     rawUrl: absHls4,
                     type: 'hls',
                     quality: 'auto',
@@ -418,7 +482,7 @@ async function resolveOtakuVid(input, baseUrl) {
             if (parsedLinks.hls2 && !parsedLinks.hls2.includes('dramiyos-cdn')) {
                 streams.push({
                     server: 'OtakuVid Direct (Backup / HLS2)',
-                    url: baseUrl ? `${baseUrl}/api/proxy?url=${encodeURIComponent(parsedLinks.hls2)}` : parsedLinks.hls2,
+                    url: baseUrl ? `${baseUrl}/api/proxy?token=${encryptStreamToken(parsedLinks.hls2)}` : parsedLinks.hls2,
                     rawUrl: parsedLinks.hls2,
                     type: 'hls',
                     quality: '1080p',
@@ -438,9 +502,9 @@ async function resolveOtakuVid(input, baseUrl) {
                 if (lm) {
                     try {
                         const pl = JSON.parse(lm[1]);
-                        if (pl.hls3) streams.push({ server: 'OtakuVid SolutionPortal (1080p / HLS3)', url: `${baseUrl}/api/proxy?url=${encodeURIComponent(pl.hls3)}`, rawUrl: pl.hls3, type: 'hls', quality: '1080p', priority: 1 });
-                        if (pl.hls4) streams.push({ server: 'OtakuVid Edge (Backup / HLS4)', url: `${baseUrl}/api/proxy?url=${encodeURIComponent(pl.hls4)}`, rawUrl: pl.hls4, type: 'hls', quality: 'auto', priority: 2 });
-                        if (pl.hls2 && !pl.hls2.includes('dramiyos-cdn')) streams.push({ server: 'OtakuVid Direct (Backup / HLS2)', url: `${baseUrl}/api/proxy?url=${encodeURIComponent(pl.hls2)}`, rawUrl: pl.hls2, type: 'hls', quality: '1080p', priority: 3 });
+                        if (pl.hls3) streams.push({ server: 'OtakuVid SolutionPortal (1080p / HLS3)', url: `${baseUrl}/api/proxy?token=${encryptStreamToken(pl.hls3)}`, rawUrl: pl.hls3, type: 'hls', quality: '1080p', priority: 1 });
+                        if (pl.hls4) streams.push({ server: 'OtakuVid Edge (Backup / HLS4)', url: `${baseUrl}/api/proxy?token=${encryptStreamToken(pl.hls4)}`, rawUrl: pl.hls4, type: 'hls', quality: 'auto', priority: 2 });
+                        if (pl.hls2 && !pl.hls2.includes('dramiyos-cdn')) streams.push({ server: 'OtakuVid Direct (Backup / HLS2)', url: `${baseUrl}/api/proxy?token=${encryptStreamToken(pl.hls2)}`, rawUrl: pl.hls2, type: 'hls', quality: '1080p', priority: 3 });
                     } catch (e) {}
                     break;
                 }
@@ -843,7 +907,7 @@ async function handleM3u8ProxyWorker(streamUrl, baseUrl) {
         if (trimmed.startsWith('#EXT-') && line.includes('URI="')) {
             return line.replace(/URI="([^"]+)"/g, (m, uri) => {
                 const abs = uri.startsWith('http') ? uri : (uri.startsWith('/') ? `${targetParsed.origin}${uri}` : `${baseDir}${uri}`);
-                return `URI="${baseUrl}/api/proxy?url=${encodeURIComponent(abs)}"`;
+                return `URI="${baseUrl}/api/proxy?token=${encryptStreamToken(abs)}"`;
             });
         }
 
@@ -858,7 +922,7 @@ async function handleM3u8ProxyWorker(streamUrl, baseUrl) {
             return absUrl;
         }
 
-        return `${baseUrl}/api/proxy?url=${encodeURIComponent(absUrl)}`;
+        return `${baseUrl}/api/proxy?token=${encryptStreamToken(absUrl)}`;
     }).join('\n');
 
     return new Response(rewritten, {
@@ -923,6 +987,14 @@ export default {
     async fetch(request, env, ctx) {
         if (request.method === "OPTIONS") {
             return new Response(null, { headers: CORS_HEADERS });
+        }
+
+        // Security: Leech Firewall (Blocks unauthorized 3rd-party domains)
+        if (!isOriginAllowed(request)) {
+            return new Response("Access Denied: Unauthorized leeching blocked by Anixo Shield", {
+                status: 403,
+                headers: { ...CORS_HEADERS, "Content-Type": "text/plain" }
+            });
         }
 
         const url = new URL(request.url);
@@ -1119,10 +1191,10 @@ export default {
                 });
             }
 
-            // 9. Smart CORS Stream Proxy
+            // 9. Smart CORS Stream Proxy: /api/proxy?token=... or ?url=...
             else if (pathname === "/api/proxy") {
-                const streamUrl = url.searchParams.get("url");
-                if (!streamUrl) return new Response("Missing target url", { status: 400, headers: CORS_HEADERS });
+                const streamUrl = resolveProxyTarget(url);
+                if (!streamUrl) return new Response("Missing target url or token", { status: 400, headers: CORS_HEADERS });
 
                 if (isPlaylistUrl(streamUrl)) {
                     response = await handleM3u8ProxyWorker(streamUrl, baseUrl);

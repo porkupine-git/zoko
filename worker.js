@@ -19,6 +19,70 @@ const CORS_HEADERS = {
 };
 
 // -------------------------------------------------------------
+// Security & Token Cipher (Zero DevTools leaks of upstream CDNs)
+// -------------------------------------------------------------
+const CIPHER_KEY = 0x5a;
+
+function encryptStreamToken(str) {
+    if (!str) return "";
+    const bytes = new TextEncoder().encode(str);
+    const xor = new Uint8Array(bytes.length);
+    for (let i = 0; i < bytes.length; i++) {
+        xor[i] = bytes[i] ^ ((CIPHER_KEY + (i % 31)) & 0xff);
+    }
+    let binary = "";
+    for (let i = 0; i < xor.length; i++) {
+        binary += String.fromCharCode(xor[i]);
+    }
+    return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+function decryptStreamToken(token) {
+    try {
+        if (!token) return null;
+        let base64 = token.replace(/-/g, "+").replace(/_/g, "/");
+        while (base64.length % 4) base64 += "=";
+        const binary = atob(base64);
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) {
+            bytes[i] = binary.charCodeAt(i) ^ ((CIPHER_KEY + (i % 31)) & 0xff);
+        }
+        return new TextDecoder().decode(bytes);
+    } catch {
+        return null;
+    }
+}
+
+function resolveProxyTarget(url) {
+    const token = url.searchParams.get("token") || url.searchParams.get("t");
+    if (token) {
+        const decrypted = decryptStreamToken(token);
+        if (decrypted) return decrypted;
+    }
+    return url.searchParams.get("url") || null;
+}
+
+function isOriginAllowed(request) {
+    const origin = request.headers.get("origin") || "";
+    const referer = request.headers.get("referer") || "";
+    const ref = (origin || referer).toLowerCase();
+
+    // Direct / server-to-server / service binding calls without browser origin/referer
+    if (!ref) return true;
+
+    if (
+        ref.includes("anixo.online") ||
+        ref.includes("anixo.buzz") ||
+        ref.includes("localhost") ||
+        ref.includes("127.0.0.1")
+    ) {
+        return true;
+    }
+
+    return false;
+}
+
+// -------------------------------------------------------------
 // TIER 1: In-Memory Isolate Micro-Cache (0ms, 0 CPU, 0 KV Ops)
 // -------------------------------------------------------------
 const MEM_CACHE = new Map();
@@ -196,14 +260,14 @@ async function extractStream(malId, episode, track, baseUrl) {
     const data = deobfuscatePayload(rawPayload);
 
     const rawMasterUrl = data.src;
-    const proxiedMasterUrl = `${baseUrl}/api/proxy/m3u8?url=${encodeURIComponent(rawMasterUrl)}`;
+    const proxiedMasterUrl = `${baseUrl}/api/proxy/m3u8?token=${encryptStreamToken(rawMasterUrl)}`;
 
     const subtitles = (data.subtitles || []).map(sub => ({
         lang: sub.lang,
         label: sub.label,
         default: !!sub.default,
         src: sub.src,
-        proxied_src: `${baseUrl}/api/proxy/vtt?url=${encodeURIComponent(sub.src)}`
+        proxied_src: `${baseUrl}/api/proxy/vtt?token=${encryptStreamToken(sub.src)}`
     }));
 
     return {
@@ -302,7 +366,7 @@ async function handleM3U8Proxy(targetUrl, baseUrl, request, ctx) {
         if (trimmed.startsWith('#EXT-X-MEDIA:') && trimmed.includes('TYPE=SUBTITLES')) {
             return line.replace(/URI="([^"]+)"/, (match, uri) => {
                 const abs = uri.startsWith('http') ? uri : (uri.startsWith('/') ? `${parsed.origin}${uri}` : `${baseDir}${uri}`);
-                return `URI="${baseUrl}/api/proxy/vtt?url=${encodeURIComponent(abs)}"`;
+                return `URI="${baseUrl}/api/proxy/vtt?token=${encryptStreamToken(abs)}"`;
             });
         }
 
@@ -312,7 +376,7 @@ async function handleM3U8Proxy(targetUrl, baseUrl, request, ctx) {
         // URL lines
         const absUrl = trimmed.startsWith('http') ? trimmed : (trimmed.startsWith('/') ? `${parsed.origin}${trimmed}` : `${baseDir}${trimmed}`);
         if (absUrl.includes('.m3u8') || absUrl.includes('playlist') || absUrl.includes('master')) {
-            return `${baseUrl}/api/proxy/m3u8?url=${encodeURIComponent(absUrl)}`;
+            return `${baseUrl}/api/proxy/m3u8?token=${encryptStreamToken(absUrl)}`;
         }
 
         // SMART SEGMENT ROUTING: Open CDNs bypass Worker proxy entirely!
@@ -321,7 +385,7 @@ async function handleM3U8Proxy(targetUrl, baseUrl, request, ctx) {
             return absUrl;
         }
 
-        return `${baseUrl}/api/proxy/ts?url=${encodeURIComponent(absUrl)}`;
+        return `${baseUrl}/api/proxy/ts?token=${encryptStreamToken(absUrl)}`;
     }).join('\n');
 
     setMemCache(memKey, rewritten, 60);
@@ -445,6 +509,14 @@ export default {
             return new Response(null, { status: 204, headers });
         }
 
+        // Security: Leech Firewall (Blocks unauthorized 3rd-party domains)
+        if (!isOriginAllowed(request)) {
+            return new Response("Access Denied: Unauthorized leeching blocked by Anixo Shield", {
+                status: 403,
+                headers: { ...CORS_HEADERS, "Content-Type": "text/plain" }
+            });
+        }
+
         // -------------------------------------------------------------
         // TIER 0: Free Cloudflare Cache API (caches.default)
         // Instant Edge RAM match (< 0.2ms CPU, 0 KV reads, 0 KV writes)
@@ -525,7 +597,7 @@ export default {
                     });
                 }
 
-                const streamCacheKey = `stream:${targetMalId}:${ep}:${track}`;
+                const streamCacheKey = `stream:v3:${targetMalId}:${ep}:${track}`;
 
                 // --- TIER 1: In-Memory Isolate Cache ---
                 const memData = getMemCache(streamCacheKey);
@@ -621,7 +693,7 @@ export default {
                     });
                 }
 
-                const streamCacheKey = `stream:v2:${targetMalId}:${ep}:${lang}`;
+                const streamCacheKey = `stream:v3:${targetMalId}:${ep}:${lang}`;
                 let streamData = getMemCache(streamCacheKey);
                 let cacheStatus = "MEM-HIT";
 
@@ -702,8 +774,8 @@ export default {
 
         // 3. Generic Proxy: /api/proxy (Auto-detects m3u8, vtt, ts for Anigo2)
         else if (url.pathname === "/api/proxy") {
-            const target = url.searchParams.get("url");
-            if (!target) return new Response("Missing target url", { status: 400, headers: CORS_HEADERS });
+            const target = resolveProxyTarget(url);
+            if (!target) return new Response("Missing target url or token", { status: 400, headers: CORS_HEADERS });
             if (target.includes(".m3u8")) response = await handleM3U8Proxy(target, baseUrl, request, ctx);
             else if (target.includes(".vtt")) response = await handleVttProxy(target, request, ctx);
             else response = await handleTsProxy(target, request, ctx);
@@ -711,22 +783,22 @@ export default {
 
         // 4. M3U8 Playlist Proxy: /api/proxy/m3u8
         else if (url.pathname === "/api/proxy/m3u8") {
-            const target = url.searchParams.get("url");
-            if (!target) return new Response("Missing target url", { status: 400, headers: CORS_HEADERS });
+            const target = resolveProxyTarget(url);
+            if (!target) return new Response("Missing target url or token", { status: 400, headers: CORS_HEADERS });
             response = await handleM3U8Proxy(target, baseUrl, request, ctx);
         }
 
         // 4. Video TS Chunk Proxy: /api/proxy/ts (Edge CDN Cached)
         else if (url.pathname === "/api/proxy/ts") {
-            const target = url.searchParams.get("url");
-            if (!target) return new Response("Missing target url", { status: 400, headers: CORS_HEADERS });
+            const target = resolveProxyTarget(url);
+            if (!target) return new Response("Missing target url or token", { status: 400, headers: CORS_HEADERS });
             response = await handleTsProxy(target, request, ctx);
         }
 
         // 5. Subtitles VTT Proxy: /api/proxy/vtt (Edge CDN Cached)
         else if (url.pathname === "/api/proxy/vtt") {
-            const target = url.searchParams.get("url");
-            if (!target) return new Response("Missing target url", { status: 400, headers: CORS_HEADERS });
+            const target = resolveProxyTarget(url);
+            if (!target) return new Response("Missing target url or token", { status: 400, headers: CORS_HEADERS });
             response = await handleVttProxy(target, request, ctx);
         }
 

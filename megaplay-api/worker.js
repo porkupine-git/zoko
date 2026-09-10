@@ -41,6 +41,70 @@ function isDirectCdn(urlStr) {
     return false;
 }
 
+// -------------------------------------------------------------
+// Security & Token Cipher (Zero DevTools leaks of upstream CDNs)
+// -------------------------------------------------------------
+const CIPHER_KEY = 0x5a;
+
+function encryptStreamToken(str) {
+    if (!str) return "";
+    const bytes = new TextEncoder().encode(str);
+    const xor = new Uint8Array(bytes.length);
+    for (let i = 0; i < bytes.length; i++) {
+        xor[i] = bytes[i] ^ ((CIPHER_KEY + (i % 31)) & 0xff);
+    }
+    let binary = "";
+    for (let i = 0; i < xor.length; i++) {
+        binary += String.fromCharCode(xor[i]);
+    }
+    return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+function decryptStreamToken(token) {
+    try {
+        if (!token) return null;
+        let base64 = token.replace(/-/g, "+").replace(/_/g, "/");
+        while (base64.length % 4) base64 += "=";
+        const binary = atob(base64);
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) {
+            bytes[i] = binary.charCodeAt(i) ^ ((CIPHER_KEY + (i % 31)) & 0xff);
+        }
+        return new TextDecoder().decode(bytes);
+    } catch {
+        return null;
+    }
+}
+
+function resolveProxyTarget(searchParams) {
+    const token = searchParams.get("token") || searchParams.get("t");
+    if (token) {
+        const decrypted = decryptStreamToken(token);
+        if (decrypted) return decrypted;
+    }
+    return searchParams.get("url") || null;
+}
+
+function isOriginAllowed(request) {
+    const origin = request.headers.get("origin") || "";
+    const referer = request.headers.get("referer") || "";
+    const ref = (origin || referer).toLowerCase();
+
+    // Direct / server-to-server / service binding calls without browser origin/referer
+    if (!ref) return true;
+
+    if (
+        ref.includes("anixo.online") ||
+        ref.includes("anixo.buzz") ||
+        ref.includes("localhost") ||
+        ref.includes("127.0.0.1")
+    ) {
+        return true;
+    }
+
+    return false;
+}
+
 function jsonResponse(data, status = 200, extraHeaders = {}) {
     return new Response(JSON.stringify(data, null, 2), {
         status,
@@ -62,18 +126,18 @@ function errorResponse(message, status = 500) {
 function attachProxyUrls(data, origin) {
     if (!data || !data.success) return data;
     if (data.stream_url) {
-        data.proxy_stream_url = `${origin}/api/proxy/m3u8?url=${encodeURIComponent(data.stream_url)}`;
+        data.proxy_stream_url = `${origin}/api/proxy/m3u8?token=${encryptStreamToken(data.stream_url)}`;
     }
     if (Array.isArray(data.sources)) {
         data.sources = data.sources.map(s => ({
             ...s,
-            proxy_url: `${origin}/api/proxy/m3u8?url=${encodeURIComponent(s.url)}`
+            proxy_url: `${origin}/api/proxy/m3u8?token=${encryptStreamToken(s.url)}`
         }));
     }
     if (Array.isArray(data.subtitles)) {
         data.subtitles = data.subtitles.map(sub => ({
             ...sub,
-            proxy_url: sub.url ? `${origin}/api/proxy/vtt?url=${encodeURIComponent(sub.url)}` : undefined
+            proxy_url: sub.url ? `${origin}/api/proxy/vtt?token=${encryptStreamToken(sub.url)}` : undefined
         }));
     }
     return data;
@@ -84,6 +148,14 @@ export default {
         // 1. Instant CORS preflight (< 0.1ms CPU)
         if (request.method === "OPTIONS") {
             return new Response(null, { status: 204, headers: CORS_HEADERS });
+        }
+
+        // Security: Leech Firewall (Blocks unauthorized 3rd-party domains)
+        if (!isOriginAllowed(request)) {
+            return new Response("Access Denied: Unauthorized leeching blocked by Anixo Shield", {
+                status: 403,
+                headers: { ...CORS_HEADERS, "Content-Type": "text/plain" }
+            });
         }
 
         const url = new URL(request.url);
@@ -242,7 +314,7 @@ export default {
 
                 if (!id) return errorResponse("Missing anime ID in /api/watch/:id/:lang/:ep", 400);
 
-                const cacheKey = `watch:anigo:v2:${id}:${ep}:${lang}`;
+                const cacheKey = `watch:anigo:v3:${id}:${ep}:${lang}`;
                 let streamData = null;
                 let cacheStatus = "MISS";
 
@@ -272,7 +344,7 @@ export default {
 
                     const withProxies = attachProxyUrls(resolved, origin);
                     const rawStreamUrl = resolved.stream_url || "";
-                    const mainProxy = withProxies.proxy_stream_url || `${origin}/api/proxy/m3u8?url=${encodeURIComponent(rawStreamUrl)}`;
+                    const mainProxy = withProxies.proxy_stream_url || `${origin}/api/proxy/m3u8?token=${encryptStreamToken(rawStreamUrl)}`;
 
                     // Generate multi-CDN streams so Anigo2 shows the Server/CDN selector
                     const streams = [
@@ -289,7 +361,7 @@ export default {
                     if (rawStreamUrl.includes('norami.top')) tokyoRaw = rawStreamUrl.replace('norami.top', 'shiora.top');
                     else if (rawStreamUrl.includes('mikora.top')) tokyoRaw = rawStreamUrl.replace('mikora.top', 'shiora.top');
                     streams.push({
-                        "url": `${origin}/api/proxy/m3u8?url=${encodeURIComponent(tokyoRaw)}`,
+                        "url": `${origin}/api/proxy/m3u8?token=${encryptStreamToken(tokyoRaw)}`,
                         "type": "hls",
                         "server": "Tokyo CDN (Asia)",
                         "priority": 2
@@ -300,7 +372,7 @@ export default {
                     if (rawStreamUrl.includes('norami.top')) backupRaw = rawStreamUrl.replace('norami.top', 'mikora.top');
                     else if (rawStreamUrl.includes('shiora.top')) backupRaw = rawStreamUrl.replace('shiora.top', 'mikora.top');
                     streams.push({
-                        "url": `${origin}/api/proxy/m3u8?url=${encodeURIComponent(backupRaw)}`,
+                        "url": `${origin}/api/proxy/m3u8?token=${encryptStreamToken(backupRaw)}`,
                         "type": "hls",
                         "server": "Backup CDN (Ultra)",
                         "priority": 3
@@ -442,10 +514,10 @@ export default {
                 }
             }
 
-            // 10. HLS M3U8 Playlist Proxy: /api/proxy/m3u8?url=...
+            // 10. HLS M3U8 Playlist Proxy: /api/proxy/m3u8?token=... or ?url=...
             else if (pathname === "/api/proxy/m3u8") {
-                const target = searchParams.get("url");
-                if (!target) return errorResponse("Missing url query parameter", 400);
+                const target = resolveProxyTarget(searchParams);
+                if (!target) return errorResponse("Missing url or token query parameter", 400);
 
                 const upstream = await fetch(target, {
                     headers: {
@@ -474,16 +546,16 @@ export default {
                         return line.replace(/URI=["']([^"']+)["']/g, (m, u) => {
                             const resolved = new URL(u, target).toString();
                             if (resolved.includes('.m3u8') || resolved.includes('master') || resolved.includes('playlist')) {
-                                return `URI="${origin}/api/proxy/m3u8?url=${encodeURIComponent(resolved)}"`;
+                                return `URI="${origin}/api/proxy/m3u8?token=${encryptStreamToken(resolved)}"`;
                             }
                             if (isDirectCdn(resolved)) return `URI="${resolved}"`;
-                            return `URI="${origin}/api/proxy/ts?url=${encodeURIComponent(resolved)}"`;
+                            return `URI="${origin}/api/proxy/ts?token=${encryptStreamToken(resolved)}"`;
                         });
                     }
 
                     const resolved = new URL(trimmed, target).toString();
                     if (resolved.includes('.m3u8') || resolved.includes('master') || resolved.includes('playlist')) {
-                        return `${origin}/api/proxy/m3u8?url=${encodeURIComponent(resolved)}`;
+                        return `${origin}/api/proxy/m3u8?token=${encryptStreamToken(resolved)}`;
                     }
 
                     // SMART SEGMENT ROUTING: Direct open CDNs bypass worker entirely!
@@ -492,7 +564,7 @@ export default {
                         return resolved;
                     }
 
-                    return `${origin}/api/proxy/ts?url=${encodeURIComponent(resolved)}`;
+                    return `${origin}/api/proxy/ts?token=${encryptStreamToken(resolved)}`;
                 }).join('\n');
 
                 response = new Response(rewritten, {
@@ -506,10 +578,10 @@ export default {
                 });
             }
 
-            // 11. VTT Subtitle Proxy: /api/proxy/vtt?url=...
+            // 11. VTT Subtitle Proxy: /api/proxy/vtt?token=... or ?url=...
             else if (pathname === "/api/proxy/vtt") {
-                const target = searchParams.get("url");
-                if (!target) return errorResponse("Missing url query parameter", 400);
+                const target = resolveProxyTarget(searchParams);
+                if (!target) return errorResponse("Missing url or token query parameter", 400);
 
                 const upstream = await fetch(target, {
                     headers: {
@@ -547,10 +619,10 @@ export default {
                 });
             }
 
-            // 12. High-Performance TS / Segment Stream Proxy: /api/proxy/ts?url=...
+            // 12. High-Performance TS / Segment Stream Proxy: /api/proxy/ts?token=... or ?url=...
             else if (pathname === "/api/proxy/ts") {
-                const target = searchParams.get("url");
-                if (!target) return errorResponse("Missing url query parameter", 400);
+                const target = resolveProxyTarget(searchParams);
+                if (!target) return errorResponse("Missing url or token query parameter", 400);
 
                 const reqHeaders = {
                     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
