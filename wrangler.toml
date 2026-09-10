@@ -2,6 +2,11 @@ name = "zoko-stream"
 main = "worker.js"
 compatibility_date = "2024-11-01"
 compatibility_flags = ["nodejs_compat"]
+workers_dev = true
+
+routes = [
+  { pattern = "zoko.anixo.online", custom_domain = true }
+]
 
 # Cloudflare KV Cache Binding (Included in $5/mo Paid Plan)
 [[kv_namespaces]]

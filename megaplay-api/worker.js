@@ -159,7 +159,8 @@ export default {
         }
 
         const url = new URL(request.url);
-        const origin = url.origin;
+        const host = request.headers.get("x-forwarded-host") || request.headers.get("host") || url.host;
+        const origin = `https://${host}`;
         const pathname = url.pathname;
         const searchParams = url.searchParams;
         const colo = request.cf?.colo || "EDGE";
@@ -314,14 +315,23 @@ export default {
 
                 if (!id) return errorResponse("Missing anime ID in /api/watch/:id/:lang/:ep", 400);
 
-                const cacheKey = `watch:anigo:v3:${id}:${ep}:${lang}`;
+                const cacheKey = `watch:anigo:v4:${id}:${ep}:${lang}`;
                 let streamData = null;
                 let cacheStatus = "MISS";
 
                 if (env.ANIKO_CACHE) {
                     try {
                         streamData = await env.ANIKO_CACHE.get(cacheKey, "json");
-                        if (streamData) cacheStatus = "KV-HIT";
+                        if (!streamData) {
+                            streamData = await env.ANIKO_CACHE.get(`watch:anigo:v3:${id}:${ep}:${lang}`, "json");
+                        }
+                        if (streamData) {
+                            cacheStatus = "KV-HIT";
+                            const raw = JSON.stringify(streamData)
+                                .replaceAll("aniko-backend.rk18109ry.workers.dev", host)
+                                .replaceAll("zoko-stream.rk18109ry.workers.dev", "zoko.anixo.online");
+                            streamData = JSON.parse(raw);
+                        }
                     } catch {}
                 }
 
@@ -402,7 +412,14 @@ export default {
                     }
                 }
 
-                response = jsonResponse(streamData, 200, {
+                // Final safety sanitize to guarantee no raw worker domains leak to the client
+                const safeData = JSON.parse(
+                    JSON.stringify(streamData)
+                        .replaceAll("aniko-backend.rk18109ry.workers.dev", host)
+                        .replaceAll("zoko-stream.rk18109ry.workers.dev", "zoko.anixo.online")
+                );
+
+                response = jsonResponse(safeData, 200, {
                     "X-Cache": cacheStatus,
                     "X-Colo": colo
                 });
