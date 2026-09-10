@@ -25,7 +25,7 @@ const state = {
         },
         lastTested: null
     },
-    updatedAt: Date.now(),
+    updatedAt: 0,
     firewall: {
         mode: "public", // "public" (allow all except blacklist) or "whitelist" (allow only whitelist)
         whitelist: [
@@ -150,6 +150,7 @@ export function getAdminConfig() {
 }
 
 export function updateAdminConfig(patch = {}) {
+    hasLocalConfigModifications = true;
     state.updatedAt = Date.now();
     lastSyncTime = Date.now();
 
@@ -514,18 +515,20 @@ export function getAdminFullState() {
 // ── Cloudflare Workers KV Persistence ──
 let kvLoaded = false;
 let lastSyncTime = 0;
+let hasLocalConfigModifications = false;
 
 export async function syncAdminStoreWithKv(kv, force = false) {
     if (!kv) return;
     const now = Date.now();
-    // Do not sync if state was updated locally in this isolate within last 5s
-    if (state.updatedAt && (now - state.updatedAt < 5000)) return;
-    if (kvLoaded && !force && (now - lastSyncTime < 5000)) return;
+    if (kvLoaded && !force) {
+        if (hasLocalConfigModifications && (now - state.updatedAt < 5000)) return;
+        if (now - lastSyncTime < 5000) return;
+    }
     try {
         const saved = await kv.get("anixo_admin_persistent_state", "json");
         if (saved) {
-            // Guard: If saved data in KV is older than current in-memory state, ignore it!
-            if (state.updatedAt && (!saved.updatedAt || saved.updatedAt < state.updatedAt)) {
+            // Guard: Only ignore KV if this specific isolate has newer unpersisted admin modifications
+            if (hasLocalConfigModifications && state.updatedAt && saved.updatedAt && saved.updatedAt < state.updatedAt) {
                 return;
             }
             if (saved.servers) {
@@ -557,9 +560,7 @@ export async function syncAdminStoreWithKv(kv, force = false) {
                     state.auth.activeSessions.add(s);
                 }
             }
-            if (saved.updatedAt) {
-                state.updatedAt = saved.updatedAt;
-            }
+            state.updatedAt = saved.updatedAt || now;
             if (saved.telemetry) {
                 state.telemetry.totalStreams = Math.max(state.telemetry.totalStreams, saved.telemetry.totalStreams || 0);
                 state.telemetry.totalBytesEstimated = Math.max(state.telemetry.totalBytesEstimated, saved.telemetry.totalBytesEstimated || 0);
@@ -598,8 +599,12 @@ export async function syncAdminStoreWithKv(kv, force = false) {
 export async function persistAdminStoreToKv(kv) {
     if (!kv) return;
     try {
+        if (!kvLoaded) {
+            await syncAdminStoreWithKv(kv, true);
+        }
         state.updatedAt = Date.now();
         lastSyncTime = Date.now();
+        hasLocalConfigModifications = false;
         const persistentData = {
             updatedAt: state.updatedAt,
             servers: state.servers,

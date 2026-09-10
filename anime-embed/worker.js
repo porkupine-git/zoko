@@ -814,7 +814,7 @@ export default {
                     headers: {
                         ...CORS_HEADERS,
                         "Content-Type": "application/json",
-                        "Cache-Control": "public, max-age=900",
+                        "Cache-Control": "no-cache, no-store, must-revalidate",
                         "X-Scraper-Advisory": SCRAPER_NOTICE_HEADER
                     }
                 });
