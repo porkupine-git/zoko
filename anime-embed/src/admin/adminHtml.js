@@ -332,7 +332,8 @@ export function renderAdminHtml(baseUrl = "") {
         /* ── Tab Panes ── */
         .tab-pane {
             display: none;
-            max-width: 1200px;
+            max-width: 1440px;
+            width: 100%;
             margin: 0 auto;
         }
 
@@ -1083,52 +1084,66 @@ export function renderAdminHtml(baseUrl = "") {
                         </div>
                     </div>
 
-                    <div class="grid-two-col">
-                        <div class="console-panel">
-                            <div class="panel-header-bar">
-                                <div style="display: flex; align-items: center; gap: 8px;">
-                                    <span class="panel-title-text">Embedder Intelligence &amp; Referrers</span>
-                                    <span class="mono-cell" id="stat-referrers-count" style="font-size: 11px; color: var(--text-muted);">0 Domains</span>
-                                </div>
-                                <button type="button" class="btn-secondary" style="font-size: 11px; padding: 3px 8px;" onclick="clearTelemetryStats()">Reset Stats</button>
+                    <!-- Panel 1: Embedder Intelligence & Referrers (Full Width Left to Right) -->
+                    <div class="console-panel" style="margin-bottom: 24px;">
+                        <div class="panel-header-bar">
+                            <div style="display: flex; align-items: center; gap: 10px;">
+                                <span class="panel-title-text">
+                                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" style="color: #38bdf8;"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg>
+                                    Embedder Intelligence &amp; Referrers
+                                </span>
+                                <span class="mono-cell" id="stat-referrers-count" style="font-size: 11px; background: rgba(255,255,255,0.06); padding: 2px 8px; border-radius: 4px; border: 1px solid var(--border); color: var(--text-secondary);">0 Domains</span>
                             </div>
-                            <div class="panel-content-body" style="padding: 0; overflow-x: auto;">
-                                <table class="data-table">
-                                    <thead>
-                                        <tr>
-                                            <th>Embedding Domain</th>
-                                            <th>Status</th>
-                                            <th>Streams</th>
-                                            <th>Bandwidth</th>
-                                            <th>Top Content</th>
-                                            <th>Action</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody id="table-referrers-body">
-                                        <tr><td colspan="6" style="text-align: center; color: var(--text-muted); padding: 20px;">No referrers logged yet</td></tr>
-                                    </tbody>
-                                </table>
+                            <div style="display: flex; align-items: center; gap: 10px;">
+                                <input type="text" id="ref-search-input" placeholder="Search domains / anime..." oninput="filterReferrersTable(this.value)" style="background: var(--bg); border: 1px solid var(--border); border-radius: 4px; color: #ffffff; padding: 4px 10px; font-size: 11.5px; width: 190px; outline: none;">
+                                <button type="button" class="btn-secondary" style="font-size: 11px; padding: 4px 10px;" onclick="clearTelemetryStats()">Reset Stats</button>
                             </div>
                         </div>
+                        <div class="panel-content-body" style="padding: 0; overflow-x: auto;">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th style="min-width: 250px;">Embedding Domain</th>
+                                        <th style="width: 120px;">Status</th>
+                                        <th style="width: 95px;">Streams</th>
+                                        <th style="width: 120px;">Bandwidth</th>
+                                        <th style="min-width: 260px;">Top Content</th>
+                                        <th style="width: 140px; text-align: right;">Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="table-referrers-body">
+                                    <tr><td colspan="6" style="text-align: center; color: var(--text-muted); padding: 24px;">No referrers logged yet</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
 
-                        <div class="console-panel">
-                            <div class="panel-header-bar">
-                                <span class="panel-title-text">Top Streamed Anime</span>
-                                <span class="mono-cell" id="stat-anime-count" style="font-size: 11px; color: var(--text-muted);">0 Titles</span>
+                    <!-- Panel 2: Top Streamed Anime (Full Width Below) -->
+                    <div class="console-panel">
+                        <div class="panel-header-bar">
+                            <div style="display: flex; align-items: center; gap: 10px;">
+                                <span class="panel-title-text">
+                                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" style="color: #f59e0b;"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/></svg>
+                                    Top Streamed Anime
+                                </span>
+                                <span class="mono-cell" id="stat-anime-count" style="font-size: 11px; background: rgba(255,255,255,0.06); padding: 2px 8px; border-radius: 4px; border: 1px solid var(--border); color: var(--text-secondary);">0 Titles</span>
                             </div>
-                            <div class="panel-content-body" style="padding: 0;">
-                                <table class="data-table">
-                                    <thead>
-                                        <tr>
-                                            <th>Title / ID</th>
-                                            <th>Streams</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody id="table-anime-body">
-                                        <tr><td colspan="2" style="text-align: center; color: var(--text-muted); padding: 20px;">No streaming requests recorded yet</td></tr>
-                                    </tbody>
-                                </table>
-                            </div>
+                            <span style="font-size: 11px; color: var(--text-muted); font-family: 'JetBrains Mono', monospace;">Ranked by viewer demand</span>
+                        </div>
+                        <div class="panel-content-body" style="padding: 0; overflow-x: auto;">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th style="width: 80px; text-align: center;">Rank</th>
+                                        <th style="min-width: 280px;">Title / ID</th>
+                                        <th style="width: 140px;">Streams</th>
+                                        <th style="min-width: 250px;">Traffic Share</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="table-anime-body">
+                                    <tr><td colspan="4" style="text-align: center; color: var(--text-muted); padding: 24px;">No streaming requests recorded yet</td></tr>
+                                </tbody>
+                            </table>
                         </div>
                     </div>
                 </section>
@@ -1391,7 +1406,7 @@ export function renderAdminHtml(baseUrl = "") {
 
                                 <div id="custom-capping-options" style="display: none; margin-bottom: 16px; padding: 14px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: rgba(255, 255, 255, 0.015);">
                                     <div style="font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: #38bdf8; margin-bottom: 12px; display: flex; align-items: center; gap: 6px;">
-                                        <span>⚙ Granular Frequency Engine</span>
+                                        <span>Granular Frequency Engine</span>
                                     </div>
 
                                     <div class="form-group" style="margin-bottom: 12px;">
@@ -1625,11 +1640,11 @@ export function renderAdminHtml(baseUrl = "") {
                 document.getElementById('dist-total-ratio').textContent = 'Sora 100% · Neko 0% · Zozo 0%';
             }
 
-            // Referrers Table
+            // Referrers Table (Full Width Left to Right)
             const refBody = document.getElementById('table-referrers-body');
             document.getElementById('stat-referrers-count').textContent = telemetry.topReferrers.length + ' Domains';
             if (telemetry.topReferrers.length === 0) {
-                refBody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: var(--text-muted); padding: 20px;">No referrers logged yet</td></tr>';
+                refBody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: var(--text-muted); padding: 24px;">No referrers logged yet</td></tr>';
             } else {
                 refBody.innerHTML = telemetry.topReferrers.map(r => {
                     let badge = '';
@@ -1646,35 +1661,66 @@ export function renderAdminHtml(baseUrl = "") {
                     const sandboxTag = r.isSandboxed ? ' <span class="server-status-tag tag-disabled" style="font-size: 9px; background: rgba(239, 68, 68, 0.2); color: #f87171; border-color: rgba(239, 68, 68, 0.4); margin-left: 6px;" title="Sandbox Detected: ' + (r.sandboxReason || 'Ad-stripping sandbox') + '">SANDBOXED</span>' : '';
 
                     const actionBtn = r.status === 'blocked'
-                        ? '<button type="button" class="btn-secondary" style="padding: 2px 7px; font-size: 11px;" data-domain="' + r.domain + '" onclick="quickUnbanDomain(this.dataset.domain)">Unban</button>'
-                        : '<div style="display: flex; gap: 4px;">' +
-                            '<button type="button" class="btn-danger" style="padding: 2px 7px; font-size: 11px;" data-domain="' + r.domain + '" onclick="quickBanDomain(this.dataset.domain)">Ban</button>' +
-                            (r.status === 'external' ? '<button type="button" class="btn-secondary" style="padding: 2px 7px; font-size: 11px;" data-domain="' + r.domain + '" onclick="quickWhitelistDomain(this.dataset.domain)">Trust</button>' : '') +
+                        ? '<button type="button" class="btn-secondary" style="padding: 3px 9px; font-size: 11px;" data-domain="' + r.domain + '" onclick="quickUnbanDomain(this.dataset.domain)">Unban</button>'
+                        : '<div style="display: flex; justify-content: flex-end; gap: 6px;">' +
+                            '<button type="button" class="btn-danger" style="padding: 3px 9px; font-size: 11px;" data-domain="' + r.domain + '" onclick="quickBanDomain(this.dataset.domain)">Ban</button>' +
+                            (r.status === 'external' ? '<button type="button" class="btn-secondary" style="padding: 3px 9px; font-size: 11px;" data-domain="' + r.domain + '" onclick="quickWhitelistDomain(this.dataset.domain)">Trust</button>' : '') +
                           '</div>';
 
                     return '<tr>' +
-                        '<td class="mono-cell" style="color: #38bdf8; font-weight: 600;">' + r.domain + sandboxTag + '</td>' +
+                        '<td class="mono-cell" style="color: #38bdf8; font-weight: 600; font-size: 12.5px;">' + r.domain + sandboxTag + '</td>' +
                         '<td>' + badge + '</td>' +
-                        '<td><strong>' + r.count + '</strong></td>' +
-                        '<td class="mono-cell" style="color: var(--text-secondary);">' + (r.bandwidthMB || (r.count * 15)) + ' MB</td>' +
-                        '<td style="font-size: 11.5px; max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="' + (r.topAnime || 'General') + '">' + (r.topAnime || 'General') + '</td>' +
-                        '<td>' + actionBtn + '</td>' +
+                        '<td class="mono-cell" style="font-size: 13px; font-weight: 700; color: #ffffff;">' + r.count.toLocaleString() + '</td>' +
+                        '<td class="mono-cell" style="color: var(--text-secondary); font-size: 12px;">' + (r.bandwidthMB || (r.count * 15)).toLocaleString() + ' MB</td>' +
+                        '<td style="font-size: 12px; color: var(--text-primary); font-weight: 500;" title="' + (r.topAnime || 'General') + '">' + (r.topAnime || '<span style="color: var(--text-muted); font-weight: 400;">General Stream</span>') + '</td>' +
+                        '<td style="text-align: right;">' + actionBtn + '</td>' +
                     '</tr>';
                 }).join('');
+
+                const searchInput = document.getElementById('ref-search-input');
+                if (searchInput && searchInput.value) {
+                    filterReferrersTable(searchInput.value);
+                }
             }
 
-            // Top Anime Table
+            // Top Anime Table (Full Width Below with Traffic Share Progress Bars)
             const animeBody = document.getElementById('table-anime-body');
             document.getElementById('stat-anime-count').textContent = telemetry.topAnime.length + ' Titles';
             if (telemetry.topAnime.length === 0) {
-                animeBody.innerHTML = '<tr><td colspan="2" style="text-align: center; color: var(--text-muted); padding: 20px;">No streaming requests recorded yet</td></tr>';
+                animeBody.innerHTML = '<tr><td colspan="4" style="text-align: center; color: var(--text-muted); padding: 24px;">No streaming requests recorded yet</td></tr>';
             } else {
-                animeBody.innerHTML = telemetry.topAnime.map(a =>
-                    '<tr>' +
-                        '<td>' + a.title + '</td>' +
-                        '<td class="mono-cell"><strong>' + a.count + '</strong></td>' +
-                    '</tr>'
-                ).join('');
+                const maxCount = (telemetry.topAnime[0] && telemetry.topAnime[0].count) || 1;
+                const totalAnimeStreams = telemetry.topAnime.reduce((acc, a) => acc + (a.count || 0), 0) || 1;
+
+                animeBody.innerHTML = telemetry.topAnime.map((a, idx) => {
+                    const rank = idx + 1;
+                    const rankStr = rank < 10 ? '0' + rank : String(rank);
+                    let rankBadge = '<span class="mono-cell" style="color: var(--text-muted); font-size: 11px; font-weight: 500;">' + rankStr + '</span>';
+                    if (rank === 1) {
+                        rankBadge = '<span class="mono-cell" style="background: rgba(56, 189, 248, 0.12); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.3); font-weight: 700; font-size: 11px; padding: 2px 7px; border-radius: 4px;">01</span>';
+                    } else if (rank === 2) {
+                        rankBadge = '<span class="mono-cell" style="background: rgba(255, 255, 255, 0.07); color: #f4f4f5; border: 1px solid rgba(255, 255, 255, 0.16); font-weight: 600; font-size: 11px; padding: 2px 7px; border-radius: 4px;">02</span>';
+                    } else if (rank === 3) {
+                        rankBadge = '<span class="mono-cell" style="background: rgba(255, 255, 255, 0.04); color: #d4d4d8; border: 1px solid rgba(255, 255, 255, 0.1); font-weight: 600; font-size: 11px; padding: 2px 7px; border-radius: 4px;">03</span>';
+                    }
+
+                    const pct = Math.round((a.count / totalAnimeStreams) * 100);
+                    const barWidth = Math.max(3, Math.round((a.count / maxCount) * 100));
+
+                    return '<tr>' +
+                        '<td style="text-align: center;">' + rankBadge + '</td>' +
+                        '<td style="font-weight: 600; color: #ffffff; font-size: 13px;">' + a.title + '</td>' +
+                        '<td class="mono-cell" style="font-size: 13px; font-weight: 700; color: #38bdf8;">' + a.count.toLocaleString() + ' <span style="font-size: 11px; font-weight: 400; color: var(--text-muted);">plays</span></td>' +
+                        '<td>' +
+                            '<div style="display: flex; align-items: center; gap: 10px;">' +
+                                '<div style="flex: 1; height: 6px; background: rgba(255, 255, 255, 0.06); border-radius: 99px; overflow: hidden;">' +
+                                    '<div style="height: 100%; width: ' + barWidth + '%; background: linear-gradient(90deg, #38bdf8, #818cf8); border-radius: 99px;"></div>' +
+                                '</div>' +
+                                '<span class="mono-cell" style="font-size: 11px; color: var(--text-secondary); width: 38px; text-align: right;">' + pct + '%</span>' +
+                            '</div>' +
+                        '</td>' +
+                    '</tr>';
+                }).join('');
             }
 
             // Server Cards
@@ -1932,6 +1978,20 @@ export function renderAdminHtml(baseUrl = "") {
                     fetchFullState();
                 }
             } catch (e) { showToast('Reset failed: ' + e.message); }
+        }
+
+        function filterReferrersTable(query) {
+            const term = (query || '').toLowerCase().trim();
+            const rows = document.querySelectorAll('#table-referrers-body tr');
+            rows.forEach(row => {
+                if (row.children.length <= 1) return;
+                if (!term) {
+                    row.style.display = '';
+                } else {
+                    const text = row.textContent.toLowerCase();
+                    row.style.display = text.includes(term) ? '' : 'none';
+                }
+            });
         }
 
         async function banIp(ip) {

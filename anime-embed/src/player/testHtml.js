@@ -275,7 +275,7 @@ export function renderTestHtml(baseUrl = "") {
     <div class="container">
         <!-- Header -->
         <div class="header">
-            <h1>🎬 Anixo Embed Tester</h1>
+            <h1>Anixo Embed Tester</h1>
             <span class="badge" id="host-badge">${baseUrl || "https://anixo.buzz"}</span>
         </div>
 
@@ -321,17 +321,17 @@ export function renderTestHtml(baseUrl = "") {
                         <option value="full">Full Sandbox (Allowed)</option>
                     </select>
                 </div>
-                <button type="button" class="btn" onclick="updatePlayer()">▶ Load</button>
+                <button type="button" class="btn" onclick="updatePlayer()">Load Player</button>
             </div>
 
             <!-- Quick Presets -->
             <div class="presets">
                 <span>Presets:</span>
-                <button type="button" class="preset-chip" onclick="loadPreset('ani', '21', 1, 'sub', 'none')">🏴‍☠️ One Piece Ep 1</button>
-                <button type="button" class="preset-chip" onclick="loadPreset('ani', '269', 1, 'sub', 'none')">⚔️ Bleach Ep 1</button>
-                <button type="button" class="preset-chip" onclick="loadPreset('ani', '20', 1, 'sub', 'none')">🌀 Naruto Ep 1</button>
-                <button type="button" class="preset-chip" onclick="loadPreset('ani', '108465', 1, 'sub', 'none')">🧙 Mushoku Tensei Ep 1</button>
-                <button type="button" class="preset-chip sandbox-test" onclick="loadPreset('ani', '21', 1, 'sub', 'restrict-popups')">⚠️ Test Sandbox Blocker</button>
+                <button type="button" class="preset-chip" onclick="loadPreset('ani', '21', 1, 'sub', 'none')">One Piece (Ep 1)</button>
+                <button type="button" class="preset-chip" onclick="loadPreset('ani', '269', 1, 'sub', 'none')">Bleach (Ep 1)</button>
+                <button type="button" class="preset-chip" onclick="loadPreset('ani', '20', 1, 'sub', 'none')">Naruto (Ep 1)</button>
+                <button type="button" class="preset-chip" onclick="loadPreset('ani', '108465', 1, 'sub', 'none')">Mushoku Tensei (Ep 1)</button>
+                <button type="button" class="preset-chip sandbox-test" onclick="loadPreset('ani', '21', 1, 'sub', 'restrict-popups')">Test Sandbox Blocker</button>
             </div>
         </div>
 
