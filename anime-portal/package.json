@@ -1,0 +1,26 @@
+{
+  "name": "anime-portal",
+  "version": "1.0.0",
+  "description": "Unified Multi-Platform Anime Hub & Ad-Free Player for AnimeSky, WatchAnimeWorld, and AnimeSalt",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "keywords": [
+    "anime-portal",
+    "animesky",
+    "watchanimeworld",
+    "animesalt",
+    "as-cdn",
+    "megaplay",
+    "artplayer",
+    "hls"
+  ],
+  "author": "Zayrix",
+  "license": "MIT",
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^5.2.1"
+  }
+}
