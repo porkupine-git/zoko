@@ -36,7 +36,7 @@ const state = {
         ],
         blacklist: [],
         blockedIps: [],
-        turnstileEnabled: true,
+        turnstileEnabled: false,
         hotlinkProtection: false, // Block direct stream URL access outside iframe
         blockedRequestsCount: 0
     },

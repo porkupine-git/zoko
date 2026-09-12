@@ -506,10 +506,7 @@ export function renderPlayerClientScript({
             url.searchParams.set('track', STATE.track);
             url.searchParams.set('server', STATE.server);
 
-            // Client-side automated scraper / bot detection
-            if (typeof window !== 'undefined' && (window.navigator?.webdriver || window.__playwright || window.__puppeteer || window._phantom)) {
-                url.searchParams.set('_bot', '1');
-            }
+            // Client-side bot detector signal (clean)
 
             // Smart Embed Detection: Capture the real parent website embedding the iframe
             try {

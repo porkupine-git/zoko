@@ -861,7 +861,7 @@ export default {
                         const userAgent = request.headers.get("user-agent") || "automated-scraper";
                         recordHoneypotTrap({ ip: clientIp, userAgent, path: pathname });
 
-                        if (isScraperRequest(request) || isDatacenterIp(request)) {
+                        if (isScraperRequest(request)) {
                             const honeypotData = getHoneypotStreamResponse(baseUrl);
                             return new Response(JSON.stringify(honeypotData, null, 2), {
                                 headers: {
@@ -947,7 +947,7 @@ export default {
                 if (getAdminConfig().firewall?.turnstileEnabled !== false) {
                     const turnstile = await verifyTurnstileToken(request, env, ctx);
                     if (!turnstile.valid) {
-                        if (isScraperRequest(request) || isDatacenterIp(request)) {
+                        if (isScraperRequest(request)) {
                             const honeypotData = getHoneypotStreamResponse(baseUrl);
                             return new Response(JSON.stringify(honeypotData, null, 2), {
                                 headers: {
@@ -1018,8 +1018,7 @@ export default {
                     return new Response("Leech domain blocked by Anixo Shield", { status: 403, headers: CORS_HEADERS });
                 }
                 const isHoneypotParam = url.searchParams.get("h") === "1";
-                const isBot = isScraperRequest(request) || isDatacenterIp(request);
-                const isHoneypot = isHoneypotParam || isBot;
+                const isHoneypot = isHoneypotParam;
 
                 const token = url.searchParams.get("t") || url.searchParams.get("token");
                 if (!token) {
@@ -1031,8 +1030,8 @@ export default {
                     return new Response("Invalid stream token", { status: 403, headers: CORS_HEADERS });
                 }
 
-                // If scraper requested directly with a stolen token, poison the stream with decoy HLS
-                if (isBot && !isHoneypotParam) {
+                // If honeypot trap parameter is explicitly active, serve decoy stream
+                if (isHoneypotParam) {
                     targetUrl = "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8";
                 }
 

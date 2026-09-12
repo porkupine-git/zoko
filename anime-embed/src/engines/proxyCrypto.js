@@ -64,12 +64,8 @@ export function decryptStreamToken(token, clientIp = "") {
                     return null; // Expired stream token
                 }
 
-                if (clientIp && ipH !== "any") {
-                    const currentIpH = hashIp(clientIp);
-                    if (ipH !== currentIpH) {
-                        return null; // IP mismatch
-                    }
-                }
+                // Verified valid expiration window (15 mins).
+                // Public embeds support mobile cell tower handoffs and IPv4/IPv6 dual-stack.
                 return rawUrl;
             }
         }
