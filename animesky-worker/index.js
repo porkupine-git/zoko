@@ -32,6 +32,43 @@ function jsonResponse(data, status = 200, extraHeaders = {}) {
     });
 }
 
+function sendCachedJson(request, ctx, data, status = 200, cacheTtlSeconds = 3600) {
+    const res = new Response(JSON.stringify(data, null, 2), {
+        status,
+        headers: {
+            'Content-Type': 'application/json; charset=utf-8',
+            'Cache-Control': `public, max-age=${Math.min(cacheTtlSeconds, 300)}, s-maxage=${cacheTtlSeconds}, stale-while-revalidate=86400`,
+            'X-Edge-Cache': 'MISS',
+            ...CORS_HEADERS
+        }
+    });
+    if (ctx && typeof ctx.waitUntil === 'function') {
+        try {
+            ctx.waitUntil(caches.default.put(request, res.clone()));
+        } catch (e) {}
+    }
+    return res;
+}
+
+async function kvGet(env, key) {
+    if (!env || !env.ANIMESKY_CACHE) return null;
+    try {
+        return await env.ANIMESKY_CACHE.get(key, 'json');
+    } catch (e) {
+        return null;
+    }
+}
+
+function kvPut(env, ctx, key, value, ttlSeconds = 86400) {
+    if (!env || !env.ANIMESKY_CACHE) return;
+    try {
+        const promise = env.ANIMESKY_CACHE.put(key, JSON.stringify(value), { expirationTtl: ttlSeconds });
+        if (ctx && typeof ctx.waitUntil === 'function') {
+            ctx.waitUntil(promise);
+        }
+    } catch (e) {}
+}
+
 function textResponse(text, contentType = 'text/plain; charset=utf-8', status = 200) {
     return new Response(text, {
         status,
@@ -657,7 +694,18 @@ async function handleProxyRequest(targetUrl, hostUrl, request) {
         reqHeaders.set('Range', range);
     }
 
-    const upstreamRes = await fetch(targetUrl, { headers: reqHeaders });
+    const isChunk = targetUrl.includes('/p/') || targetUrl.match(/\.(ts|m4s|mp4)$/i) || targetUrl.includes('.js') || targetUrl.includes('.css') || targetUrl.includes('.woff');
+
+    const cfOptions = {
+        cacheEverything: true,
+        cacheTtl: isChunk ? 86400 : (targetUrl.includes('.vtt') || targetUrl.includes('.srt') ? 3600 : 60),
+        cacheKey: targetUrl
+    };
+
+    const upstreamRes = await fetch(targetUrl, { 
+        headers: reqHeaders,
+        cf: cfOptions
+    });
 
     if (!upstreamRes.ok && upstreamRes.status !== 206) {
         return textResponse(`Upstream returned HTTP ${upstreamRes.status}`, 'text/plain', upstreamRes.status);
@@ -668,11 +716,17 @@ async function handleProxyRequest(targetUrl, hostUrl, request) {
     // 1. Subtitle files (.vtt or .srt)
     if (targetUrl.includes('.vtt') || targetUrl.includes('.srt') || contentType.includes('vtt')) {
         const vttText = await upstreamRes.text();
-        return textResponse(vttText, 'text/vtt; charset=utf-8', 200);
+        return new Response(vttText, {
+            status: 200,
+            headers: {
+                'Content-Type': 'text/vtt; charset=utf-8',
+                'Cache-Control': 'public, max-age=3600, s-maxage=86400',
+                ...CORS_HEADERS
+            }
+        });
     }
 
     // 2. M3U8 Playlists
-    const isChunk = targetUrl.includes('/p/') || targetUrl.match(/\.(ts|m4s|mp4)$/i);
     const isM3u8 = !isChunk && (
         targetUrl.includes('.m3u8') || 
         targetUrl.includes('/hls/') || 
@@ -688,7 +742,7 @@ async function handleProxyRequest(targetUrl, hostUrl, request) {
             status: 200,
             headers: {
                 'Content-Type': 'application/vnd.apple.mpegurl',
-                'Cache-Control': 'public, max-age=60',
+                'Cache-Control': 'public, max-age=60, s-maxage=120',
                 ...CORS_HEADERS
             }
         });
@@ -701,8 +755,9 @@ async function handleProxyRequest(targetUrl, hostUrl, request) {
         if (val) resHeaders.set(h, val);
     });
 
-    if (isChunk || targetUrl.includes('.js') || targetUrl.includes('.css') || targetUrl.includes('.woff')) {
+    if (isChunk) {
         resHeaders.set('Content-Type', 'video/mp2t');
+        resHeaders.set('Cache-Control', 'public, max-age=86400, s-maxage=604800, immutable');
     }
 
     return new Response(upstreamRes.body, {
@@ -738,12 +793,14 @@ export default {
                 }
             }
 
-            // Healthcheck & API Info
+            // Healthcheck & System Info
             if (pathname === '/health') {
                 return jsonResponse({
                     status: 'online',
                     service: 'animesky-worker',
-                    version: '1.0.0',
+                    plan: 'paid-standard',
+                    smartPlacement: true,
+                    kvCache: !!env.ANIMESKY_CACHE,
                     edge: 'cloudflare-workers',
                     endpoints: {
                         search: '/api/search?q=:query',
@@ -757,9 +814,24 @@ export default {
                 });
             }
 
-            // Presets
+            // ⚡ Cloudflare Edge Cache: Check if response is already cached at edge (0ms CPU time!)
+            if (request.method === 'GET' && pathname.startsWith('/api/')) {
+                try {
+                    const cachedResponse = await caches.default.match(request);
+                    if (cachedResponse) {
+                        const hitHeaders = new Headers(cachedResponse.headers);
+                        hitHeaders.set('X-Edge-Cache', 'HIT');
+                        return new Response(cachedResponse.body, {
+                            status: cachedResponse.status,
+                            headers: hitHeaders
+                        });
+                    }
+                } catch (e) {}
+            }
+
+            // Presets (Cached 24h)
             if (pathname === '/api/presets') {
-                return jsonResponse([
+                return sendCachedJson(request, ctx, [
                     {
                         platform: 'AnimeSky',
                         category: 'shonen',
@@ -796,38 +868,46 @@ export default {
                         sampleEpisode: 'https://animesky.app/episode/solo-leveling-1x1/',
                         badge: '1080p • Hindi Dub'
                     }
-                ]);
+                ], 200, 86400);
             }
 
-            // Search
+            // Search (KV Cached 1h, Edge Cached 1h)
             if (pathname === '/api/search') {
                 const q = url.searchParams.get('q') || url.searchParams.get('query');
                 if (!q) return jsonResponse({ success: true, results: [] });
 
-                let results = await searchAnimeCatalog(q);
-                if (results.length === 0) {
-                    const skyResults = await searchAnimeSky(q);
-                    results = skyResults.map(s => ({
-                        id: s.seriesUrl,
-                        title: s.title,
-                        romajiTitle: s.title,
-                        rating: null,
-                        year: null,
-                        format: 'TV',
-                        status: null,
-                        poster: s.poster,
-                        banner: null,
-                        synopsis: '',
-                        seriesUrl: s.seriesUrl,
-                        streamQuery: s.title,
-                        source: 'animesky'
-                    }));
+                const kvKey = `search:${q.trim().toLowerCase()}`;
+                let results = await kvGet(env, kvKey);
+
+                if (!results) {
+                    results = await searchAnimeCatalog(q);
+                    if (results.length === 0) {
+                        const skyResults = await searchAnimeSky(q);
+                        results = skyResults.map(s => ({
+                            id: s.seriesUrl,
+                            title: s.title,
+                            romajiTitle: s.title,
+                            rating: null,
+                            year: null,
+                            format: 'TV',
+                            status: null,
+                            poster: s.poster,
+                            banner: null,
+                            synopsis: '',
+                            seriesUrl: s.seriesUrl,
+                            streamQuery: s.title,
+                            source: 'animesky'
+                        }));
+                    }
+                    if (results && results.length > 0) {
+                        kvPut(env, ctx, kvKey, results, 3600);
+                    }
                 }
 
-                return jsonResponse({ success: true, count: results.length, provider: 'catalog', results });
+                return sendCachedJson(request, ctx, { success: true, count: results.length, provider: 'catalog', results }, 200, 3600);
             }
 
-            // Series Scraper
+            // Series Scraper (KV Cached 24h, Edge Cached 24h)
             if (pathname === '/api/series') {
                 let seriesUrl = url.searchParams.get('url');
                 if (!seriesUrl) return jsonResponse({ success: false, error: 'Missing url parameter.' }, 400);
@@ -841,11 +921,20 @@ export default {
                 }
 
                 const targetSeason = parseInt(url.searchParams.get('season'), 10) || 1;
-                const data = await getAnimeSkySeries(seriesUrl, { targetSeason });
-                return jsonResponse({ ...data, provider: 'animesky' });
+                const kvKey = `series:${encodeURIComponent(seriesUrl.toLowerCase())}:s${targetSeason}`;
+                let data = await kvGet(env, kvKey);
+
+                if (!data) {
+                    data = await getAnimeSkySeries(seriesUrl, { targetSeason });
+                    if (data && data.success) {
+                        kvPut(env, ctx, kvKey, data, 86400);
+                    }
+                }
+
+                return sendCachedJson(request, ctx, { ...data, provider: 'animesky' }, 200, 86400);
             }
 
-            // Season AJAX
+            // Season AJAX (KV Cached 24h, Edge Cached 24h)
             if (pathname === '/api/series/season') {
                 const postId = url.searchParams.get('postId');
                 const season = url.searchParams.get('season');
@@ -856,20 +945,38 @@ export default {
                     return jsonResponse({ success: false, error: 'Missing postId or season query parameter' }, 400);
                 }
 
-                const data = await getAnimeSkySeasonEpisodes(postId, parseInt(season, 10), title, offset);
-                return jsonResponse({ ...data, provider: 'animesky' });
+                const kvKey = `season:${postId}:${season}:off${offset}`;
+                let data = await kvGet(env, kvKey);
+
+                if (!data) {
+                    data = await getAnimeSkySeasonEpisodes(postId, parseInt(season, 10), title, offset);
+                    if (data && data.success) {
+                        kvPut(env, ctx, kvKey, data, 86400);
+                    }
+                }
+
+                return sendCachedJson(request, ctx, { ...data, provider: 'animesky' }, 200, 86400);
             }
 
-            // Watch / Episode Resolver
+            // Watch / Episode Resolver (KV Cached 5 min, Edge Cached 2 min)
             if (pathname === '/api/watch') {
                 const episodeUrl = url.searchParams.get('url');
                 if (!episodeUrl) return jsonResponse({ success: false, error: 'Missing url parameter.' }, 400);
 
-                const data = await resolveAnimeSkyEpisode(episodeUrl, hostUrl);
-                return jsonResponse({ ...data, provider: 'animesky' });
+                const kvKey = `watch:${encodeURIComponent(episodeUrl.toLowerCase())}`;
+                let data = await kvGet(env, kvKey);
+
+                if (!data) {
+                    data = await resolveAnimeSkyEpisode(episodeUrl, hostUrl);
+                    if (data && data.success) {
+                        kvPut(env, ctx, kvKey, data, 300);
+                    }
+                }
+
+                return sendCachedJson(request, ctx, { ...data, provider: 'animesky' }, 200, 120);
             }
 
-            // Stream M3U8 Master Proxy
+            // Stream M3U8 Master Proxy (Edge Cached 60s)
             const streamMatch = pathname.match(/^\/api\/stream\/([a-zA-Z0-9_\-]+)\/master\.m3u8/);
             if (streamMatch) {
                 const hash = streamMatch[1];
@@ -881,6 +988,10 @@ export default {
                     headers: {
                         'User-Agent': DEFAULT_HEADERS['User-Agent'],
                         'Referer': `https://${hostDomain}/`
+                    },
+                    cf: {
+                        cacheEverything: true,
+                        cacheTtl: 60
                     }
                 });
 
@@ -891,14 +1002,22 @@ export default {
                 const m3u8Text = await upstreamRes.text();
                 const rewritten = rewriteM3u8(m3u8Text, hlsData.masterHlsUrl, hostUrl);
 
-                return new Response(rewritten, {
+                const m3u8Response = new Response(rewritten, {
                     status: 200,
                     headers: {
                         'Content-Type': 'application/vnd.apple.mpegurl',
-                        'Cache-Control': 'public, max-age=60',
+                        'Cache-Control': 'public, max-age=60, s-maxage=120',
                         ...CORS_HEADERS
                     }
                 });
+
+                if (ctx && typeof ctx.waitUntil === 'function') {
+                    try {
+                        ctx.waitUntil(caches.default.put(request, m3u8Response.clone()));
+                    } catch (e) {}
+                }
+
+                return m3u8Response;
             }
 
             // Universal Proxy
