@@ -81,7 +81,7 @@ const server = http.createServer(async (req, res) => {
             const malId = parts[0] || query.id;
             const ep = parts[1] || query.ep || 1;
             const track = parts[2] || query.track || "sub";
-            const serverOpt = query.s || query.server || "";
+            const serverOpt = query.s || query.server || "tcdn";
 
             if (!malId) return sendError(res, 400, "Missing MAL ID parameter");
 
@@ -95,7 +95,7 @@ const server = http.createServer(async (req, res) => {
             const aniId = parts[0] || query.id;
             const ep = parts[1] || query.ep || 1;
             const track = parts[2] || query.track || "sub";
-            const serverOpt = query.s || query.server || "";
+            const serverOpt = query.s || query.server || "tcdn";
 
             if (!aniId) return sendError(res, 400, "Missing AniList ID parameter");
 
@@ -108,7 +108,7 @@ const server = http.createServer(async (req, res) => {
             const parts = pathname.replace('/api/stream/catalog', '').split('/').filter(Boolean);
             const epId = parts[0] || query.id || query.epId;
             const track = parts[1] || query.track || "sub";
-            const serverOpt = query.s || query.server || "";
+            const serverOpt = query.s || query.server || "tcdn";
 
             if (!epId) return sendError(res, 400, "Missing Catalog Episode ID parameter");
 
@@ -120,7 +120,7 @@ const server = http.createServer(async (req, res) => {
         if (pathname === "/api/stream/resolve") {
             const embedUrl = query.url;
             if (!embedUrl) return sendError(res, 400, "Missing embed url query parameter");
-            const serverOpt = query.s || query.server || "";
+            const serverOpt = query.s || query.server || "tcdn";
             const data = await megaplay.resolveFromEmbedUrl(embedUrl, serverOpt);
             return sendJson(res, 200, attachProxyUrls(data));
         }
@@ -251,6 +251,22 @@ const server = http.createServer(async (req, res) => {
                         "Content-Type": "text/plain"
                     });
                     return res.end(`Segment fetch error: ${upstream.status}`);
+                }
+
+                const shouldStrip = megaplay.STRIP_URL_RE && megaplay.STRIP_URL_RE.test(target);
+                if (shouldStrip) {
+                    const buf = await upstream.arrayBuffer();
+                    const rawBytes = new Uint8Array(buf);
+                    const stripped = megaplay.stripSegmentBytes(rawBytes);
+
+                    res.writeHead(200, {
+                        "Access-Control-Allow-Origin": "*",
+                        "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
+                        "Content-Type": "video/mp2t",
+                        "Content-Length": stripped.length,
+                        "Cache-Control": "public, max-age=31536000, immutable"
+                    });
+                    return res.end(Buffer.from(stripped.buffer, stripped.byteOffset, stripped.length));
                 }
 
                 const responseHeaders = {

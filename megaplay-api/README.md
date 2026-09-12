@@ -27,36 +27,27 @@ MegaPlay renders an HTML container with custom data attributes:
 ### 2. The Internal Endpoint (`/stream/getSourcesNew`)
 MegaPlay's internal player script (`newclient.min.js`) extracts `data-id` and makes an asynchronous XMLHttpRequest:
 ```http
-GET https://megaplay.buzz/stream/getSourcesNew?id=36396
+GET https://megaplay.buzz/stream/getSourcesNew?id=36396&s=tcdn
 Headers:
   X-Requested-With: XMLHttpRequest
   Referer: https://megaplay.buzz/stream/...
 ```
-Optional CDN server query param:
-- `?id=36396&s=tcdn` -> routes to `megap.mikora.top`
-- `?id=36396` -> routes to `megap.norami.top`
+CDN server query param:
+- `?id=36396&s=tcdn` -> routes to `megap.mikora.top` (Active CDN)
+- `?id=36396` -> routes to `fetch.nexabloom.top` (Blocked / 403)
 
-### 3. The Decrypted Stream JSON Response
-```json
-{
-  "sources": {
-    "file": "https://megap.norami.top/f899139df5e1059396431415e770c6dd/61b87186ab260d05003427e16ccf5657/master.m3u8"
-  },
-  "tracks": [
-    {
-      "file": "https://cdn.imgnex.top/anime/.../subtitles/eng-2.vtt",
-      "label": "English",
-      "kind": "captions",
-      "default": true
-    }
-  ],
-  "intro": { "start": 31, "end": 111 },
-  "outro": { "start": 1376, "end": 1447 },
-  "server": 4
-}
-```
+### 3. Decrypting the AES Payload
+MegaPlay encrypts the master stream URL inside the `enc` field using **AES-CBC**:
+- **AES Key:** `i?LMTAx0Q6,:}50U` (padded to 32 bytes)
+- **AES IV:** `W0;27ToaUpl_P%'c` (16 bytes)
+- **Format:** Base64URL ciphertext -> JSON `{"file":"https://megap.mikora.top/.../master.m3u8"}`
 
-### 4. Anikoto Catalog API (`anikotoapi.site`)
+### 4. Segment Header Stripping (252 Bytes)
+Video segments hosted on TikTok CDN (`p19-ad-site-sign-sg.tiktokcdn.com`, `ibyteimg.com`) have an obfuscated 252-byte PNG dummy header prepended.
+- The player / proxy strips the first 252 bytes (`buffer.slice(252)`).
+- The resulting stream is standard MPEG-TS starting with the `0x47` sync byte at offset 0.
+
+### 5. Anikoto Catalog API (`anikotoapi.site`)
 MegaPlay shares its underlying database with Anikoto:
 - **Recent Anime:** `GET https://anikotoapi.site/recent-anime?page=1&per_page=20`
 - **Series & Episodes:** `GET https://anikotoapi.site/series/{seriesId}`

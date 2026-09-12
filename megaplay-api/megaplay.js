@@ -6,6 +6,64 @@
 export const MEGAPLAY_BASE = "https://megaplay.buzz";
 export const ANIKOTO_API_BASE = "https://anikotoapi.site";
 
+export const MEGAPLAY_AES_KEY = "i?LMTAx0Q6,:}50U";
+export const MEGAPLAY_AES_IV = "W0;27ToaUpl_P%'c";
+export const STRIP_URL_RE = /ibyteimg\.com|tiktokcdn\.com|ipstatp\.com|yoot\.akirax\.buzz/i;
+export const STRIP_BYTES = 252;
+
+function getAesKeyBuffer() {
+    const i = new TextEncoder().encode(MEGAPLAY_AES_KEY);
+    const o = new Uint8Array(32);
+    o.set(i.subarray(0, Math.min(32, i.length)));
+    return o;
+}
+
+function fromBase64ToUint8(str) {
+    let o = String(str).replace(/-/g, '+').replace(/_/g, '/');
+    const p = o.length % 4;
+    if (p) o += '===='.slice(p);
+    const binary = atob(o);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    return bytes;
+}
+
+/**
+ * Decrypt MegaPlay encrypted source token (AES-CBC)
+ * @param {string} encToken - Base64/Base64URL encoded AES ciphertext
+ * @returns {Promise<{ file: string } | null>}
+ */
+export async function decryptEncryptedSources(encToken) {
+    if (!encToken) return null;
+    try {
+        const keyBuf = getAesKeyBuffer();
+        const key = await crypto.subtle.importKey('raw', keyBuf, { name: 'AES-CBC' }, false, ['decrypt']);
+        const iv = new TextEncoder().encode(MEGAPLAY_AES_IV);
+        const cipherBuf = fromBase64ToUint8(encToken);
+        const decBuf = await crypto.subtle.decrypt({ name: 'AES-CBC', iv }, key, cipherBuf);
+        return JSON.parse(new TextDecoder().decode(decBuf));
+    } catch (e) {
+        return null;
+    }
+}
+
+/**
+ * Strip obfuscated dummy bytes (e.g. 252 bytes PNG dummy header on TikTok CDN chunks)
+ * @param {ArrayBuffer|Uint8Array} buffer 
+ * @param {number} [bytesToStrip=252] 
+ * @returns {ArrayBuffer|Uint8Array}
+ */
+export function stripSegmentBytes(buffer, bytesToStrip = STRIP_BYTES) {
+    if (!buffer) return buffer;
+    if (buffer instanceof ArrayBuffer) {
+        return buffer.byteLength <= bytesToStrip ? buffer : buffer.slice(bytesToStrip);
+    }
+    if (buffer instanceof Uint8Array) {
+        return buffer.length <= bytesToStrip ? buffer : buffer.subarray(bytesToStrip);
+    }
+    return buffer;
+}
+
 const DEFAULT_HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
@@ -57,11 +115,11 @@ export async function extractPlayerIds(embedUrl) {
 /**
  * Call the reverse-engineered getSourcesNew endpoint to retrieve the decrypted HLS stream
  * @param {string} id - The data-id or realid extracted from the player page
- * @param {string} [server] - Optional CDN server selector ('tcdn', 'bcdn', etc.)
+ * @param {string} [server="tcdn"] - CDN server selector ('tcdn', 'bcdn', etc., default 'tcdn')
  * @param {string} [refererUrl] - Optional referer header
  * @returns {Promise<any>}
  */
-export async function getSources(id, server = "", refererUrl = "") {
+export async function getSources(id, server = "tcdn", refererUrl = "") {
     let url = `${MEGAPLAY_BASE}/stream/getSourcesNew?id=${encodeURIComponent(id)}`;
     if (server) {
         url += `&s=${encodeURIComponent(server)}`;
@@ -89,35 +147,48 @@ export async function getSources(id, server = "", refererUrl = "") {
 /**
  * Resolve direct HLS stream from any MegaPlay embed URL
  * @param {string} embedUrl 
- * @param {string} [server] - 'tcdn' or 'bcdn'
+ * @param {string} [server="tcdn"] - 'tcdn' or 'bcdn' (default 'tcdn')
  * @returns {Promise<any>}
  */
-export async function resolveFromEmbedUrl(embedUrl, server = "") {
+export async function resolveFromEmbedUrl(embedUrl, server = "tcdn") {
     const ids = await extractPlayerIds(embedUrl);
     const targetId = ids.dataId || ids.realId;
     const rawData = await getSources(targetId, server, embedUrl);
 
-    const masterFile = rawData.sources?.file || (Array.isArray(rawData.sources) ? rawData.sources[0]?.file : null);
+    let masterFile = rawData.sources?.file || (Array.isArray(rawData.sources) ? rawData.sources[0]?.file : null);
+    if (!masterFile && rawData.enc) {
+        const dec = await decryptEncryptedSources(rawData.enc);
+        if (dec?.file) {
+            masterFile = dec.file;
+        }
+    }
 
     return {
-        success: true,
+        success: !!masterFile,
         provider: "megaplay.buzz",
         stream_url: masterFile,
         sources: [
             {
                 url: masterFile,
                 type: "hls",
-                server: `MegaPlay-${rawData.server || 'default'}`
+                server: `MegaPlay-${rawData.server || server || 'tcdn'}`
             }
         ],
         subtitles: (rawData.tracks || []).map(t => ({
             url: t.file,
             label: t.label || "English",
             kind: t.kind || "captions",
-            default: !!t.default
+            default: !!t.default,
+            headers: {
+                "Referer": "https://megaplay.buzz/"
+            }
         })),
         intro: rawData.intro || { start: 0, end: 0 },
         outro: rawData.outro || { start: 0, end: 0 },
+        segment_info: {
+            strip_bytes: STRIP_BYTES,
+            strip_url_pattern: STRIP_URL_RE.source
+        },
         ids: {
             data_id: ids.dataId,
             real_id: ids.realId,
@@ -131,9 +202,9 @@ export async function resolveFromEmbedUrl(embedUrl, server = "") {
  * @param {number|string} malId 
  * @param {number|string} [episode=1] 
  * @param {string} [track="sub"] - 'sub' or 'dub'
- * @param {string} [server=""] - 'tcdn' or 'bcdn'
+ * @param {string} [server="tcdn"] - 'tcdn' or 'bcdn' (default 'tcdn')
  */
-export async function resolveFromMal(malId, episode = 1, track = "sub", server = "") {
+export async function resolveFromMal(malId, episode = 1, track = "sub", server = "tcdn") {
     const lang = track.toLowerCase() === "dub" ? "dub" : "sub";
     const embedUrl = `${MEGAPLAY_BASE}/stream/mal/${malId}/${episode}/${lang}`;
     const data = await resolveFromEmbedUrl(embedUrl, server);
@@ -201,9 +272,9 @@ export async function mapAniToMal(aniId) {
  * @param {number|string} aniId 
  * @param {number|string} [episode=1] 
  * @param {string} [track="sub"] - 'sub' or 'dub'
- * @param {string} [server=""] - 'tcdn' or 'bcdn'
+ * @param {string} [server="tcdn"] - 'tcdn' or 'bcdn' (default 'tcdn')
  */
-export async function resolveFromAnilist(aniId, episode = 1, track = "sub", server = "") {
+export async function resolveFromAnilist(aniId, episode = 1, track = "sub", server = "tcdn") {
     const lang = track.toLowerCase() === "dub" ? "dub" : "sub";
     const embedUrl = `${MEGAPLAY_BASE}/stream/ani/${aniId}/${episode}/${lang}`;
     
@@ -237,9 +308,9 @@ export async function resolveFromAnilist(aniId, episode = 1, track = "sub", serv
  * Resolve stream by Catalog / Anikoto Episode ID (legacy HiAnime ID)
  * @param {string|number} catalogEpId 
  * @param {string} [track="sub"] - 'sub' or 'dub'
- * @param {string} [server=""] - 'tcdn' or 'bcdn'
+ * @param {string} [server="tcdn"] - 'tcdn' or 'bcdn' (default 'tcdn')
  */
-export async function resolveFromCatalogId(catalogEpId, track = "sub", server = "") {
+export async function resolveFromCatalogId(catalogEpId, track = "sub", server = "tcdn") {
     const lang = track.toLowerCase() === "dub" ? "dub" : "sub";
     const embedUrl = `${MEGAPLAY_BASE}/stream/s-2/${catalogEpId}/${lang}`;
     const data = await resolveFromEmbedUrl(embedUrl, server);
@@ -277,8 +348,14 @@ export async function getSeriesEpisodes(seriesId) {
 export default {
     MEGAPLAY_BASE,
     ANIKOTO_API_BASE,
+    MEGAPLAY_AES_KEY,
+    MEGAPLAY_AES_IV,
+    STRIP_URL_RE,
+    STRIP_BYTES,
     extractPlayerIds,
     getSources,
+    decryptEncryptedSources,
+    stripSegmentBytes,
     resolveFromEmbedUrl,
     resolveFromMal,
     resolveFromAnilist,

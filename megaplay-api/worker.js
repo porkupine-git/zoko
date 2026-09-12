@@ -559,6 +559,7 @@ export default {
                     let backupRaw = rawStreamUrl;
                     if (rawStreamUrl.includes('norami.top')) backupRaw = rawStreamUrl.replace('norami.top', 'mikora.top');
                     else if (rawStreamUrl.includes('shiora.top')) backupRaw = rawStreamUrl.replace('shiora.top', 'mikora.top');
+                    else if (rawStreamUrl.includes('mikora.top')) backupRaw = rawStreamUrl.replace('mikora.top', 'norami.top');
                     streams.push({
                         "url": `${origin}/api/proxy/m3u8?token=${encryptStreamToken(backupRaw)}`,
                         "type": "hls",
