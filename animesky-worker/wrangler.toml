@@ -1,0 +1,16 @@
+name = "animesky-api"
+main = "index.js"
+compatibility_date = "2024-11-01"
+compatibility_flags = ["nodejs_compat"]
+workers_dev = true
+
+routes = [
+  { pattern = "hindi.anixo.online/*", zone_name = "anixo.online" }
+]
+
+[assets]
+directory = "./public"
+binding = "ASSETS"
+
+[observability]
+enabled = true

@@ -1,0 +1,19 @@
+{
+  "name": "animesky-api",
+  "version": "1.0.0",
+  "description": "High-Performance Cloudflare Worker for AnimeSky Scraping & AS-CDN HLS Streaming Proxy",
+  "main": "index.js",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy"
+  },
+  "keywords": [
+    "cloudflare-worker",
+    "animesky",
+    "scraper",
+    "hls-proxy",
+    "anime"
+  ],
+  "author": "",
+  "license": "MIT"
+}

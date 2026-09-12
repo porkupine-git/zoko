@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AnimeHub • Unified Ad-Free Player (AnimeSky, WatchAnimeWorld, AnimeSalt)</title>
+  <meta name="description" content="Reverse-engineered unified anime streaming portal for AnimeSky, WatchAnimeWorld, and AnimeSalt with 1080p playback and multi-audio dubs.">
+  
+  <!-- Modern Typography -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  
+  <!-- HLS.js & ArtPlayer Engine -->
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/artplayer@5.1.7/dist/artplayer.js"></script>
+  
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- Ambient Glow Background -->
+  <div class="ambient-glow glow-1"></div>
+  <div class="ambient-glow glow-2"></div>
+  <div class="ambient-glow glow-3"></div>
+
+  <!-- Header -->
+  <header class="header">
+    <div class="brand">
+      <div class="brand-icon">⚡</div>
+      <div class="brand-text">
+        <span class="brand-title">AnimeSky <span class="badge-pro">PRO</span></span>
+        <span class="brand-subtitle">Pure Anime Streaming Engine • Multi-Audio & Subtitles</span>
+      </div>
+    </div>
+    
+    <div class="header-badges">
+      <span class="pill-badge badge-sky">AnimeSky Official</span>
+      <span class="pill-badge badge-world">Hindi Dub Default</span>
+      <span class="pill-badge badge-clean">Zero Ads • 1080p FHD</span>
+    </div>
+  </header>
+
+  <!-- Main Content Layout -->
+  <main class="main-container">
+
+    <!-- Hero / Universal Search Bar -->
+    <section class="search-section">
+      <div class="search-wrapper">
+        <div class="search-box">
+          <div class="input-icon">🔍</div>
+          <input 
+            type="text" 
+            id="urlInput" 
+            placeholder="Search anime title (e.g. Solo Leveling, Demon Slayer) or paste AnimeSky URL... [Press '/' to search]" 
+            value="https://animesky.app/series/naruto-shippuden/"
+            autocomplete="off"
+            spellcheck="false"
+          />
+          <div id="searchSpinner" class="search-spinner" style="display: none;"></div>
+          <button id="clearBtn" class="btn-icon" title="Clear">✕</button>
+          <button id="fetchBtn" class="btn-primary" onclick="handleLoad()">
+            <span>Search & Stream</span>
+            <span class="btn-arrow">→</span>
+          </button>
+        </div>
+
+        <!-- Floating Live Search Suggestions Dropdown -->
+        <div class="search-dropdown" id="searchDropdown" style="display: none;">
+          <div class="dropdown-header">
+            <span id="dropdownHeaderTitle">🔥 Trending Searches</span>
+            <span class="dropdown-hint">ESC to close</span>
+          </div>
+          <div class="dropdown-content" id="dropdownContent">
+            <!-- Dynamically populated via JS -->
+          </div>
+          <div class="dropdown-footer" id="dropdownFooter" style="display: none;" onclick="triggerFullSearch()">
+            <span>🔍 View all search results in grid</span>
+            <span class="dropdown-footer-arrow">↵ Enter</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Quick Anime Category Filter Tabs -->
+      <div class="platform-tabs">
+        <span class="tab-label">Categories:</span>
+        <button class="tab-btn active" data-filter="all" onclick="filterPresets('all')">🔥 All Trending</button>
+        <button class="tab-btn" data-filter="shonen" onclick="filterPresets('shonen')">⚡ Shonen & Action</button>
+        <button class="tab-btn" data-filter="supernatural" onclick="filterPresets('supernatural')">🗡️ Supernatural & Fantasy</button>
+      </div>
+    </section>
+
+    <!-- Full Search Results Section (Shown when query matches multiple anime) -->
+    <section class="search-results-section" id="searchResultsSection" style="display: none;">
+      <div class="section-header search-results-header">
+        <div>
+          <h2 id="searchResultsHeading">🔍 Search Results</h2>
+          <span class="subtext" id="searchResultsSubtext">Found matching titles on AnimeSky</span>
+        </div>
+        <button class="btn-secondary btn-close-search" onclick="closeSearchResults()">✕ Close Results</button>
+      </div>
+      <div class="search-results-grid" id="searchResultsGrid">
+        <!-- Injected via JavaScript -->
+      </div>
+    </section>
+
+    <!-- Quick Trending Presets -->
+    <section class="presets-section">
+      <div class="section-header">
+        <h2>🔥 Quick Launch Trending Series</h2>
+        <span class="subtext">One-click instant stream loader</span>
+      </div>
+      <div class="presets-grid" id="presetsContainer">
+        <!-- Injected via JavaScript -->
+      </div>
+    </section>
+
+    <!-- Player & Series Viewport -->
+    <section class="player-section" id="playerSection">
+      
+      <!-- Video Player Wrapper -->
+      <div class="video-container">
+        <div id="loadingOverlay" class="loading-overlay" style="display: none;">
+          <div class="spinner"></div>
+          <div id="loadingMessage" class="loading-text">Resolving stream & decrypting HLS...</div>
+        </div>
+        <div id="artplayer"></div>
+      </div>
+
+      <!-- Video Control Bar & Stream Meta -->
+      <div class="stream-info-card">
+        <div class="info-top-row">
+          <div>
+            <h1 id="currentEpisodeTitle" class="episode-title">Naruto Shippuden - Episode 1</h1>
+            <div id="platformMeta" class="platform-meta">
+              <span id="providerTag" class="tag tag-sky">AnimeSky</span>
+              <span id="qualityTag" class="tag tag-quality">1080p Full HD</span>
+              <span id="serverTag" class="tag tag-server">AS-CDN</span>
+            </div>
+          </div>
+
+          <div class="action-buttons">
+            <button class="btn-secondary" onclick="copyStreamUrl()" id="copyUrlBtn">
+              <span>📋 Copy M3U8</span>
+            </button>
+            <button class="btn-secondary" onclick="openExternalPlayer()" title="Open in MPV / VLC">
+              <span>🎬 Open VLC</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Video Quality Selector -->
+        <div class="quality-selector">
+          <span class="track-label">🎬 Video Quality:</span>
+          <div class="quality-pills" id="qualityPillsContainer">
+            <span class="empty-hint">Auto (1080p / 720p / 480p)</span>
+          </div>
+        </div>
+
+        <!-- Multi-Audio Track Selector -->
+        <div class="audio-track-selector">
+          <span class="track-label">🎧 Audio Language:</span>
+          <div class="audio-pills" id="audioPillsContainer">
+            <span class="empty-hint">Load an episode to view audio tracks</span>
+          </div>
+        </div>
+
+        <!-- Subtitles Track Selector -->
+        <div class="subtitle-selector">
+          <div class="selector-header-row">
+            <span class="track-label">💬 Subtitles:</span>
+            <div class="sub-actions">
+              <input type="file" id="subFileInput" accept=".vtt,.srt" style="display: none;" onchange="handleCustomSubtitleUpload(event)" />
+              <button class="btn-sub-upload" onclick="document.getElementById('subFileInput').click()" title="Upload custom .srt or .vtt subtitle file">
+                <span>📂 Upload .SRT / .VTT</span>
+              </button>
+            </div>
+          </div>
+          <div class="subtitle-pills" id="subtitlePillsContainer">
+            <span class="empty-hint">Off (No subtitles active)</span>
+          </div>
+        </div>
+
+        <!-- Available Server Mirrors -->
+        <div class="server-mirror-selector">
+          <span class="track-label">⚡ Direct Video CDN:</span>
+          <div class="server-pills" id="serverPillsContainer">
+            <span class="empty-hint">Auto-selected primary CDN</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Anime Hero Showcase Card -->
+      <div class="anime-hero-card" id="animeHeroCard" style="display: none;">
+        <div class="hero-backdrop" id="heroBackdrop"></div>
+        <div class="hero-overlay"></div>
+        <div class="hero-content">
+          <div class="hero-poster-box">
+            <img id="heroPoster" src="" alt="Anime Poster" />
+            <span class="hero-status-pill" id="heroStatusBadge">FINISHED</span>
+          </div>
+          <div class="hero-info">
+            <div class="hero-title-row">
+              <h2 id="heroTitle" class="hero-title">Anime Title</h2>
+              <span id="heroRomaji" class="hero-romaji">Japanese / Romaji Title</span>
+            </div>
+            
+            <div class="hero-metrics">
+              <div class="hero-score-badge" id="heroScoreBox" title="Global Rating">
+                <span class="star-icon">⭐</span>
+                <span id="heroScoreVal">8.4</span>
+                <span class="score-scale">/10</span>
+              </div>
+              <div class="hero-genres" id="heroGenresList">
+                <!-- Genre tags -->
+              </div>
+            </div>
+
+            <p id="heroSynopsis" class="hero-synopsis">
+              Anime synopsis will appear here...
+            </p>
+
+            <div class="hero-footer-row">
+              <div class="hero-mappings" id="heroMappings">
+                <!-- AniList, MAL, Kitsu, AniZip badges -->
+              </div>
+              <div class="hero-actions">
+                <a id="heroTrailerBtn" class="btn-trailer" target="_blank" rel="noopener" style="display: none;">
+                  <span>▶ Watch Trailer</span>
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Series Episode Grid / Drawer -->
+      <div class="series-drawer" id="seriesDrawer">
+        <div class="drawer-header">
+          <div class="drawer-title-box">
+            <h3 id="seriesName">Series Episodes</h3>
+            <span class="episode-count" id="episodeCountBadge">0 Episodes</span>
+          </div>
+          <div class="drawer-controls">
+            <div class="view-mode-toggle">
+              <button class="view-btn active" id="richViewBtn" onclick="setEpisodeViewMode('rich')" title="Cards with HD Thumbnails">🖼️ Cards</button>
+              <button class="view-btn" id="compactViewBtn" onclick="setEpisodeViewMode('compact')" title="Compact Numbers">🔢 Compact</button>
+            </div>
+            <input type="text" id="episodeSearchInput" placeholder="Filter episode by # or title..." oninput="filterEpisodesList()" />
+          </div>
+        </div>
+
+        <!-- Season Selector Bar (Tabs) -->
+        <div class="season-tabs-container" id="seasonTabsContainer" style="display: none;">
+          <div class="season-tabs-label">Seasons:</div>
+          <div class="season-tabs-list" id="seasonTabsList">
+            <!-- Dynamically populated: Season 1, Season 2... -->
+          </div>
+        </div>
+
+        <!-- Episodes Grid -->
+        <div class="episodes-grid rich-grid" id="episodesGrid">
+          <!-- Populated by JavaScript -->
+        </div>
+      </div>
+
+    </section>
+
+  </main>
+
+  <!-- Toast Notification -->
+  <div id="toast" class="toast">Stream link copied to clipboard!</div>
+
+  <script src="app.js"></script>
+</body>
+</html>
