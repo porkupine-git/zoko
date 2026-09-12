@@ -79,7 +79,7 @@ async function runTests() {
     // 9a. Python Scraper Simulation
     console.log("   -> Testing python-requests bot detection...");
     const botReq = new Request("http://localhost:3005/api/stream/resolve?anilistId=21&episode=1&track=sub", {
-        headers: { "User-Agent": "python-requests/2.31.0" }
+        headers: { "User-Agent": "python-requests/2.31.0", "CF-Connecting-IP": "10.0.0.1" }
     });
     const botRes = await worker.fetch(botReq, {}, {});
     const botJson = await botRes.json();
@@ -93,7 +93,7 @@ async function runTests() {
     // 9b. Curl Bot Simulation
     console.log("   -> Testing curl bot detection...");
     const curlReq = new Request("http://localhost:3005/api/stream/resolve?anilistId=21&episode=1&track=sub", {
-        headers: { "User-Agent": "curl/8.4.0" }
+        headers: { "User-Agent": "curl/8.4.0", "CF-Connecting-IP": "10.0.0.2" }
     });
     const curlRes = await worker.fetch(curlReq, {}, {});
     const curlJson = await curlRes.json();
@@ -114,20 +114,110 @@ async function runTests() {
         throw new Error("Decoy WebVTT content verification failed!");
     }
 
-    // 9d. Legitimate Browser Request
-    console.log("   -> Testing legitimate human browser request...");
+    // 9d. Scraper Request without ticket (Spoofed Referer & User-Agent)
+    console.log("   -> Testing scraper request without ticket (Spoofed Referer & User-Agent)...");
+    const rawScraperReq = new Request("http://localhost:3005/api/stream/resolve?anilistId=21&episode=1&track=sub", {
+        headers: {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/124.0.0.0",
+            "Referer": "https://anixo.buzz/embed/ani/21/1",
+            "CF-Connecting-IP": "10.0.0.3",
+            "Accept": "application/json"
+        }
+    });
+    const rawScraperRes = await worker.fetch(rawScraperReq, {}, {});
+    if (rawScraperRes.status === 403) {
+        console.log("      ✓ Raw scraper without ticket successfully BLOCKED (HTTP 403 Forbidden)!");
+    } else {
+        throw new Error(`Scraper was not blocked! Status: ${rawScraperRes.status}`);
+    }
+
+    // 9e. Legitimate Full Embed Flow (Embed HTML -> Extract Ticket -> Resolve Stream)
+    console.log("   -> Testing legitimate human embed player flow...");
+    const embedReq = new Request("http://localhost:3005/embed/ani/21/1", {
+        headers: {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/124.0.0.0",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            "Referer": "http://localhost:3005/",
+            "CF-Connecting-IP": "10.0.0.4"
+        }
+    });
+    const embedPageRes = await worker.fetch(embedReq, {}, {});
+    const embedPageHtml = await embedPageRes.text();
+    
+    // 1. Confirm that static regex scraping returns null
+    const staticRegexMatch = embedPageHtml.match(/ticket:\s*"([^"]+)"/);
+    if (staticRegexMatch) {
+        throw new Error("VULNERABILITY: Static ticket is still visible via regex!");
+    }
+    console.log("      ✓ Static HTML regex scraper trapped (No ticket string in HTML)!");
+
+    // 2. Browser client dynamic reconstitution
+    const partAMatch = embedPageHtml.match(/id="cp-core-shield"\s+data-sh="([^"]+)"/);
+    const fragBMatch = embedPageHtml.match(/b64\s*=\s*"([^"]+)"/);
+    const seedMatch = embedPageHtml.match(/s\s*=\s*(\d+)/);
+    if (!partAMatch || !fragBMatch || !seedMatch) {
+        throw new Error("Failed to find dynamic shield components in HTML!");
+    }
+    const partA = partAMatch[1];
+    const rawB = Buffer.from(fragBMatch[1], 'base64').toString('binary');
+    const s = parseInt(seedMatch[1], 10);
+    let partB = "";
+    for (let i = 0; i < rawB.length; i++) {
+        partB += String.fromCharCode(rawB.charCodeAt(i) ^ s);
+    }
+    const ticket = partA + partB;
+    console.log(`      ✓ Browser Dynamic Shield Reconstituted Ticket: ${ticket.slice(0, 30)}...`);
+
+    // Test legitimate stream resolution with ticket
     const legitReq = new Request("http://localhost:3005/api/stream/resolve?anilistId=21&episode=1&track=sub", {
         headers: {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/124.0.0.0",
+            "Referer": "http://localhost:3005/embed/ani/21/1",
+            "CF-Connecting-IP": "10.0.0.4",
+            "x-embed-ticket": ticket,
             "Accept": "application/json"
         }
     });
     const legitRes = await worker.fetch(legitReq, {}, {});
     const legitJson = await legitRes.json();
-    if (legitJson._hp !== 1 && !legitRes.headers.get("X-Honeypot-Engaged")) {
-        console.log(`      ✓ Legitimate user bypassed honeypot and received real stream! Server: ${legitJson.server}`);
+    if (legitJson.streamUrl && legitJson._hp !== 1) {
+        console.log(`      ✓ Legitimate user with ticket received real stream! Server: ${legitJson.server}`);
+        console.log(`        Stream URL: ${legitJson.streamUrl.slice(0, 70)}...`);
     } else {
-        throw new Error("Honeypot falsely flagged a legitimate browser user!");
+        throw new Error(`Legitimate user failed to resolve stream! JSON: ${JSON.stringify(legitJson)}`);
+    }
+
+    // 9f. Stolen Ticket from Different IP
+    console.log("   -> Testing stolen ticket replay from different IP...");
+    const stolenReq = new Request("http://localhost:3005/api/stream/resolve?anilistId=21&episode=1&track=sub", {
+        headers: {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+            "CF-Connecting-IP": "192.168.100.5", // Different IP!
+            "x-embed-ticket": ticket,
+            "Accept": "application/json"
+        }
+    });
+    const stolenRes = await worker.fetch(stolenReq, {}, {});
+    if (stolenRes.status === 403) {
+        console.log("      ✓ Cross-IP stolen ticket replay successfully BLOCKED (HTTP 403 Forbidden)!");
+    } else {
+        throw new Error(`Cross-IP ticket was not blocked! Status: ${stolenRes.status}`);
+    }
+
+    // 9g. Burst Scraping Rate Limiter Test
+    console.log("   -> Testing burst scraping rate limiter...");
+    const burstReq = new Request("http://localhost:3005/api/stream/resolve?anilistId=21&episode=1&track=sub", {
+        headers: {
+            "CF-Connecting-IP": "127.0.0.1",
+            "User-Agent": "Mozilla/5.0",
+            "x-embed-ticket": ticket
+        }
+    });
+    const burstRes = await worker.fetch(burstReq, {}, {});
+    if (burstRes.status === 429) {
+        console.log("      ✓ Rapid burst scraping successfully BLOCKED (HTTP 429 Too Many Requests)!");
+    } else {
+        console.log(`      (Burst status: ${burstRes.status})`);
     }
 
     console.log("\n==============================================");

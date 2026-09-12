@@ -13,6 +13,7 @@ import { PLAYER_CSS } from './playerCss.js';
 import { renderPlayerClientScript } from './playerClient.js';
 import { CONTROL_ICONS, SUB_ICON_ON, SUB_ICON_OFF } from './icons.js';
 import { getAdminConfig } from '../admin/adminStore.js';
+import { fragmentTicket } from '../security/ticket.js';
 
 export { escapeHtml, escapeJs } from './utils.js';
 
@@ -29,12 +30,15 @@ export function renderEmbedHtml({
     server = 1,
     autoPlay = 1,
     autoNext = 1,
-    autoSkip = 1
+    autoSkip = 1,
+    ticket = ""
 }) {
     const adminConfig = getAdminConfig();
     const monetization = adminConfig?.monetization || {};
     const popunderEnabled = Boolean(monetization.adsEnabled && monetization.popunderUrl);
     const pageTitle = escapeHtml(title ? `${title} - Episode ${episode}` : `Episode ${episode}`);
+
+    const { fragA, fragB, seed } = fragmentTicket(ticket);
 
     const clientScript = renderPlayerClientScript({
         id,
@@ -48,7 +52,9 @@ export function renderEmbedHtml({
         server,
         autoPlay,
         autoNext,
-        autoSkip
+        autoSkip,
+        fragB,
+        seed
     });
 
     return `<!DOCTYPE html>
@@ -69,6 +75,8 @@ ${PLAYER_CSS}
 </head>
 <body>
     <div id="player-root" class="cp-controls-visible">
+        <!-- Dynamic Anti-Scraper Session Shield -->
+        <div id="cp-core-shield" data-sh="${escapeHtml(fragA)}" style="display:none;" aria-hidden="true"></div>
         <script>
             (function() {
                 var isMob = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || 

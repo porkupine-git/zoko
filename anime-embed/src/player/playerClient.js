@@ -22,7 +22,10 @@ export function renderPlayerClientScript({
     server = 1,
     autoPlay = 1,
     autoNext = 1,
-    autoSkip = 1
+    autoSkip = 1,
+    fragB = '',
+    seed = 0,
+    ticket = ''
 }) {
     return `
         /* ── Subtitle Settings Storage & Defaults ── */
@@ -144,6 +147,27 @@ export function renderPlayerClientScript({
             } catch (e) {}
         }
 
+        /* ── Dynamic Session Ticket Reconstitution (Anti-Scraper Shield) ── */
+        function getDynamicSessionTicket() {
+            try {
+                const el = document.getElementById('cp-core-shield');
+                const partA = el ? (el.getAttribute('data-sh') || '') : '';
+                const b64 = "${escapeJs(fragB || '')}";
+                const s = ${parseInt(seed, 10) || 0};
+                if (!partA || !b64 || !s) {
+                    return "${escapeJs(ticket || '')}";
+                }
+                const rawB = atob(b64);
+                let partB = "";
+                for (let i = 0; i < rawB.length; i++) {
+                    partB += String.fromCharCode(rawB.charCodeAt(i) ^ s);
+                }
+                return partA + partB;
+            } catch (e) {
+                return "${escapeJs(ticket || '')}";
+            }
+        }
+
         /* ── STATE ── */
         const STATE = {
             id: "${escapeJs(id || '')}",
@@ -158,6 +182,7 @@ export function renderPlayerClientScript({
             autoPlay: ${autoPlay ? 'true' : 'false'},
             autoNext: ${autoNext ? 'true' : 'false'},
             autoSkip: ${autoSkip ? 'true' : 'false'},
+            ticket: getDynamicSessionTicket(),
             streamData: null,
             hls: null,
             video: null,
@@ -609,6 +634,9 @@ export function renderPlayerClientScript({
                 const reqHeaders = {};
                 if (turnstileToken) {
                     reqHeaders['cf-turnstile-token'] = turnstileToken;
+                }
+                if (STATE.ticket) {
+                    reqHeaders['x-embed-ticket'] = STATE.ticket;
                 }
                 const res = await fetch(url.toString(), { headers: reqHeaders });
                 if (!res.ok) {
@@ -2646,6 +2674,14 @@ export function renderPlayerClientScript({
 
         function changeEpisode(epNum) {
             if (epNum === STATE.currentEp) return;
+            const url = new URL(window.location.href);
+            const pathParts = url.pathname.split('/');
+            if (pathParts.length >= 4 && pathParts[1] === 'embed') {
+                pathParts[3] = String(epNum);
+                url.pathname = pathParts.join('/');
+                window.location.href = url.toString();
+                return;
+            }
             STATE.currentEp = epNum;
             document.title = (STATE.title ? STATE.title + ' - ' : '') + 'Episode ' + epNum;
             turnstileToken = null;

@@ -13,6 +13,39 @@ import { resolveStreamWithFailover, resolveSpecificServer } from './src/engines/
 import { checkClusterHealth } from './src/engines/health.js';
 import { maskStreamResult, decryptStreamToken, encryptStreamToken, SCRAPER_NOTICE_HEADER, SCRAPER_NOTICE_TEXT } from './src/engines/proxyCrypto.js';
 import { isScraperRequest, getHoneypotStreamResponse, getHoneypotVttContent } from './src/engines/honeypot.js';
+import { createEmbedTicket, verifyEmbedTicket, isBotRequest } from './src/security/ticket.js';
+
+// Strict Stream Resolver Rate Limiter (Max 1 req / 1.5s burst, max 30 req / 5m per IP)
+const ipStreamRateLimits = new Map();
+function checkStreamRateLimit(ip) {
+    if (!ip) return true;
+    const now = Date.now();
+    const entry = ipStreamRateLimits.get(ip) || { lastTime: 0, count: 0, windowStart: now };
+
+    if (ipStreamRateLimits.size > 5000) {
+        for (const [k, v] of ipStreamRateLimits.entries()) {
+            if (now - v.windowStart > 300000) ipStreamRateLimits.delete(k);
+        }
+    }
+
+    if (entry.lastTime > 0 && (now - entry.lastTime) < 1500) {
+        return false; // Burst scraping rejected
+    }
+
+    if (now - entry.windowStart > 300000) {
+        entry.windowStart = now;
+        entry.count = 1;
+    } else {
+        entry.count++;
+        if (entry.count > 30) {
+            return false; // Exceeded 30 resolutions in 5 mins
+        }
+    }
+
+    entry.lastTime = now;
+    ipStreamRateLimits.set(ip, entry);
+    return true;
+}
 import {
     verifyAdminPassword,
     createAdminSession,
@@ -108,24 +141,6 @@ function isDatacenterIp(request) {
 }
 
 async function verifyTurnstileToken(request, env, ctx) {
-    const clientIp = request.headers.get("CF-Connecting-IP") || request.headers.get("x-real-ip") || "";
-
-    // 1. Check IP Pre-Clearance (MemCache & KV) - Allows verified humans to browse smoothly without repeated challenges
-    if (clientIp) {
-        if (getMemCache(`turnstile:cleared:${clientIp}`)) {
-            return { valid: true, reason: "precleared_session" };
-        }
-        if (env?.ANIXO_ADMIN_STORE) {
-            try {
-                const kvCleared = await env.ANIXO_ADMIN_STORE.get(`turnstile:cleared:${clientIp}`);
-                if (kvCleared) {
-                    setMemCache(`turnstile:cleared:${clientIp}`, 1, 1800);
-                    return { valid: true, reason: "kv_precleared" };
-                }
-            } catch {}
-        }
-    }
-
     const token = request.headers.get("cf-turnstile-token") || new URL(request.url).searchParams.get("turnstileToken");
     if (!token) {
         return { valid: false, error: "Cloudflare Turnstile token required" };
@@ -557,6 +572,9 @@ export default {
 
             // 5. Embed Route: /embed/ani/:id/:ep
             if (pathname.startsWith("/embed/ani/")) {
+                if (isBotRequest(request)) {
+                    return getBlockedLeechResponse();
+                }
                 const clientReferer = extractClientReferer(request, url);
                 if (!isDomainAllowed(clientReferer)) {
                     return getBlockedLeechResponse();
@@ -579,6 +597,15 @@ export default {
                     ctx.waitUntil(persistAdminStoreToKv(kv));
                 }
 
+                const clientIp = request.headers.get("cf-connecting-ip") || request.headers.get("x-forwarded-for") || request.headers.get("x-real-ip") || "127.0.0.1";
+                const ticket = await createEmbedTicket({
+                    ip: clientIp,
+                    id: String(anilistId),
+                    idType: "ani",
+                    episode: ep,
+                    secret: env?.TICKET_SECRET
+                });
+
                 const html = renderEmbedHtml({
                     id: String(anilistId),
                     idType: "ani",
@@ -592,7 +619,8 @@ export default {
                     server,
                     autoPlay,
                     autoNext,
-                    autoSkip
+                    autoSkip,
+                    ticket
                 });
 
                 return new Response(html, {
@@ -606,6 +634,9 @@ export default {
 
             // 6. Embed Route: /embed/mal/:id/:ep
             if (pathname.startsWith("/embed/mal/")) {
+                if (isBotRequest(request)) {
+                    return getBlockedLeechResponse();
+                }
                 const clientReferer = extractClientReferer(request, url);
                 if (!isDomainAllowed(clientReferer)) {
                     return getBlockedLeechResponse();
@@ -628,6 +659,15 @@ export default {
                     ctx.waitUntil(persistAdminStoreToKv(kv));
                 }
 
+                const clientIp = request.headers.get("cf-connecting-ip") || request.headers.get("x-forwarded-for") || request.headers.get("x-real-ip") || "127.0.0.1";
+                const ticket = await createEmbedTicket({
+                    ip: clientIp,
+                    id: String(malId),
+                    idType: "mal",
+                    episode: ep,
+                    secret: env?.TICKET_SECRET
+                });
+
                 const html = renderEmbedHtml({
                     id: String(malId),
                     idType: "mal",
@@ -641,7 +681,8 @@ export default {
                     server,
                     autoPlay,
                     autoNext,
-                    autoSkip
+                    autoSkip,
+                    ticket
                 });
 
                 return new Response(html, {
@@ -655,6 +696,9 @@ export default {
 
             // 7. General Embed Route: /embed?anilist=... or /embed?mal=... or /embed?id=...
             if (pathname === "/embed" || (pathname.startsWith("/embed/") && !pathname.startsWith("/embed/ani/") && !pathname.startsWith("/embed/mal/"))) {
+                if (isBotRequest(request)) {
+                    return getBlockedLeechResponse();
+                }
                 const clientReferer = extractClientReferer(request, url);
                 if (!isDomainAllowed(clientReferer)) {
                     return getBlockedLeechResponse();
@@ -692,6 +736,15 @@ export default {
                     ctx.waitUntil(persistAdminStoreToKv(kv));
                 }
 
+                const clientIp = request.headers.get("cf-connecting-ip") || request.headers.get("x-forwarded-for") || request.headers.get("x-real-ip") || "127.0.0.1";
+                const ticket = await createEmbedTicket({
+                    ip: clientIp,
+                    id: String(effectiveId),
+                    idType: resolvedAniId ? "ani" : "mal",
+                    episode: ep,
+                    secret: env?.TICKET_SECRET
+                });
+
                 const html = renderEmbedHtml({
                     id: String(effectiveId),
                     idType: resolvedAniId ? "ani" : "mal",
@@ -705,7 +758,8 @@ export default {
                     server,
                     autoPlay,
                     autoNext,
-                    autoSkip
+                    autoSkip,
+                    ticket
                 });
 
                 return new Response(html, {
@@ -747,15 +801,67 @@ export default {
                     });
                 }
 
-                // Turnstile Human Verification Check (Configurable from Admin Panel)
-                if (getAdminConfig().firewall?.turnstileEnabled !== false) {
+                const clientIp = request.headers.get("cf-connecting-ip") || request.headers.get("x-forwarded-for") || request.headers.get("x-real-ip") || "127.0.0.1";
+
+                // 1. Anti-Bot / Burst Scraper Rate Limiter
+                if (!checkStreamRateLimit(clientIp)) {
+                    recordHoneypotTrap({ ip: clientIp, userAgent: request.headers.get("user-agent") || "", path: pathname });
+                    return new Response(JSON.stringify({
+                        success: false,
+                        error: "Rate limit exceeded. Rapid automated scraping is blocked.",
+                        retryAfter: 2
+                    }), {
+                        status: 429,
+                        headers: {
+                            ...CORS_HEADERS,
+                            "Content-Type": "application/json",
+                            "Retry-After": "2"
+                        }
+                    });
+                }
+
+                const anilistId = url.searchParams.get("anilistId");
+                const malId = url.searchParams.get("malId");
+                const title = url.searchParams.get("title");
+                const episode = parseInt(url.searchParams.get("episode") || "1", 10) || 1;
+                const track = (url.searchParams.get("track") || "sub").toLowerCase();
+                const targetId = String(malId || anilistId || "");
+                const targetIdType = malId ? "mal" : "ani";
+
+                // 2. Cryptographic Embed Ticket Verification
+                if (isBotRequest(request)) {
+                    recordHoneypotTrap({ ip: clientIp, userAgent: request.headers.get("user-agent") || "bot", path: pathname });
+                    const honeypotData = getHoneypotStreamResponse(baseUrl);
+                    return new Response(JSON.stringify(honeypotData, null, 2), {
+                        headers: {
+                            ...CORS_HEADERS,
+                            "Content-Type": "application/json",
+                            "Cache-Control": "no-cache, no-store",
+                            "X-Honeypot-Engaged": "1",
+                            "X-Scraper-Advisory": SCRAPER_NOTICE_HEADER
+                        }
+                    });
+                }
+
+                const embedTicket = request.headers.get("x-embed-ticket") || url.searchParams.get("ticket");
+                const ticketCheck = await verifyEmbedTicket(embedTicket, {
+                    ip: clientIp,
+                    id: targetId,
+                    idType: targetIdType,
+                    episode,
+                    secret: env?.TICKET_SECRET,
+                    kv: env?.ANIXO_ADMIN_STORE,
+                    ctx
+                });
+
+                // If ticket is missing or invalid, require Turnstile verification
+                if (!ticketCheck.valid) {
                     const turnstile = await verifyTurnstileToken(request, env, ctx);
                     if (!turnstile.valid) {
-                        if (isScraperRequest(request) || isDatacenterIp(request)) {
-                            const clientIp = request.headers.get("cf-connecting-ip") || request.headers.get("x-forwarded-for") || "127.0.0.1";
-                            const userAgent = request.headers.get("user-agent") || "automated-scraper";
-                            recordHoneypotTrap({ ip: clientIp, userAgent, path: pathname });
+                        const userAgent = request.headers.get("user-agent") || "automated-scraper";
+                        recordHoneypotTrap({ ip: clientIp, userAgent, path: pathname });
 
+                        if (isScraperRequest(request) || isDatacenterIp(request)) {
                             const honeypotData = getHoneypotStreamResponse(baseUrl);
                             return new Response(JSON.stringify(honeypotData, null, 2), {
                                 headers: {
@@ -767,9 +873,10 @@ export default {
                                 }
                             });
                         }
+
                         return new Response(JSON.stringify({
                             success: false,
-                            error: `Access Denied: ${turnstile.error || "Turnstile verification required"}`,
+                            error: `Access Denied: ${ticketCheck.error || "Valid embed ticket required"}`,
                             verificationRequired: true
                         }), {
                             status: 403,
@@ -781,11 +888,6 @@ export default {
                     }
                 }
 
-                const anilistId = url.searchParams.get("anilistId");
-                const malId = url.searchParams.get("malId");
-                const title = url.searchParams.get("title");
-                const episode = parseInt(url.searchParams.get("episode") || "1", 10) || 1;
-                const track = (url.searchParams.get("track") || "sub").toLowerCase();
                 const defaultServer = getAdminConfig().servers?.primary || 1;
                 const serverParam = url.searchParams.get("server");
                 const preferredServer = serverParam ? (parseInt(serverParam, 10) || defaultServer) : defaultServer;
@@ -799,7 +901,7 @@ export default {
                     preferredServer
                 }, env);
 
-                const maskedResult = maskStreamResult(result, baseUrl);
+                const maskedResult = maskStreamResult(result, baseUrl, clientIp);
 
                 recordStreamAccess({
                     domain: clientReferer,
@@ -887,7 +989,8 @@ export default {
                     track
                 }, env);
 
-                const maskedResult = maskStreamResult(result, baseUrl);
+                const clientIp = request.headers.get("cf-connecting-ip") || request.headers.get("x-forwarded-for") || request.headers.get("x-real-ip") || "127.0.0.1";
+                const maskedResult = maskStreamResult(result, baseUrl, clientIp);
 
                 recordStreamAccess({
                     domain: clientReferer,
@@ -922,7 +1025,8 @@ export default {
                 if (!token) {
                     return new Response("Missing stream token", { status: 400, headers: CORS_HEADERS });
                 }
-                let targetUrl = decryptStreamToken(token);
+                const clientIp = request.headers.get("cf-connecting-ip") || request.headers.get("x-forwarded-for") || request.headers.get("x-real-ip") || "127.0.0.1";
+                let targetUrl = decryptStreamToken(token, clientIp);
                 if (!targetUrl || !targetUrl.startsWith("http")) {
                     return new Response("Invalid stream token", { status: 403, headers: CORS_HEADERS });
                 }
@@ -1037,7 +1141,8 @@ export default {
                 if (!token) {
                     return new Response("Missing vtt token", { status: 400, headers: CORS_HEADERS });
                 }
-                const targetUrl = decryptStreamToken(token);
+                const clientIp = request.headers.get("cf-connecting-ip") || request.headers.get("x-forwarded-for") || request.headers.get("x-real-ip") || "127.0.0.1";
+                const targetUrl = decryptStreamToken(token, clientIp);
                 if (!targetUrl || !targetUrl.startsWith("http")) {
                     return new Response("Invalid vtt token", { status: 403, headers: CORS_HEADERS });
                 }
