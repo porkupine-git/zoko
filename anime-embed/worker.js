@@ -1050,6 +1050,10 @@ export default {
                     "Accept": request.headers.get("Accept") || "*/*",
                     "x-cluster-internal": CLUSTER_SECRET
                 };
+                if (targetUrl.includes("megaplay") || targetUrl.includes("mikora") || targetUrl.includes("shiora") || targetUrl.includes("norami") || targetUrl.includes("nexabloom")) {
+                    forwardHeaders["Referer"] = "https://megaplay.buzz/";
+                    forwardHeaders["Origin"] = "https://megaplay.buzz";
+                }
                 if (request.headers.get("Range")) {
                     forwardHeaders["Range"] = request.headers.get("Range");
                 }
@@ -1097,6 +1101,25 @@ export default {
                             ...CORS_HEADERS,
                             "Content-Type": "application/vnd.apple.mpegurl",
                             "Cache-Control": isHoneypot ? "no-cache, no-store" : "public, max-age=60",
+                            "X-Scraper-Advisory": SCRAPER_NOTICE_HEADER,
+                            ...(isHoneypot ? { "X-Honeypot-Engaged": "1" } : {})
+                        }
+                    });
+                }
+
+                // Strip 252 bytes dummy PNG header from obfuscated TikTok CDN video chunks
+                const shouldStrip = /ibyteimg\.com|tiktokcdn\.com|ipstatp\.com|yoot\.akirax\.buzz/i.test(targetUrl);
+                if (shouldStrip && upstreamRes.body) {
+                    const buf = await upstreamRes.arrayBuffer();
+                    const bytes = new Uint8Array(buf);
+                    const stripped = bytes.length <= 252 ? bytes : bytes.subarray(252);
+                    return new Response(stripped, {
+                        status: 200,
+                        headers: {
+                            ...CORS_HEADERS,
+                            "Content-Type": "video/MP2T",
+                            "Content-Length": stripped.length.toString(),
+                            "Cache-Control": isHoneypot ? "no-cache, no-store" : "public, max-age=86400",
                             "X-Scraper-Advisory": SCRAPER_NOTICE_HEADER,
                             ...(isHoneypot ? { "X-Honeypot-Engaged": "1" } : {})
                         }
@@ -1156,11 +1179,17 @@ export default {
                     fetcher = (u, init) => env.ZOKO_SERVICE.fetch(u, init);
                 }
 
+                const vttHeaders = {
+                    "User-Agent": request.headers.get("User-Agent") || "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
+                    "x-cluster-internal": CLUSTER_SECRET
+                };
+                if (targetUrl.includes("nexabloom") || targetUrl.includes("megaplay") || targetUrl.includes("imgnex")) {
+                    vttHeaders["Referer"] = "https://megaplay.buzz/";
+                    vttHeaders["Origin"] = "https://megaplay.buzz";
+                }
+
                 const upstreamRes = await fetcher(targetUrl, {
-                    headers: {
-                        "User-Agent": request.headers.get("User-Agent") || "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
-                        "x-cluster-internal": CLUSTER_SECRET
-                    }
+                    headers: vttHeaders
                 });
 
                 const vttText = await upstreamRes.text();
