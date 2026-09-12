@@ -507,6 +507,16 @@ async function getAnimeSkySeries(seriesUrl, options = {}) {
                 const sMeta = await fetchAnimeMetadata(title, targetSeasonObj.season);
                 if (sMeta) finalMeta = sMeta;
             } catch (sErr) {}
+        } else {
+            return {
+                success: false,
+                error: `Season ${targetSeasonNum} is not available for "${title}" on AnimeSky.`,
+                title,
+                requestedSeason: targetSeasonNum,
+                seasons,
+                totalEpisodes: 0,
+                episodes: []
+            };
         }
     }
 
@@ -819,12 +829,28 @@ export default {
                 try {
                     const cachedResponse = await caches.default.match(request);
                     if (cachedResponse) {
-                        const hitHeaders = new Headers(cachedResponse.headers);
-                        hitHeaders.set('X-Edge-Cache', 'HIT');
-                        return new Response(cachedResponse.body, {
-                            status: cachedResponse.status,
-                            headers: hitHeaders
-                        });
+                        if (pathname === '/api/series') {
+                            const clone = cachedResponse.clone();
+                            const json = await clone.json().catch(() => null);
+                            const targetSeason = parseInt(url.searchParams.get('season'), 10) || 1;
+                            if (json && targetSeason > 1 && json.activeSeason !== targetSeason) {
+                                await caches.default.delete(request).catch(() => {});
+                            } else {
+                                const hitHeaders = new Headers(cachedResponse.headers);
+                                hitHeaders.set('X-Edge-Cache', 'HIT');
+                                return new Response(cachedResponse.body, {
+                                    status: cachedResponse.status,
+                                    headers: hitHeaders
+                                });
+                            }
+                        } else {
+                            const hitHeaders = new Headers(cachedResponse.headers);
+                            hitHeaders.set('X-Edge-Cache', 'HIT');
+                            return new Response(cachedResponse.body, {
+                                status: cachedResponse.status,
+                                headers: hitHeaders
+                            });
+                        }
                     }
                 } catch (e) {}
             }
@@ -923,12 +949,19 @@ export default {
                 const targetSeason = parseInt(url.searchParams.get('season'), 10) || 1;
                 const kvKey = `series:${encodeURIComponent(seriesUrl.toLowerCase())}:s${targetSeason}`;
                 let data = await kvGet(env, kvKey);
+                if (data && targetSeason > 1 && data.activeSeason !== targetSeason) {
+                    data = null;
+                }
 
                 if (!data) {
                     data = await getAnimeSkySeries(seriesUrl, { targetSeason });
-                    if (data && data.success) {
+                    if (data && data.success && (!targetSeason || data.activeSeason === targetSeason)) {
                         kvPut(env, ctx, kvKey, data, 86400);
                     }
+                }
+
+                if (!data || !data.success || !data.episodes || data.episodes.length === 0 || (targetSeason > 1 && data.activeSeason !== targetSeason)) {
+                    return jsonResponse({ success: false, error: data?.error || `Season ${targetSeason} not found on AnimeSky.` }, 404);
                 }
 
                 return sendCachedJson(request, ctx, { ...data, provider: 'animesky' }, 200, 86400);
