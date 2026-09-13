@@ -497,22 +497,30 @@ export default {
                     return errorResponse(`Access Denied: ${turnstile.error || "Turnstile verification required"}`, 403);
                 }
 
-                const cacheKey = `watch:anigo:v4:${id}:${ep}:${lang}`;
+                const cacheKey = `watch:anigo:v5:${id}:${ep}:${lang}`;
                 let streamData = null;
                 let cacheStatus = "MISS";
+
+                const isValidCachedStream = (data) => {
+                    if (!data?.aniko?.streams?.length) return false;
+                    const firstUrl = data.aniko.streams[0]?.url || "";
+                    if (firstUrl.endsWith("token=") || !firstUrl.includes("token=") || firstUrl.includes("token=&")) {
+                        return false;
+                    }
+                    return true;
+                };
 
                 if (env.ANIKO_CACHE) {
                     try {
                         streamData = await env.ANIKO_CACHE.get(cacheKey, "json");
-                        if (!streamData) {
-                            streamData = await env.ANIKO_CACHE.get(`watch:anigo:v3:${id}:${ep}:${lang}`, "json");
-                        }
-                        if (streamData) {
+                        if (streamData && isValidCachedStream(streamData)) {
                             cacheStatus = "KV-HIT";
                             const raw = JSON.stringify(streamData)
                                 .replaceAll("aniko-backend.rk18109ry.workers.dev", host)
                                 .replaceAll("zoko-stream.rk18109ry.workers.dev", "zoko.anixo.online");
                             streamData = JSON.parse(raw);
+                        } else {
+                            streamData = null;
                         }
                     } catch {}
                 }
@@ -535,8 +543,17 @@ export default {
                     }
 
                     const withProxies = attachProxyUrls(resolved, origin);
-                    const rawStreamUrl = resolved.stream_url || "";
-                    const mainProxy = withProxies.proxy_stream_url || `${origin}/api/proxy/m3u8?token=${encryptStreamToken(rawStreamUrl)}`;
+                    const rawStreamUrl = resolved.stream_url || (resolved.sources && resolved.sources[0]?.url) || "";
+                    if (!rawStreamUrl) {
+                        return errorResponse("Upstream stream URL not available for episode", 404);
+                    }
+
+                    const mainToken = encryptStreamToken(rawStreamUrl);
+                    if (!mainToken) {
+                        return errorResponse("Failed to generate encrypted stream token", 500);
+                    }
+
+                    const mainProxy = `${origin}/api/proxy/m3u8?token=${mainToken}`;
 
                     // Generate multi-CDN streams so Anigo2 shows the Server/CDN selector
                     const streams = [
@@ -552,24 +569,30 @@ export default {
                     let tokyoRaw = rawStreamUrl;
                     if (rawStreamUrl.includes('norami.top')) tokyoRaw = rawStreamUrl.replace('norami.top', 'shiora.top');
                     else if (rawStreamUrl.includes('mikora.top')) tokyoRaw = rawStreamUrl.replace('mikora.top', 'shiora.top');
-                    streams.push({
-                        "url": `${origin}/api/proxy/m3u8?token=${encryptStreamToken(tokyoRaw)}`,
-                        "type": "hls",
-                        "server": "Tokyo CDN (Asia)",
-                        "priority": 2
-                    });
+                    const tokyoToken = encryptStreamToken(tokyoRaw);
+                    if (tokyoToken) {
+                        streams.push({
+                            "url": `${origin}/api/proxy/m3u8?token=${tokyoToken}`,
+                            "type": "hls",
+                            "server": "Tokyo CDN (Asia)",
+                            "priority": 2
+                        });
+                    }
 
                     // Backup CDN (Ultra)
                     let backupRaw = rawStreamUrl;
                     if (rawStreamUrl.includes('norami.top')) backupRaw = rawStreamUrl.replace('norami.top', 'mikora.top');
                     else if (rawStreamUrl.includes('shiora.top')) backupRaw = rawStreamUrl.replace('shiora.top', 'mikora.top');
                     else if (rawStreamUrl.includes('mikora.top')) backupRaw = rawStreamUrl.replace('mikora.top', 'norami.top');
-                    streams.push({
-                        "url": `${origin}/api/proxy/m3u8?token=${encryptStreamToken(backupRaw)}`,
-                        "type": "hls",
-                        "server": "Backup CDN (Ultra)",
-                        "priority": 3
-                    });
+                    const backupToken = encryptStreamToken(backupRaw);
+                    if (backupToken) {
+                        streams.push({
+                            "url": `${origin}/api/proxy/m3u8?token=${backupToken}`,
+                            "type": "hls",
+                            "server": "Backup CDN (Ultra)",
+                            "priority": 3
+                        });
+                    }
 
                     streamData = {
                         "aniko": {
@@ -588,7 +611,7 @@ export default {
                         }
                     };
 
-                    if (env.ANIKO_CACHE && ctx?.waitUntil) {
+                    if (env.ANIKO_CACHE && ctx?.waitUntil && isValidCachedStream(streamData)) {
                         ctx.waitUntil(
                             env.ANIKO_CACHE.put(cacheKey, JSON.stringify(streamData), { expirationTtl: 43200 }).catch(() => {})
                         );
