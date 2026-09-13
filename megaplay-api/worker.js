@@ -121,8 +121,8 @@ function isOriginAllowed(request) {
     if (!ref) return true;
 
     if (
-        ref.includes("anixo.online") ||
-        ref.includes("anixo.buzz") ||
+        ref.includes("anigo") ||
+        ref.includes("anixo") ||
         ref.includes("localhost") ||
         ref.includes("127.0.0.1") ||
         ref.includes("192.168.") ||
@@ -130,6 +130,9 @@ function isOriginAllowed(request) {
         ref.includes("172.") ||
         ref.includes("pages.dev") ||
         ref.includes("vercel.app") ||
+        ref.includes("netlify.app") ||
+        ref.includes("onrender.com") ||
+        ref.includes("render.com") ||
         ref.includes("hf.space")
     ) {
         return true;
@@ -318,20 +321,21 @@ export default {
             });
         }
 
-        // Security: Datacenter & Cloud Hosting IP Blocker (Blocks automated scraping servers)
-        if (isDatacenterIp(request)) {
-            return new Response("Access Denied: Datacenter & Cloud hosting networks are blocked by Anixo Shield.", {
-                status: 403,
-                headers: { ...CORS_HEADERS, "Content-Type": "text/plain" }
-            });
-        }
-
         const url = new URL(request.url);
         const host = request.headers.get("x-forwarded-host") || request.headers.get("host") || url.host;
         const origin = `https://${host}`;
         const pathname = url.pathname;
         const searchParams = url.searchParams;
         const colo = request.cf?.colo || "EDGE";
+
+        // Security: Datacenter & Cloud Hosting IP Blocker (Blocks automated scraping servers, exempts encrypted proxy playback)
+        const isProxyPlayback = pathname.startsWith("/api/proxy/");
+        if (!isProxyPlayback && isDatacenterIp(request)) {
+            return new Response("Access Denied: Datacenter & Cloud hosting networks are blocked by Anixo Shield.", {
+                status: 403,
+                headers: { ...CORS_HEADERS, "Content-Type": "text/plain" }
+            });
+        }
 
         // 2. L1 Free Edge Cache API Check (caches.default)
         // Free, unlimited, runs in RAM in < 0.5ms CPU time without consuming KV reads!
