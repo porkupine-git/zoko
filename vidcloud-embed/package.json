@@ -1,0 +1,20 @@
+{
+  "name": "vidcloud-embed",
+  "version": "1.0.0",
+  "description": "High-Speed Anime Video Embed Provider for vidcloud.sbs powered by player.anixo.online",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "deploy": "wrangler deploy",
+    "test": "node test.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.19.2"
+  },
+  "devDependencies": {
+    "wrangler": "^4.129.1"
+  }
+}

@@ -1,0 +1,743 @@
+/**
+ * VIDCLOUD PUBLIC ANIME EMBED PROVIDER - CLOUDFLARE WORKER
+ * Edge router serving the developer playground, cinema embed player,
+ * AniList/MAL metadata, and the 3-engine multi-server stream coordinator.
+ * Powered by player.anixo.online
+ */
+
+import { renderLandingHtml } from './src/landing/landingHtml.js';
+import { renderEmbedHtml } from './src/player/embedHtml.js';
+import { renderAdminHtml } from './src/admin/adminHtml.js';
+import { searchAnime, getAnimeByAniListId, getAnimeByMalId } from './src/metadata/anilist.js';
+import { resolveStreamWithFailover, resolveSpecificServer } from './src/engines/resolver.js';
+import { checkClusterHealth } from './src/engines/health.js';
+import { maskStreamResult, decryptStreamToken, encryptStreamToken, SCRAPER_NOTICE_HEADER, SCRAPER_NOTICE_TEXT } from './src/engines/proxyCrypto.js';
+import { isScraperRequest, getHoneypotStreamResponse, getHoneypotVttContent } from './src/engines/honeypot.js';
+import { createEmbedTicket, verifyEmbedTicket, isBotRequest } from './src/security/ticket.js';
+import {
+    verifyAdminPassword,
+    createAdminSession,
+    validateAdminSession,
+    getAdminConfig,
+    updateAdminConfig,
+    getAdminFullState,
+    isDomainAllowed,
+    addFirewallDomain,
+    removeFirewallDomain,
+    recordStreamAccess,
+    clearTelemetry,
+    unmaskReferrer,
+    markReferrerSandboxed,
+    recordHoneypotTrap,
+    generateApiKey,
+    toggleApiKey,
+    deleteApiKey,
+    syncAdminStoreWithKv,
+    persistAdminStoreToKv,
+    addBlockedIp,
+    removeBlockedIp,
+    isIpBlocked
+} from './src/admin/adminStore.js';
+
+const CORS_HEADERS = {
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Methods": "GET, POST, OPTIONS, HEAD",
+    "Access-Control-Allow-Headers": "Origin, X-Requested-With, Content-Type, Accept, Range, Authorization, *",
+    "Access-Control-Expose-Headers": "Content-Range, Accept-Ranges, Content-Length, X-Cluster-Status, *",
+    "Access-Control-Max-Age": "86400"
+};
+
+const CLUSTER_SECRET = "anixo-cluster-auth-9x82k1";
+
+// Stream rate limiter (30 req / 5m per IP)
+const ipStreamRateLimits = new Map();
+function checkStreamRateLimit(ip) {
+    if (!ip) return true;
+    const now = Date.now();
+    const entry = ipStreamRateLimits.get(ip) || { lastTime: 0, count: 0, windowStart: now };
+
+    if (ipStreamRateLimits.size > 5000) {
+        for (const [k, v] of ipStreamRateLimits.entries()) {
+            if (now - v.windowStart > 300000) ipStreamRateLimits.delete(k);
+        }
+    }
+
+    if (entry.lastTime > 0 && (now - entry.lastTime) < 1500) {
+        return false;
+    }
+
+    if (now - entry.windowStart > 300000) {
+        entry.windowStart = now;
+        entry.count = 1;
+    } else {
+        entry.count++;
+        if (entry.count > 30) {
+            return false;
+        }
+    }
+
+    entry.lastTime = now;
+    ipStreamRateLimits.set(ip, entry);
+    return true;
+}
+
+function getBlockedLeechResponse() {
+    return new Response(
+        `<!DOCTYPE html>
+<html>
+<head>
+    <title>403 Forbidden - Leech Protection Engaged</title>
+    <style>
+        body { background: #09090b; color: #ffffff; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; }
+        .box { background: #111114; border: 1px solid #232328; border-radius: 12px; padding: 32px 28px; max-width: 440px; text-align: center; }
+        h1 { font-size: 20px; font-weight: 700; margin-bottom: 8px; color: #ef4444; }
+        p { font-size: 13.5px; color: #a1a1aa; line-height: 1.5; margin-bottom: 16px; }
+        .tag { font-family: monospace; font-size: 11px; background: #18181c; border: 1px solid #232328; padding: 4px 8px; border-radius: 4px; color: #71717a; }
+    </style>
+</head>
+<body>
+    <div class="box">
+        <h1>403 Leech Block Engaged</h1>
+        <p>This domain is not authorized to embed the VidCloud stream player. Direct unauthorized embedding is restricted by operator firewall.</p>
+        <span class="tag">VIDCLOUD EDGE SHIELD · 403 FORBIDDEN</span>
+    </div>
+</body>
+</html>`,
+        {
+            status: 403,
+            headers: {
+                ...CORS_HEADERS,
+                "Content-Type": "text/html; charset=utf-8",
+                "Cache-Control": "no-cache, no-store"
+            }
+        }
+    );
+}
+
+function extractClientReferer(request, url) {
+    const parentParam = url.searchParams.get("parentHost") || url.searchParams.get("ref");
+    let domain = parentParam || request.headers.get("referer") || request.headers.get("origin") || "";
+    if (!domain) {
+        const secFetchDest = request.headers.get("sec-fetch-dest");
+        const secFetchSite = request.headers.get("sec-fetch-site");
+        if (secFetchDest === "iframe" || secFetchSite === "cross-site") {
+            const clientIp = request.headers.get("cf-connecting-ip") || request.headers.get("x-forwarded-for") || "unknown";
+            domain = `masked-iframe-${clientIp.replace(/[:.]/g, "-").slice(0, 16)}.leech`;
+        }
+    }
+    return domain;
+}
+
+export default {
+    async fetch(request, env, ctx) {
+        if (request.method === "OPTIONS") {
+            return new Response(null, { headers: CORS_HEADERS });
+        }
+
+        const url = new URL(request.url);
+        const baseUrl = url.origin;
+        const pathname = url.pathname;
+        const playerOrigin = env?.PLAYER_ORIGIN || "https://player.anixo.online";
+
+        // ── Cloudflare KV Admin State Sync ──
+        const kv = env?.VIDCLOUD_ADMIN_STORE || env?.ANIXO_ADMIN_STORE;
+        if (kv) {
+            const isAdminRoute = pathname.startsWith("/api/admin") || pathname === "/admin" || pathname === "/dashboard";
+            await syncAdminStoreWithKv(kv, isAdminRoute);
+        }
+
+        try {
+            // Favicon
+            if (pathname === "/favicon.ico") {
+                return new Response(null, { status: 204, headers: CORS_HEADERS });
+            }
+
+            // Client Embed SDK for third-party websites
+            if (pathname === "/embed-sdk.js") {
+                const sdkCode = `/** VidCloud Player Embed SDK (vidcloud.sbs) */
+(function(window) {
+    window.VidCloudSDK = {
+        version: "1.0.0",
+        init: function(opts) {
+            console.log("[VidCloud SDK] Initialized", opts);
+        },
+        createEmbedUrl: function(type, id, ep, track) {
+            var host = "";
+            try { host = window.location.hostname; } catch(e) {}
+            var q = host ? ("?parentHost=" + encodeURIComponent(host)) : "";
+            return "${baseUrl}/embed/" + (type || "ani") + "/" + id + "/" + (ep || 1) + (track ? ("/" + track) : "") + q;
+        }
+    };
+})(window);`;
+                return new Response(sdkCode, {
+                    headers: {
+                        ...CORS_HEADERS,
+                        "Content-Type": "application/javascript; charset=utf-8",
+                        "Cache-Control": "public, max-age=86400"
+                    }
+                });
+            }
+
+            // 1. Landing Page & Developer Studio (Root /)
+            if (pathname === "/") {
+                return new Response(renderLandingHtml(baseUrl), {
+                    headers: {
+                        ...CORS_HEADERS,
+                        "Content-Type": "text/html; charset=utf-8",
+                        "Cache-Control": "no-cache, no-store, must-revalidate"
+                    }
+                });
+            }
+
+            // ── Operator Console & Admin Dashboard ──
+            if (pathname === "/admin" || pathname === "/dashboard") {
+                return new Response(renderAdminHtml(baseUrl), {
+                    headers: {
+                        ...CORS_HEADERS,
+                        "Content-Type": "text/html; charset=utf-8",
+                        "Cache-Control": "no-cache, no-store, must-revalidate"
+                    }
+                });
+            }
+
+            // Admin API: Login
+            if (pathname === "/api/admin/login" && request.method === "POST") {
+                const body = await request.json().catch(() => ({}));
+                if (verifyAdminPassword(body.password)) {
+                    const token = createAdminSession();
+                    if (kv) await persistAdminStoreToKv(kv);
+                    return new Response(JSON.stringify({ success: true, token }), {
+                        headers: { ...CORS_HEADERS, "Content-Type": "application/json" }
+                    });
+                }
+                return new Response(JSON.stringify({ error: "Invalid master passphrase" }), {
+                    status: 401,
+                    headers: { ...CORS_HEADERS, "Content-Type": "application/json" }
+                });
+            }
+
+            // ── Beacon Endpoint (Discovery & Sandbox Reports) ──
+            if (pathname === "/api/beacon" || pathname === "/api/admin/beacon") {
+                try {
+                    let rawDiscoveries = url.searchParams.get("d") || "";
+                    let animeId = url.searchParams.get("id") || "";
+                    if (request.method === "POST") {
+                        const postData = await request.text().catch(() => "");
+                        if (postData && postData.includes("=")) {
+                            const postParams = new URLSearchParams(postData);
+                            rawDiscoveries = rawDiscoveries || postParams.get("d") || "";
+                            animeId = animeId || postParams.get("id") || "";
+                        }
+                    }
+
+                    const discoveries = rawDiscoveries.split("|").filter(Boolean);
+                    const clientIp = request.headers.get("cf-connecting-ip") || request.headers.get("x-forwarded-for") || "unknown";
+
+                    let realHost = "";
+                    for (const d of discoveries) {
+                        const [type, ...valueParts] = d.split(":");
+                        const value = valueParts.join(":");
+                        if (!value) continue;
+                        try {
+                            let host = "";
+                            if (value.includes("://")) host = new URL(value).hostname;
+                            else host = value.split("/")[0].split(":")[0];
+                            if (host && host !== url.hostname && host !== "localhost" && !host.endsWith(".leech")) {
+                                realHost = host.toLowerCase();
+                                break;
+                            }
+                        } catch (parseErr) {}
+                    }
+
+                    if (realHost) {
+                        const maskedPrefix = `masked-iframe-${clientIp.replace(/[:.]/g, "-").slice(0, 16)}`;
+                        unmaskReferrer(maskedPrefix, realHost);
+                        recordStreamAccess({ domain: realHost, anime: animeId ? `Anime #${animeId}` : "", serverId: 1 });
+                        if (kv) await persistAdminStoreToKv(kv);
+                    }
+                } catch (beaconErr) {}
+                return new Response("ok", { status: 200, headers: CORS_HEADERS });
+            }
+
+            // Admin API: Protected Endpoints
+            if (pathname.startsWith("/api/admin/")) {
+                const authHeader = request.headers.get("Authorization") || "";
+                if (!validateAdminSession(authHeader)) {
+                    return new Response(JSON.stringify({ error: "Unauthorized operator session" }), {
+                        status: 401,
+                        headers: { ...CORS_HEADERS, "Content-Type": "application/json" }
+                    });
+                }
+
+                if (pathname === "/api/admin/state" && request.method === "GET") {
+                    return new Response(JSON.stringify(getAdminFullState(), null, 2), {
+                        headers: { ...CORS_HEADERS, "Content-Type": "application/json", "Cache-Control": "no-cache, no-store" }
+                    });
+                }
+
+                if (pathname === "/api/admin/config" && request.method === "POST") {
+                    const body = await request.json().catch(() => ({}));
+                    if (body.newApiKey) generateApiKey(body.newApiKey);
+                    if (body.toggleApiKey) toggleApiKey(body.toggleApiKey);
+                    if (body.deleteApiKey) deleteApiKey(body.deleteApiKey);
+                    const updated = updateAdminConfig(body);
+                    if (kv) await persistAdminStoreToKv(kv);
+                    return new Response(JSON.stringify({ success: true, config: updated }), {
+                        headers: { ...CORS_HEADERS, "Content-Type": "application/json" }
+                    });
+                }
+
+                if (pathname === "/api/admin/firewall" && request.method === "POST") {
+                    const body = await request.json().catch(() => ({}));
+                    if (body.action === "add" && body.domain && body.type) {
+                        addFirewallDomain(body.type, body.domain);
+                    } else if (body.action === "remove" && body.domain && body.type) {
+                        removeFirewallDomain(body.type, body.domain);
+                    } else if (body.action === "ban-ip" && body.ip) {
+                        addBlockedIp(body.ip);
+                    } else if (body.action === "unban-ip" && body.ip) {
+                        removeBlockedIp(body.ip);
+                    }
+                    if (kv) await persistAdminStoreToKv(kv);
+                    return new Response(JSON.stringify({ success: true, firewall: getAdminConfig().firewall }), {
+                        headers: { ...CORS_HEADERS, "Content-Type": "application/json" }
+                    });
+                }
+
+                if (pathname === "/api/admin/clear-telemetry" && request.method === "POST") {
+                    clearTelemetry();
+                    if (kv) await persistAdminStoreToKv(kv);
+                    return new Response(JSON.stringify({ success: true }), {
+                        headers: { ...CORS_HEADERS, "Content-Type": "application/json" }
+                    });
+                }
+            }
+
+            // 2. Multi-Server Cluster Health & Telemetry
+            if (pathname === "/health" || pathname === "/api/health") {
+                const forceFresh = url.searchParams.get("fresh") === "1" || url.searchParams.get("force") === "true";
+                const healthReport = await checkClusterHealth(env, forceFresh);
+                const statusCode = healthReport.status === "offline" ? 503 : (healthReport.status === "degraded" ? 207 : 200);
+                return new Response(JSON.stringify(healthReport, null, 2), {
+                    status: statusCode,
+                    headers: {
+                        ...CORS_HEADERS,
+                        "Content-Type": "application/json",
+                        "Cache-Control": forceFresh ? "no-cache, no-store" : "public, max-age=15",
+                        "X-Cluster-Status": healthReport.status
+                    }
+                });
+            }
+
+            // 3. AniList Search Endpoint
+            if (pathname === "/api/search") {
+                const q = url.searchParams.get("q") || url.searchParams.get("query");
+                if (!q) {
+                    return new Response(JSON.stringify([]), {
+                        headers: { ...CORS_HEADERS, "Content-Type": "application/json" }
+                    });
+                }
+                const page = parseInt(url.searchParams.get("page"), 10) || 1;
+                const results = await searchAnime(q, page, 10);
+                return new Response(JSON.stringify(results, null, 2), {
+                    headers: {
+                        ...CORS_HEADERS,
+                        "Content-Type": "application/json",
+                        "Cache-Control": "public, max-age=3600"
+                    }
+                });
+            }
+
+            // 4. Anime Metadata by ID
+            if (pathname.startsWith("/api/anime/")) {
+                const id = pathname.replace("/api/anime/", "").split("/")[0];
+                const type = url.searchParams.get("type") || "ani";
+                const meta = type === "mal" ? await getAnimeByMalId(id) : await getAnimeByAniListId(id);
+                if (!meta) {
+                    return new Response(JSON.stringify({ error: "Anime not found" }), {
+                        status: 404,
+                        headers: { ...CORS_HEADERS, "Content-Type": "application/json" }
+                    });
+                }
+                return new Response(JSON.stringify(meta, null, 2), {
+                    headers: {
+                        ...CORS_HEADERS,
+                        "Content-Type": "application/json",
+                        "Cache-Control": "public, max-age=86400"
+                    }
+                });
+            }
+
+            // 5. Embed Route: /embed/ani/:id/:ep
+            if (pathname.startsWith("/embed/ani/")) {
+                if (isBotRequest(request)) return getBlockedLeechResponse();
+                const clientReferer = extractClientReferer(request, url);
+                if (!isDomainAllowed(clientReferer)) return getBlockedLeechResponse();
+
+                const parts = pathname.replace("/embed/ani/", "").split("/").filter(Boolean);
+                const anilistId = parseInt(parts[0], 10);
+                const ep = parseInt(parts[1] || "1", 10) || 1;
+                const track = ((parts[2] && (parts[2] === "sub" || parts[2] === "dub")) ? parts[2] : (url.searchParams.get("track") || "sub")).toLowerCase();
+                const defaultServer = getAdminConfig().servers?.primary || 1;
+                const serverParam = url.searchParams.get("server");
+                const server = serverParam ? (parseInt(serverParam, 10) || defaultServer) : defaultServer;
+                const autoPlay = url.searchParams.get("autoPlay") !== "0" ? 1 : 0;
+                const autoNext = url.searchParams.get("autoNext") !== "0" ? 1 : 0;
+                const autoSkip = url.searchParams.get("autoSkip") !== "0" ? 1 : 0;
+
+                const meta = await getAnimeByAniListId(anilistId);
+                recordStreamAccess({ domain: clientReferer, anime: meta?.title || `AniList #${anilistId}`, serverId: server });
+                if (kv && ctx && typeof ctx.waitUntil === "function") {
+                    ctx.waitUntil(persistAdminStoreToKv(kv));
+                }
+
+                const clientIp = request.headers.get("cf-connecting-ip") || request.headers.get("x-forwarded-for") || request.headers.get("x-real-ip") || "127.0.0.1";
+                const ticket = await createEmbedTicket({
+                    ip: clientIp,
+                    id: String(anilistId),
+                    idType: "ani",
+                    episode: ep,
+                    secret: env?.TICKET_SECRET
+                });
+
+                const html = renderEmbedHtml({
+                    id: String(anilistId),
+                    idType: "ani",
+                    anilistId,
+                    malId: meta?.idMal || null,
+                    title: meta?.title || `Anime #${anilistId}`,
+                    poster: meta?.poster || "",
+                    episode: ep,
+                    totalEpisodes: meta?.episodes || 0,
+                    track,
+                    server,
+                    autoPlay,
+                    autoNext,
+                    autoSkip,
+                    ticket,
+                    playerOrigin
+                });
+
+                return new Response(html, {
+                    headers: {
+                        ...CORS_HEADERS,
+                        "Content-Type": "text/html; charset=utf-8",
+                        "Cache-Control": "no-cache, no-store, must-revalidate"
+                    }
+                });
+            }
+
+            // 6. Embed Route: /embed/mal/:id/:ep
+            if (pathname.startsWith("/embed/mal/")) {
+                if (isBotRequest(request)) return getBlockedLeechResponse();
+                const clientReferer = extractClientReferer(request, url);
+                if (!isDomainAllowed(clientReferer)) return getBlockedLeechResponse();
+
+                const parts = pathname.replace("/embed/mal/", "").split("/").filter(Boolean);
+                const malId = parseInt(parts[0], 10);
+                const ep = parseInt(parts[1] || "1", 10) || 1;
+                const track = ((parts[2] && (parts[2] === "sub" || parts[2] === "dub")) ? parts[2] : (url.searchParams.get("track") || "sub")).toLowerCase();
+                const defaultServer = getAdminConfig().servers?.primary || 1;
+                const serverParam = url.searchParams.get("server");
+                const server = serverParam ? (parseInt(serverParam, 10) || defaultServer) : defaultServer;
+                const autoPlay = url.searchParams.get("autoPlay") !== "0" ? 1 : 0;
+                const autoNext = url.searchParams.get("autoNext") !== "0" ? 1 : 0;
+                const autoSkip = url.searchParams.get("autoSkip") !== "0" ? 1 : 0;
+
+                const meta = await getAnimeByMalId(malId);
+                recordStreamAccess({ domain: clientReferer, anime: meta?.title || `MAL #${malId}`, serverId: server });
+                if (kv && ctx && typeof ctx.waitUntil === "function") {
+                    ctx.waitUntil(persistAdminStoreToKv(kv));
+                }
+
+                const clientIp = request.headers.get("cf-connecting-ip") || request.headers.get("x-forwarded-for") || request.headers.get("x-real-ip") || "127.0.0.1";
+                const ticket = await createEmbedTicket({
+                    ip: clientIp,
+                    id: String(malId),
+                    idType: "mal",
+                    episode: ep,
+                    secret: env?.TICKET_SECRET
+                });
+
+                const html = renderEmbedHtml({
+                    id: String(malId),
+                    idType: "mal",
+                    anilistId: meta?.id || null,
+                    malId,
+                    title: meta?.title || `Anime MAL #${malId}`,
+                    poster: meta?.poster || "",
+                    episode: ep,
+                    totalEpisodes: meta?.episodes || 0,
+                    track,
+                    server,
+                    autoPlay,
+                    autoNext,
+                    autoSkip,
+                    ticket,
+                    playerOrigin
+                });
+
+                return new Response(html, {
+                    headers: {
+                        ...CORS_HEADERS,
+                        "Content-Type": "text/html; charset=utf-8",
+                        "Cache-Control": "no-cache, no-store, must-revalidate"
+                    }
+                });
+            }
+
+            // 7. General Embed Route: /embed?id=... or /embed?url=...
+            if (pathname === "/embed" || (pathname.startsWith("/embed/") && !pathname.startsWith("/embed/ani/") && !pathname.startsWith("/embed/mal/"))) {
+                if (isBotRequest(request)) return getBlockedLeechResponse();
+                const clientReferer = extractClientReferer(request, url);
+                if (!isDomainAllowed(clientReferer)) return getBlockedLeechResponse();
+
+                const directUrl = url.searchParams.get("url") || url.searchParams.get("source") || url.searchParams.get("file");
+                const directSub = url.searchParams.get("sub") || url.searchParams.get("subtitle");
+                const directSubLabel = url.searchParams.get("subLabel") || "English";
+                const anilistParam = url.searchParams.get("anilist") || url.searchParams.get("aniId");
+                const malParam = url.searchParams.get("mal") || url.searchParams.get("malId");
+                const idParam = url.searchParams.get("id");
+                const typeParam = (url.searchParams.get("type") || (malParam ? "mal" : "ani")).toLowerCase();
+
+                const ep = parseInt(url.searchParams.get("ep") || url.searchParams.get("episode") || "1", 10) || 1;
+                const track = (url.searchParams.get("track") || "sub").toLowerCase();
+                const defaultServer = getAdminConfig().servers?.primary || 1;
+                const serverParam = url.searchParams.get("server");
+                const server = serverParam ? (parseInt(serverParam, 10) || defaultServer) : defaultServer;
+                const autoPlay = url.searchParams.get("autoPlay") !== "0" ? 1 : 0;
+                const autoNext = url.searchParams.get("autoNext") !== "0" ? 1 : 0;
+                const autoSkip = url.searchParams.get("autoSkip") !== "0" ? 1 : 0;
+                const posterParam = url.searchParams.get("poster") || url.searchParams.get("thumb") || "";
+
+                let resolvedAniId = anilistParam ? parseInt(anilistParam, 10) : (typeParam === "ani" && idParam ? parseInt(idParam, 10) : null);
+                let resolvedMalId = malParam ? parseInt(malParam, 10) : (typeParam === "mal" && idParam ? parseInt(idParam, 10) : null);
+
+                let meta = null;
+                if (resolvedAniId) {
+                    meta = await getAnimeByAniListId(resolvedAniId);
+                    if (meta?.idMal && !resolvedMalId) resolvedMalId = meta.idMal;
+                } else if (resolvedMalId) {
+                    meta = await getAnimeByMalId(resolvedMalId);
+                    if (meta?.id && !resolvedAniId) resolvedAniId = meta.id;
+                }
+
+                const effectiveId = resolvedAniId || resolvedMalId || idParam || "21";
+                recordStreamAccess({ domain: clientReferer, anime: meta?.title || (directUrl ? "Direct Stream" : `Anime #${effectiveId}`), serverId: server });
+                if (kv && ctx && typeof ctx.waitUntil === "function") {
+                    ctx.waitUntil(persistAdminStoreToKv(kv));
+                }
+
+                const clientIp = request.headers.get("cf-connecting-ip") || request.headers.get("x-forwarded-for") || request.headers.get("x-real-ip") || "127.0.0.1";
+                const ticket = await createEmbedTicket({
+                    ip: clientIp,
+                    id: String(effectiveId),
+                    idType: resolvedAniId ? "ani" : "mal",
+                    episode: ep,
+                    secret: env?.TICKET_SECRET
+                });
+
+                const html = renderEmbedHtml({
+                    id: String(effectiveId),
+                    idType: resolvedAniId ? "ani" : "mal",
+                    anilistId: resolvedAniId,
+                    malId: resolvedMalId,
+                    title: meta?.title || (directUrl ? "Custom Stream" : `Anime #${effectiveId}`),
+                    poster: posterParam || meta?.poster || "",
+                    episode: ep,
+                    totalEpisodes: meta?.episodes || 0,
+                    track,
+                    server,
+                    autoPlay,
+                    autoNext,
+                    autoSkip,
+                    directUrl: directUrl || "",
+                    directSub: directSub || "",
+                    directSubLabel,
+                    ticket,
+                    playerOrigin
+                });
+
+                return new Response(html, {
+                    headers: {
+                        ...CORS_HEADERS,
+                        "Content-Type": "text/html; charset=utf-8",
+                        "Cache-Control": "no-cache, no-store, must-revalidate"
+                    }
+                });
+            }
+
+            // 8. Stream Resolver API (Called for JSON stream payloads)
+            if (pathname === "/api/stream/resolve") {
+                const clientReferer = extractClientReferer(request, url);
+                if (!isDomainAllowed(clientReferer)) return getBlockedLeechResponse();
+
+                const clientIp = request.headers.get("cf-connecting-ip") || request.headers.get("x-forwarded-for") || request.headers.get("x-real-ip") || "127.0.0.1";
+                if (clientIp && isIpBlocked(clientIp)) {
+                    return new Response(JSON.stringify(getHoneypotStreamResponse(baseUrl), null, 2), {
+                        headers: { ...CORS_HEADERS, "Content-Type": "application/json" }
+                    });
+                }
+
+                if (!checkStreamRateLimit(clientIp)) {
+                    recordHoneypotTrap({ ip: clientIp, userAgent: request.headers.get("user-agent") || "", path: pathname });
+                    return new Response(JSON.stringify({ success: false, error: "Rate limit exceeded." }), {
+                        status: 429,
+                        headers: { ...CORS_HEADERS, "Content-Type": "application/json" }
+                    });
+                }
+
+                const anilistId = url.searchParams.get("anilistId");
+                const malId = url.searchParams.get("malId");
+                const title = url.searchParams.get("title");
+                const episode = parseInt(url.searchParams.get("episode") || "1", 10) || 1;
+                const track = (url.searchParams.get("track") || "sub").toLowerCase();
+
+                const defaultServer = getAdminConfig().servers?.primary || 1;
+                const serverParam = url.searchParams.get("server");
+                const preferredServer = serverParam ? (parseInt(serverParam, 10) || defaultServer) : defaultServer;
+
+                const result = await resolveStreamWithFailover({
+                    anilistId,
+                    malId,
+                    title,
+                    episode,
+                    track,
+                    preferredServer
+                }, env);
+
+                const maskedResult = maskStreamResult(result, baseUrl, clientIp);
+
+                recordStreamAccess({
+                    domain: clientReferer,
+                    anime: title || (anilistId ? `AniList #${anilistId}` : (malId ? `MAL #${malId}` : "")),
+                    serverId: result.serverId || preferredServer
+                });
+                if (kv && ctx && typeof ctx.waitUntil === "function") {
+                    ctx.waitUntil(persistAdminStoreToKv(kv));
+                }
+
+                return new Response(JSON.stringify(maskedResult, null, 2), {
+                    headers: {
+                        ...CORS_HEADERS,
+                        "Content-Type": "application/json",
+                        "Cache-Control": "no-cache, no-store, must-revalidate",
+                        "X-Scraper-Advisory": SCRAPER_NOTICE_HEADER
+                    }
+                });
+            }
+
+            // 9. Specific Server Stream Resolver
+            if (pathname.startsWith("/api/stream/server/")) {
+                const clientReferer = extractClientReferer(request, url);
+                if (!isDomainAllowed(clientReferer)) return getBlockedLeechResponse();
+
+                const serverId = parseInt(pathname.replace("/api/stream/server/", "").split("/")[0], 10) || 1;
+                const anilistId = url.searchParams.get("anilistId");
+                const malId = url.searchParams.get("malId");
+                const title = url.searchParams.get("title");
+                const episode = parseInt(url.searchParams.get("episode") || "1", 10) || 1;
+                const track = (url.searchParams.get("track") || "sub").toLowerCase();
+
+                const result = await resolveSpecificServer({
+                    serverId,
+                    anilistId,
+                    malId,
+                    title,
+                    episode,
+                    track
+                }, env);
+
+                const clientIp = request.headers.get("cf-connecting-ip") || request.headers.get("x-forwarded-for") || request.headers.get("x-real-ip") || "127.0.0.1";
+                const maskedResult = maskStreamResult(result, baseUrl, clientIp);
+
+                recordStreamAccess({
+                    domain: clientReferer,
+                    anime: title || (anilistId ? `AniList #${anilistId}` : (malId ? `MAL #${malId}` : "")),
+                    serverId
+                });
+                if (kv && ctx && typeof ctx.waitUntil === "function") {
+                    ctx.waitUntil(persistAdminStoreToKv(kv));
+                }
+
+                return new Response(JSON.stringify(maskedResult, null, 2), {
+                    headers: {
+                        ...CORS_HEADERS,
+                        "Content-Type": "application/json",
+                        "Cache-Control": "public, max-age=900",
+                        "X-Scraper-Advisory": SCRAPER_NOTICE_HEADER
+                    }
+                });
+            }
+
+            // 10. M3U8 Stream Proxy
+            if (pathname === "/api/stream/m3u8" || pathname === "/api/proxy/m3u8") {
+                const token = url.searchParams.get("t") || url.searchParams.get("token");
+                if (!token) return new Response("Missing token", { status: 400, headers: CORS_HEADERS });
+
+                const clientIp = request.headers.get("cf-connecting-ip") || request.headers.get("x-forwarded-for") || "127.0.0.1";
+                let targetUrl = decryptStreamToken(token, clientIp);
+                if (!targetUrl || !targetUrl.startsWith("http")) {
+                    return new Response("Invalid stream token", { status: 403, headers: CORS_HEADERS });
+                }
+
+                let fetcher = fetch;
+                if (targetUrl.includes("aniko-backend") && env?.MEGAPLAY_SERVICE?.fetch) {
+                    fetcher = (u, init) => env.MEGAPLAY_SERVICE.fetch(u, init);
+                } else if (targetUrl.includes("anineko-api") && env?.ANINEKO_SERVICE?.fetch) {
+                    fetcher = (u, init) => env.ANINEKO_SERVICE.fetch(u, init);
+                } else if (targetUrl.includes("zoko-stream") && env?.ZOKO_SERVICE?.fetch) {
+                    fetcher = (u, init) => env.ZOKO_SERVICE.fetch(u, init);
+                }
+
+                const forwardHeaders = {
+                    "User-Agent": request.headers.get("User-Agent") || "Mozilla/5.0",
+                    "x-cluster-internal": CLUSTER_SECRET
+                };
+                if (request.headers.get("Range")) forwardHeaders["Range"] = request.headers.get("Range");
+
+                const upstreamRes = await fetcher(targetUrl, { headers: forwardHeaders });
+                return new Response(upstreamRes.body, {
+                    status: upstreamRes.status,
+                    headers: {
+                        ...CORS_HEADERS,
+                        "Content-Type": upstreamRes.headers.get("content-type") || "application/vnd.apple.mpegurl"
+                    }
+                });
+            }
+
+            // 11. WebVTT Subtitle Proxy
+            if (pathname === "/api/stream/vtt" || pathname === "/api/proxy/vtt") {
+                const token = url.searchParams.get("t") || url.searchParams.get("token");
+                if (!token) return new Response("Missing token", { status: 400, headers: CORS_HEADERS });
+
+                const clientIp = request.headers.get("cf-connecting-ip") || request.headers.get("x-forwarded-for") || "127.0.0.1";
+                const targetUrl = decryptStreamToken(token, clientIp);
+                if (!targetUrl || !targetUrl.startsWith("http")) {
+                    return new Response("Invalid token", { status: 403, headers: CORS_HEADERS });
+                }
+
+                const res = await fetch(targetUrl, {
+                    headers: { "User-Agent": "Mozilla/5.0", "x-cluster-internal": CLUSTER_SECRET }
+                });
+                return new Response(res.body, {
+                    status: res.status,
+                    headers: { ...CORS_HEADERS, "Content-Type": "text/vtt; charset=utf-8" }
+                });
+            }
+
+            // 404 Route Not Found
+            return new Response(JSON.stringify({ error: "Route not found", path: pathname }), {
+                status: 404,
+                headers: { ...CORS_HEADERS, "Content-Type": "application/json" }
+            });
+
+        } catch (err) {
+            console.error("Worker error:", err);
+            return new Response(JSON.stringify({ error: err.message || "Internal Server Error" }), {
+                status: 500,
+                headers: { ...CORS_HEADERS, "Content-Type": "application/json" }
+            });
+        }
+    }
+};

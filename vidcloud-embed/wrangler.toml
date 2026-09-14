@@ -1,0 +1,41 @@
+name = "vidcloud-embed"
+main = "worker.js"
+compatibility_date = "2024-11-01"
+compatibility_flags = ["nodejs_compat"]
+
+workers_dev = true
+
+# Custom Domain for vidcloud.sbs
+# routes = [
+#   { pattern = "vidcloud.sbs/*", zone_name = "vidcloud.sbs" },
+#   { pattern = "vidcloud.sbs", custom_domain = true }
+# ]
+
+[placement]
+mode = "smart"
+
+[observability]
+enabled = true
+
+# Direct 0ms in-memory Edge Service Bindings to the Engines
+[[services]]
+binding = "MEGAPLAY_SERVICE"
+service = "aniko-backend"
+
+[[services]]
+binding = "ANINEKO_SERVICE"
+service = "anineko-api"
+
+[[services]]
+binding = "ZOKO_SERVICE"
+service = "zoko-stream"
+
+# Persistent Cloudflare KV Database for Admin Config, Firewall, and Keys
+[[kv_namespaces]]
+binding = "VIDCLOUD_ADMIN_STORE"
+id = "d8743d081b64441099d52e9e175268b1"
+
+[vars]
+TURNSTILE_SECRET_KEY = "0x4AAAAAADGQxcZgLa0ZRtaJbL3mxiKj4RA"
+TURNSTILE_SITE_KEY = "0x4AAAAAADGQxfMRQroxFG6O"
+PLAYER_ORIGIN = "https://player.anixo.online"
