@@ -11,7 +11,7 @@ const state = {
         activeSessions: new Set()
     },
     servers: {
-        primary: 1, // 1: VidCloud Core (MegaPlay), 2: VidCloud Neko (AniNeko), 3: VidCloud Zozo (Zoko)
+        primary: 1, // 1: Marin, 2: Nunu, 3: Zexy
         enabled: {
             1: true,
             2: true,
@@ -462,7 +462,7 @@ export function getAdminFullState() {
             const sandboxReason = (typeof data === "object" && data.sandboxReason) ? data.sandboxReason : "";
 
             let status = "external";
-            if (domain === "vidcloud.sbs" || domain === "localhost" || domain === "127.0.0.1" || domain.includes("workers.dev")) {
+            if (domain === "vidcloud.sbs" || domain === "localhost" || domain === "127.0.0.1") {
                 status = "official";
             } else if (blacklist.includes(domain)) {
                 status = "blocked";

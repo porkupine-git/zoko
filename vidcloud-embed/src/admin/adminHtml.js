@@ -366,9 +366,9 @@ export function renderAdminHtml(baseUrl = "") {
                     <div class="form-subtext">The initial server query target before attempting automated failover.</div>
                 </div>
                 <select id="cfg-primary-server" class="form-control-select">
-                    <option value="1">Server 1 (VidCloud Core / MegaPlay)</option>
-                    <option value="2">Server 2 (VidCloud Neko)</option>
-                    <option value="3">Server 3 (VidCloud Zozo)</option>
+                    <option value="1">Server 1 (Marin)</option>
+                    <option value="2">Server 2 (Nunu)</option>
+                    <option value="3">Server 3 (Zexy)</option>
                 </select>
             </div>
 

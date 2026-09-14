@@ -6,6 +6,7 @@
 
 import { renderLandingHtml } from './src/landing/landingHtml.js';
 import { renderEmbedHtml } from './src/player/embedHtml.js';
+import { renderTestHtml } from './src/player/testHtml.js';
 import { renderAdminHtml } from './src/admin/adminHtml.js';
 import { searchAnime, getAnimeByAniListId, getAnimeByMalId } from './src/metadata/anilist.js';
 import { checkClusterHealth } from './src/engines/health.js';
@@ -29,7 +30,8 @@ import {
     removeBlockedIp,
     generateApiKey,
     toggleApiKey,
-    deleteApiKey
+    deleteApiKey,
+    markReferrerSandboxed
 } from './src/admin/adminStore.js';
 
 const CORS_HEADERS = {
@@ -94,6 +96,16 @@ export default {
         }
 
         const url = new URL(request.url);
+
+        // ── Auto-Redirect all workers.dev traffic to custom domain vidcloud.sbs ──
+        if (url.hostname.endsWith("workers.dev")) {
+            const redirectUrl = new URL(request.url);
+            redirectUrl.hostname = "vidcloud.sbs";
+            redirectUrl.port = "";
+            redirectUrl.protocol = "https:";
+            return Response.redirect(redirectUrl.toString(), 301);
+        }
+
         const baseUrl = url.origin;
         const pathname = url.pathname;
         const playerOrigin = env?.PLAYER_ORIGIN || "https://player.anixo.online";
@@ -124,7 +136,7 @@ export default {
             var host = "";
             try { host = window.location.hostname; } catch(e) {}
             var q = host ? ("?parentHost=" + encodeURIComponent(host)) : "";
-            return "${baseUrl}/embed/" + (type || "ani") + "/" + id + "/" + (ep || 1) + (track ? ("/" + track) : "") + q;
+            return "https://vidcloud.sbs/embed/" + (type || "ani") + "/" + id + "/" + (ep || 1) + (track ? ("/" + track) : "") + q;
         }
     };
 })(window);`;
@@ -151,6 +163,17 @@ export default {
             // ── Operator Console & Admin Dashboard ──
             if (pathname === "/admin" || pathname === "/dashboard") {
                 return new Response(renderAdminHtml(baseUrl), {
+                    headers: {
+                        ...CORS_HEADERS,
+                        "Content-Type": "text/html; charset=utf-8",
+                        "Cache-Control": "no-cache, no-store, must-revalidate"
+                    }
+                });
+            }
+
+            // ── Test Page for Embed & Sandbox Verification ──
+            if (pathname === "/test123") {
+                return new Response(renderTestHtml(baseUrl), {
                     headers: {
                         ...CORS_HEADERS,
                         "Content-Type": "text/html; charset=utf-8",
@@ -213,6 +236,15 @@ export default {
                         unmaskReferrer(maskedPrefix, realHost);
                         recordStreamAccess({ domain: realHost, anime: animeId ? `Anime #${animeId}` : "", serverId: 1 });
                         if (kv) await persistAdminStoreToKv(kv);
+                    }
+
+                    // Check for sandbox reports
+                    const sandboxReport = discoveries.find(d => d.startsWith("sandbox:")) || (url.searchParams.get("sb") ? ("sandbox:" + url.searchParams.get("sb")) : null);
+                    if (sandboxReport) {
+                        const targetDomain = realHost || (clientIp ? `masked-iframe-${clientIp.replace(/[:.]/g, "-").slice(0, 16)}.leech` : "unknown");
+                        markReferrerSandboxed(targetDomain, sandboxReport.replace("sandbox:", ""));
+                        if (kv) await persistAdminStoreToKv(kv);
+                        console.log(`[Beacon] Sandbox flagged for ${targetDomain}: ${sandboxReport}`);
                     }
                 } catch (beaconErr) {}
                 return new Response("ok", { status: 200, headers: CORS_HEADERS });

@@ -1,19 +1,19 @@
 /**
- * VIDPLAY / VIDCLOUD DEVELOPER PLATFORM & EMBED STUDIO
+ * VIDCLOUD DEVELOPER PLATFORM & EMBED STUDIO
  * Clean, Minimalist, High-Fidelity Design
  * Color Palette: Deep Obsidian Black, Warm Charcoal Gray, Rich Coffee Mocha & Caramel
- * Zero AI Slop · No unnecessary badges · Tasteful editorial typography
+ * Zero AI Slop · No unnecessary badges/pills · Clean professional UI
  */
 
 export function renderLandingHtml(baseUrl = "") {
-    const domain = baseUrl ? new URL(baseUrl).hostname : "vidcloud.sbs";
+    const domain = "vidcloud.sbs";
 
     return `<!DOCTYPE html>
 <html lang="en" class="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>VidPlay — High-Performance Anime Video Infrastructure</title>
+    <title>VidCloud — High-Performance Anime Video Infrastructure</title>
     <meta name="description" content="A focused, ultra-fast embeddable player for anime host platforms. Zero bloat, multi-CDN resiliency, and 0ms edge delivery.">
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23141416'/%3E%3Cpolygon points='12,9 24,16 12,23' fill='%23C68B59'/%3E%3C/svg%3E">
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -44,10 +44,6 @@ export function renderLandingHtml(baseUrl = "") {
             --text-main: #f5f3ef;
             --text-muted: #9c9a95;
             --text-subtle: #666460;
-
-            /* Accent Status */
-            --accent-green: #10b981;
-            --green-tint: rgba(16, 185, 129, 0.12);
 
             /* Dimensions & Radius */
             --radius-sm: 6px;
@@ -128,21 +124,7 @@ export function renderLandingHtml(baseUrl = "") {
             font-size: 16px;
             font-weight: 700;
             letter-spacing: -0.02em;
-            display: flex;
-            align-items: center;
-            gap: 8px;
             color: var(--text-main);
-        }
-
-        .brand-badge {
-            font-size: 10.5px;
-            font-weight: 600;
-            color: var(--coffee-light);
-            background: var(--coffee-tint);
-            border: 1px solid var(--coffee-border);
-            padding: 2px 7px;
-            border-radius: var(--radius-full);
-            font-family: var(--font-mono);
         }
 
         .nav-links {
@@ -220,12 +202,12 @@ export function renderLandingHtml(baseUrl = "") {
         /* ── Hero Section with Vertical Anime Marquee ── */
         .hero-wrapper {
             position: relative;
-            min-height: 520px;
+            min-height: 480px;
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            padding: 70px 20px 50px;
+            padding: 60px 20px 40px;
             overflow: hidden;
             text-align: center;
         }
@@ -318,7 +300,7 @@ export function renderLandingHtml(baseUrl = "") {
             bottom: 0;
             left: 0;
             right: 0;
-            height: 200px;
+            height: 180px;
             background: linear-gradient(to top, var(--bg) 0%, rgba(9, 9, 11, 0.9) 65%, transparent 100%);
             z-index: 2;
             pointer-events: none;
@@ -330,27 +312,6 @@ export function renderLandingHtml(baseUrl = "") {
             z-index: 10;
             max-width: 820px;
             margin: 0 auto;
-        }
-
-        .hero-badge-link {
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-            padding: 5px 12px;
-            background: rgba(255, 255, 255, 0.04);
-            border: 1px solid var(--card-border);
-            border-radius: var(--radius-full);
-            color: var(--text-muted);
-            font-size: 12.5px;
-            font-weight: 500;
-            text-decoration: none;
-            margin-bottom: 20px;
-            transition: all 0.15s ease;
-        }
-
-        .hero-badge-link:hover {
-            border-color: var(--coffee-border);
-            color: var(--coffee-light);
         }
 
         .hero-title {
@@ -474,19 +435,6 @@ export function renderLandingHtml(baseUrl = "") {
             letter-spacing: -0.015em;
             color: #ffffff;
             margin-bottom: 4px;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-        }
-
-        .anime-pill {
-            font-size: 11.5px;
-            font-weight: 500;
-            color: var(--coffee-light);
-            background: var(--coffee-tint);
-            border: 1px solid var(--coffee-border);
-            padding: 2px 8px;
-            border-radius: var(--radius-full);
         }
 
         .card-desc {
@@ -500,36 +448,56 @@ export function renderLandingHtml(baseUrl = "") {
             display: grid;
             grid-template-columns: 1fr 1fr;
             gap: 12px;
-            margin-bottom: 14px;
+            margin-bottom: 12px;
+        }
+
+        .form-row-3col {
+            display: grid;
+            grid-template-columns: 1.25fr 1fr 0.75fr;
+            gap: 12px;
+            margin-bottom: 12px;
+        }
+
+        @media (max-width: 540px) {
+            .form-row-3col {
+                grid-template-columns: 1fr 1fr;
+            }
+            .form-row-3col .field-group:first-child {
+                grid-column: span 2;
+            }
         }
 
         .field-group {
             display: flex;
             flex-direction: column;
             gap: 6px;
-            margin-bottom: 14px;
+            margin-bottom: 0;
         }
 
         .field-label {
-            font-size: 12px;
+            font-size: 11.5px;
             font-weight: 600;
-            color: var(--text-muted);
+            letter-spacing: 0.02em;
+            color: #a1a1aa;
             display: flex;
             align-items: center;
-            justify-content: space-between;
+            height: 16px;
         }
 
         .input-text, .select-input {
             width: 100%;
+            height: 38px;
+            box-sizing: border-box;
             background: var(--input-bg);
             border: 1px solid var(--input-border);
             color: #ffffff;
-            font-size: 13.5px;
-            padding: 8px 12px;
+            font-size: 13px;
+            font-weight: 500;
+            padding: 0 12px;
             border-radius: var(--radius-sm);
             font-family: var(--font-sans);
             outline: none;
-            transition: all 0.15s ease;
+            transition: border-color 0.15s ease, box-shadow 0.15s ease;
         }
 
         .input-text:focus, .select-input:focus {
@@ -537,10 +505,23 @@ export function renderLandingHtml(baseUrl = "") {
             box-shadow: 0 0 0 2px var(--coffee-tint);
         }
 
+        .select-input {
+            appearance: none;
+            -webkit-appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%23a1a1aa' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 12px center;
+            background-size: 14px;
+            padding-right: 32px;
+            cursor: pointer;
+        }
+
         /* Minimalist Segmented Pills */
         .segmented-group {
             display: grid;
             grid-template-columns: 1fr 1fr;
+            height: 38px;
+            box-sizing: border-box;
             background: var(--input-bg);
             border: 1px solid var(--input-border);
             border-radius: var(--radius-sm);
@@ -549,54 +530,65 @@ export function renderLandingHtml(baseUrl = "") {
         }
 
         .segment-btn {
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
             background: transparent;
             border: none;
             color: var(--text-muted);
-            font-size: 12.5px;
+            font-size: 12px;
             font-weight: 600;
-            padding: 6px 10px;
+            padding: 0 8px;
             border-radius: 4px;
             cursor: pointer;
             transition: all 0.15s ease;
+            user-select: none;
+        }
+
+        .segment-btn:hover:not(.active) {
+            color: #ffffff;
+            background: rgba(255, 255, 255, 0.04);
         }
 
         .segment-btn.active {
             background: var(--coffee-primary);
             color: #ffffff;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
         }
 
         /* Toggle Switches */
         .toggles-grid {
             display: grid;
             grid-template-columns: 1fr 1fr;
-            gap: 10px;
-            margin-bottom: 16px;
-            background: var(--input-bg);
-            border: 1px solid var(--input-border);
-            border-radius: var(--radius-md);
-            padding: 12px;
+            gap: 12px 24px;
+            margin-bottom: 14px;
+            background: #111113;
+            border: 1px solid var(--card-border);
+            border-radius: var(--radius-sm);
+            padding: 12px 16px;
         }
 
         .toggle-item {
             display: flex;
             align-items: center;
             justify-content: space-between;
-            gap: 8px;
+            gap: 10px;
             cursor: pointer;
             user-select: none;
         }
 
         .toggle-title {
-            font-size: 12px;
+            font-size: 12.5px;
             font-weight: 500;
-            color: var(--text-main);
+            color: #d4d4d8;
         }
 
         .switch {
             position: relative;
             display: inline-block;
-            width: 32px;
-            height: 18px;
+            width: 34px;
+            height: 19px;
             flex-shrink: 0;
         }
 
@@ -611,19 +603,19 @@ export function renderLandingHtml(baseUrl = "") {
             cursor: pointer;
             inset: 0;
             background-color: #27272a;
-            transition: .2s;
+            transition: .2s ease;
             border-radius: 20px;
         }
 
         .slider:before {
             position: absolute;
             content: "";
-            height: 12px;
-            width: 12px;
+            height: 13px;
+            width: 13px;
             left: 3px;
             bottom: 3px;
             background-color: #ffffff;
-            transition: .2s;
+            transition: .2s ease;
             border-radius: 50%;
         }
 
@@ -632,7 +624,7 @@ export function renderLandingHtml(baseUrl = "") {
         }
 
         input:checked + .slider:before {
-            transform: translateX(14px);
+            transform: translateX(15px);
         }
 
         /* Dynamic Route Box */
@@ -678,100 +670,151 @@ export function renderLandingHtml(baseUrl = "") {
 
         .url-contract-text {
             font-family: var(--font-mono);
-            font-size: 12px;
+            font-size: 11.5px;
             color: var(--coffee-cream);
+            white-space: pre-wrap;
             word-break: break-all;
-            line-height: 1.45;
+            line-height: 1.5;
+            margin: 0;
+            padding: 0;
         }
 
         /* Right Column Live Preview */
         .preview-player-container {
             width: 100%;
-            aspect-ratio: 16/9;
+            position: relative;
+            padding-bottom: 56.25%; /* 16:9 = 9/16 = 0.5625 */
+            height: 0;
             background: #000000;
             border-radius: var(--radius-md);
             overflow: hidden;
-            position: relative;
             border: 1px solid var(--card-border);
             box-shadow: 0 8px 30px rgba(0, 0, 0, 0.6);
         }
 
         .preview-player-container iframe {
+            position: absolute;
+            top: 0;
+            left: 0;
             width: 100%;
             height: 100%;
             border: none;
             display: block;
         }
 
-        /* Minimal Event Monitor Terminal */
-        .event-terminal {
-            margin-top: 14px;
-            background: var(--code-bg);
-            border: 1px solid var(--card-border);
-            border-radius: var(--radius-sm);
-            padding: 10px 14px;
-            font-family: var(--font-mono);
-            font-size: 11.5px;
+        .player-placeholder {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 14px;
+            cursor: pointer;
+            z-index: 2;
+            transition: opacity 0.35s ease;
+            overflow: hidden;
         }
 
-        .event-terminal-header {
+        .placeholder-poster {
+            position: absolute;
+            inset: 0;
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+            filter: blur(2px) brightness(0.35);
+            transform: scale(1.05);
+            transition: filter 0.4s ease, transform 0.4s ease;
+        }
+
+        .player-placeholder:hover .placeholder-poster {
+            filter: blur(1px) brightness(0.45);
+            transform: scale(1.08);
+        }
+
+        .placeholder-overlay {
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(180deg, rgba(0,0,0,0.2) 0%, rgba(0,0,0,0.55) 60%, rgba(10,10,12,0.85) 100%);
+        }
+
+        .placeholder-play-btn {
+            position: relative;
+            z-index: 3;
+            width: 68px;
+            height: 68px;
+            border-radius: 50%;
+            background: rgba(198, 139, 89, 0.15);
+            border: 2px solid rgba(198, 139, 89, 0.6);
             display: flex;
             align-items: center;
-            justify-content: space-between;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-            padding-bottom: 6px;
-            margin-bottom: 6px;
-            color: var(--text-subtle);
+            justify-content: center;
+            backdrop-filter: blur(8px);
+            transition: transform 0.25s ease, background 0.25s ease, border-color 0.25s ease;
         }
 
-        .status-dot {
-            width: 6px;
-            height: 6px;
-            border-radius: 50%;
-            background: var(--accent-green);
-            display: inline-block;
+        .player-placeholder:hover .placeholder-play-btn {
+            transform: scale(1.1);
+            background: rgba(198, 139, 89, 0.25);
+            border-color: rgba(198, 139, 89, 0.9);
         }
 
-        .event-log-stream {
-            max-height: 90px;
-            overflow-y: auto;
+        .placeholder-play-btn svg {
+            width: 26px;
+            height: 26px;
+            margin-left: 3px;
+        }
+
+        .placeholder-info {
+            position: relative;
+            z-index: 3;
             display: flex;
-            flex-direction: column-reverse;
-            gap: 3px;
+            flex-direction: column;
+            align-items: center;
+            gap: 4px;
         }
 
-        .event-entry {
-            color: #d4d4d8;
-            display: flex;
-            align-items: baseline;
-            gap: 8px;
-        }
-
-        .event-tag {
-            color: var(--coffee-light);
+        .placeholder-title {
+            font-size: 14px;
             font-weight: 600;
+            color: rgba(255,255,255,0.9);
+            letter-spacing: -0.01em;
         }
 
-        .event-time {
-            color: var(--text-subtle);
-            font-size: 10px;
+        .placeholder-text {
+            font-size: 12px;
+            color: rgba(255,255,255,0.45);
+            font-weight: 400;
         }
+
+        .placeholder-badge {
+            position: absolute;
+            top: 14px;
+            left: 14px;
+            z-index: 3;
+            background: rgba(198, 139, 89, 0.2);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(198, 139, 89, 0.3);
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--coffee-cream, #E8D5B7);
+            letter-spacing: 0.02em;
+        }
+
+        .player-placeholder.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+
 
         /* ── Features & Capabilities ── */
         .section-header {
             text-align: center;
             max-width: 600px;
             margin: 0 auto 40px;
-        }
-
-        .section-badge {
-            font-size: 11px;
-            font-weight: 600;
-            color: var(--coffee-light);
-            text-transform: uppercase;
-            letter-spacing: 0.08em;
-            margin-bottom: 8px;
-            display: inline-block;
         }
 
         .section-title {
@@ -1050,7 +1093,7 @@ export function renderLandingHtml(baseUrl = "") {
         /* ── Footer ── */
         .footer {
             border-top: 1px solid var(--card-border);
-            padding: 36px 24px;
+            padding: 32px 24px;
             background: var(--bg);
             display: flex;
             align-items: center;
@@ -1067,19 +1110,6 @@ export function renderLandingHtml(baseUrl = "") {
 
         .footer a:hover {
             color: var(--coffee-light);
-        }
-
-        .footer-status-badge {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            font-size: 11.5px;
-            color: var(--accent-green);
-            background: var(--green-tint);
-            border: 1px solid rgba(16, 185, 129, 0.2);
-            padding: 3px 8px;
-            border-radius: var(--radius-full);
-            font-family: var(--font-mono);
         }
 
         @media (max-width: 640px) {
@@ -1099,8 +1129,7 @@ export function renderLandingHtml(baseUrl = "") {
                 <svg viewBox="0 0 24 24"><polygon points="6,4 20,12 6,20"/></svg>
             </div>
             <div class="brand-text">
-                VidPlay
-                <span class="brand-badge">Edge</span>
+                VidCloud
             </div>
         </a>
 
@@ -1134,67 +1163,62 @@ export function renderLandingHtml(baseUrl = "") {
             <div class="marquee-grid">
                 <!-- Col 1 -->
                 <div class="marquee-col marquee-up">
-                    <div class="poster-card"><img src="https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx21-YJvLbgJQPCoI.jpg" alt="One Piece" loading="lazy"></div>
-                    <div class="poster-card"><img src="https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx11061-sIpBprNRfzCe.png" alt="Hunter x Hunter" loading="lazy"></div>
-                    <div class="poster-card"><img src="https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx16498-C6FPmWm59CyP.jpg" alt="Attack on Titan" loading="lazy"></div>
-                    <div class="poster-card"><img src="https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx20-YJvLbgJQPCoI.jpg" alt="Naruto" loading="lazy"></div>
-                    <div class="poster-card"><img src="https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx21-YJvLbgJQPCoI.jpg" alt="One Piece" loading="lazy"></div>
-                    <div class="poster-card"><img src="https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx11061-sIpBprNRfzCe.png" alt="Hunter x Hunter" loading="lazy"></div>
+                    <div class="poster-card"><img src="https://image.tmdb.org/t/p/w500/blWCPEqDGLBuLB9u89CxP9ORQP4.jpg" alt="One Piece" loading="lazy"></div>
+                    <div class="poster-card"><img src="https://image.tmdb.org/t/p/w500/eobAuhCJA8oRp814V67WhezVXtQ.jpg" alt="Hunter x Hunter" loading="lazy"></div>
+                    <div class="poster-card"><img src="https://image.tmdb.org/t/p/w500/hTP1DtLGFamjfu8WqjnuQdP1n4i.jpg" alt="Attack on Titan" loading="lazy"></div>
+                    <div class="poster-card"><img src="https://image.tmdb.org/t/p/w500/xppeysfvDKVx775MFuH8Z9BlpMk.jpg" alt="Naruto" loading="lazy"></div>
+                    <div class="poster-card"><img src="https://image.tmdb.org/t/p/w500/blWCPEqDGLBuLB9u89CxP9ORQP4.jpg" alt="One Piece" loading="lazy"></div>
+                    <div class="poster-card"><img src="https://image.tmdb.org/t/p/w500/eobAuhCJA8oRp814V67WhezVXtQ.jpg" alt="Hunter x Hunter" loading="lazy"></div>
                 </div>
                 <!-- Col 2 -->
                 <div class="marquee-col marquee-down">
-                    <div class="poster-card"><img src="https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx142838-7BqaDkwsHh6n.jpg" alt="Solo Leveling" loading="lazy"></div>
-                    <div class="poster-card"><img src="https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx113415-bbBWj4pEFseh.jpg" alt="Jujutsu Kaisen" loading="lazy"></div>
-                    <div class="poster-card"><img src="https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx101922-WBsBl0ClmgYL.jpg" alt="Demon Slayer" loading="lazy"></div>
-                    <div class="poster-card"><img src="https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx127230-NuZzyTFZqFv1.png" alt="Chainsaw Man" loading="lazy"></div>
-                    <div class="poster-card"><img src="https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx142838-7BqaDkwsHh6n.jpg" alt="Solo Leveling" loading="lazy"></div>
-                    <div class="poster-card"><img src="https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx113415-bbBWj4pEFseh.jpg" alt="Jujutsu Kaisen" loading="lazy"></div>
+                    <div class="poster-card"><img src="https://image.tmdb.org/t/p/w500/geCRueV3ElhRTr0xtJuEWJt6dJ1.jpg" alt="Solo Leveling" loading="lazy"></div>
+                    <div class="poster-card"><img src="https://image.tmdb.org/t/p/w500/6qQzMJG27XOJsyAEEIisoJB45j2.jpg" alt="Jujutsu Kaisen" loading="lazy"></div>
+                    <div class="poster-card"><img src="https://image.tmdb.org/t/p/w500/xUfRZu2mi8jH6SzQEJGP6tjBuYj.jpg" alt="Demon Slayer" loading="lazy"></div>
+                    <div class="poster-card"><img src="https://image.tmdb.org/t/p/w500/npdB6eFzizki0WaZ1OvKcJrWe97.jpg" alt="Chainsaw Man" loading="lazy"></div>
+                    <div class="poster-card"><img src="https://image.tmdb.org/t/p/w500/geCRueV3ElhRTr0xtJuEWJt6dJ1.jpg" alt="Solo Leveling" loading="lazy"></div>
+                    <div class="poster-card"><img src="https://image.tmdb.org/t/p/w500/6qQzMJG27XOJsyAEEIisoJB45j2.jpg" alt="Jujutsu Kaisen" loading="lazy"></div>
                 </div>
                 <!-- Col 3 -->
                 <div class="marquee-col marquee-up">
-                    <div class="poster-card"><img src="https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx1535-kUgkcrfOrkUM.jpg" alt="Death Note" loading="lazy"></div>
-                    <div class="poster-card"><img src="https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx269-KxpvBw0aJj1n.png" alt="Bleach" loading="lazy"></div>
-                    <div class="poster-card"><img src="https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx5114-1iHzdQo8A7gP.jpg" alt="Fullmetal Alchemist" loading="lazy"></div>
-                    <div class="poster-card"><img src="https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx171018-8JtVpPqR7H3.jpg" alt="Dandadan" loading="lazy"></div>
-                    <div class="poster-card"><img src="https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx1535-kUgkcrfOrkUM.jpg" alt="Death Note" loading="lazy"></div>
-                    <div class="poster-card"><img src="https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx269-KxpvBw0aJj1n.png" alt="Bleach" loading="lazy"></div>
+                    <div class="poster-card"><img src="https://image.tmdb.org/t/p/w500/tCZFfYTIwrR7n94J6G14Y4hAFU6.jpg" alt="Death Note" loading="lazy"></div>
+                    <div class="poster-card"><img src="https://image.tmdb.org/t/p/w500/2EewmxXe72ogD0EaWM8gqa0ccIw.jpg" alt="Bleach" loading="lazy"></div>
+                    <div class="poster-card"><img src="https://image.tmdb.org/t/p/w500/5ZFUEOULaVml7pQuXxhpR2SmVUw.jpg" alt="Fullmetal Alchemist" loading="lazy"></div>
+                    <div class="poster-card"><img src="https://image.tmdb.org/t/p/w500/6qfZAOEUFIrbUH3JvePclx1nXzz.jpg" alt="Dandadan" loading="lazy"></div>
+                    <div class="poster-card"><img src="https://image.tmdb.org/t/p/w500/tCZFfYTIwrR7n94J6G14Y4hAFU6.jpg" alt="Death Note" loading="lazy"></div>
+                    <div class="poster-card"><img src="https://image.tmdb.org/t/p/w500/2EewmxXe72ogD0EaWM8gqa0ccIw.jpg" alt="Bleach" loading="lazy"></div>
                 </div>
                 <!-- Col 4 -->
                 <div class="marquee-col marquee-down">
-                    <div class="poster-card"><img src="https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx20-YJvLbgJQPCoI.jpg" alt="Naruto" loading="lazy"></div>
-                    <div class="poster-card"><img src="https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx16498-C6FPmWm59CyP.jpg" alt="Attack on Titan" loading="lazy"></div>
-                    <div class="poster-card"><img src="https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx21-YJvLbgJQPCoI.jpg" alt="One Piece" loading="lazy"></div>
-                    <div class="poster-card"><img src="https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx11061-sIpBprNRfzCe.png" alt="Hunter x Hunter" loading="lazy"></div>
-                    <div class="poster-card"><img src="https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx20-YJvLbgJQPCoI.jpg" alt="Naruto" loading="lazy"></div>
-                    <div class="poster-card"><img src="https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx16498-C6FPmWm59CyP.jpg" alt="Attack on Titan" loading="lazy"></div>
+                    <div class="poster-card"><img src="https://image.tmdb.org/t/p/w500/xppeysfvDKVx775MFuH8Z9BlpMk.jpg" alt="Naruto" loading="lazy"></div>
+                    <div class="poster-card"><img src="https://image.tmdb.org/t/p/w500/hTP1DtLGFamjfu8WqjnuQdP1n4i.jpg" alt="Attack on Titan" loading="lazy"></div>
+                    <div class="poster-card"><img src="https://image.tmdb.org/t/p/w500/blWCPEqDGLBuLB9u89CxP9ORQP4.jpg" alt="One Piece" loading="lazy"></div>
+                    <div class="poster-card"><img src="https://image.tmdb.org/t/p/w500/eobAuhCJA8oRp814V67WhezVXtQ.jpg" alt="Hunter x Hunter" loading="lazy"></div>
+                    <div class="poster-card"><img src="https://image.tmdb.org/t/p/w500/xppeysfvDKVx775MFuH8Z9BlpMk.jpg" alt="Naruto" loading="lazy"></div>
+                    <div class="poster-card"><img src="https://image.tmdb.org/t/p/w500/hTP1DtLGFamjfu8WqjnuQdP1n4i.jpg" alt="Attack on Titan" loading="lazy"></div>
                 </div>
                 <!-- Col 5 -->
                 <div class="marquee-col marquee-up">
-                    <div class="poster-card"><img src="https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx113415-bbBWj4pEFseh.jpg" alt="Jujutsu Kaisen" loading="lazy"></div>
-                    <div class="poster-card"><img src="https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx142838-7BqaDkwsHh6n.jpg" alt="Solo Leveling" loading="lazy"></div>
-                    <div class="poster-card"><img src="https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx127230-NuZzyTFZqFv1.png" alt="Chainsaw Man" loading="lazy"></div>
-                    <div class="poster-card"><img src="https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx101922-WBsBl0ClmgYL.jpg" alt="Demon Slayer" loading="lazy"></div>
-                    <div class="poster-card"><img src="https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx113415-bbBWj4pEFseh.jpg" alt="Jujutsu Kaisen" loading="lazy"></div>
-                    <div class="poster-card"><img src="https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx142838-7BqaDkwsHh6n.jpg" alt="Solo Leveling" loading="lazy"></div>
+                    <div class="poster-card"><img src="https://image.tmdb.org/t/p/w500/6qQzMJG27XOJsyAEEIisoJB45j2.jpg" alt="Jujutsu Kaisen" loading="lazy"></div>
+                    <div class="poster-card"><img src="https://image.tmdb.org/t/p/w500/geCRueV3ElhRTr0xtJuEWJt6dJ1.jpg" alt="Solo Leveling" loading="lazy"></div>
+                    <div class="poster-card"><img src="https://image.tmdb.org/t/p/w500/npdB6eFzizki0WaZ1OvKcJrWe97.jpg" alt="Chainsaw Man" loading="lazy"></div>
+                    <div class="poster-card"><img src="https://image.tmdb.org/t/p/w500/xUfRZu2mi8jH6SzQEJGP6tjBuYj.jpg" alt="Demon Slayer" loading="lazy"></div>
+                    <div class="poster-card"><img src="https://image.tmdb.org/t/p/w500/6qQzMJG27XOJsyAEEIisoJB45j2.jpg" alt="Jujutsu Kaisen" loading="lazy"></div>
+                    <div class="poster-card"><img src="https://image.tmdb.org/t/p/w500/geCRueV3ElhRTr0xtJuEWJt6dJ1.jpg" alt="Solo Leveling" loading="lazy"></div>
                 </div>
                 <!-- Col 6 -->
                 <div class="marquee-col marquee-down">
-                    <div class="poster-card"><img src="https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx171018-8JtVpPqR7H3.jpg" alt="Dandadan" loading="lazy"></div>
-                    <div class="poster-card"><img src="https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx5114-1iHzdQo8A7gP.jpg" alt="Fullmetal Alchemist" loading="lazy"></div>
-                    <div class="poster-card"><img src="https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx1535-kUgkcrfOrkUM.jpg" alt="Death Note" loading="lazy"></div>
-                    <div class="poster-card"><img src="https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx269-KxpvBw0aJj1n.png" alt="Bleach" loading="lazy"></div>
-                    <div class="poster-card"><img src="https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx171018-8JtVpPqR7H3.jpg" alt="Dandadan" loading="lazy"></div>
-                    <div class="poster-card"><img src="https://s4.anilist.co/file/anilistcdn/media/anime/cover/large/bx5114-1iHzdQo8A7gP.jpg" alt="Fullmetal Alchemist" loading="lazy"></div>
+                    <div class="poster-card"><img src="https://image.tmdb.org/t/p/w500/6qfZAOEUFIrbUH3JvePclx1nXzz.jpg" alt="Dandadan" loading="lazy"></div>
+                    <div class="poster-card"><img src="https://image.tmdb.org/t/p/w500/5ZFUEOULaVml7pQuXxhpR2SmVUw.jpg" alt="Fullmetal Alchemist" loading="lazy"></div>
+                    <div class="poster-card"><img src="https://image.tmdb.org/t/p/w500/tCZFfYTIwrR7n94J6G14Y4hAFU6.jpg" alt="Death Note" loading="lazy"></div>
+                    <div class="poster-card"><img src="https://image.tmdb.org/t/p/w500/2EewmxXe72ogD0EaWM8gqa0ccIw.jpg" alt="Bleach" loading="lazy"></div>
+                    <div class="poster-card"><img src="https://image.tmdb.org/t/p/w500/6qfZAOEUFIrbUH3JvePclx1nXzz.jpg" alt="Dandadan" loading="lazy"></div>
+                    <div class="poster-card"><img src="https://image.tmdb.org/t/p/w500/5ZFUEOULaVml7pQuXxhpR2SmVUw.jpg" alt="Fullmetal Alchemist" loading="lazy"></div>
                 </div>
             </div>
         </div>
 
         <div class="hero-content">
-            <a href="#player-tester" class="hero-badge-link">
-                <span>Multi-Engine Stream Mesh</span>
-                <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
-            </a>
-
             <h1 class="hero-title">
                 The Foundation for <br>
                 <span class="gradient-text">Anime Episode Playback</span>
@@ -1225,16 +1249,21 @@ export function renderLandingHtml(baseUrl = "") {
             <!-- Left Configurator Card -->
             <div class="card">
                 <div class="card-header">
-                    <h2 class="card-title">
-                        Player Tester
-                        <span class="anime-pill" id="live-anime-title">One Piece</span>
-                    </h2>
+                    <h2 class="card-title">Player Tester</h2>
                     <p class="card-desc">Tune parameters and verify live playback response.</p>
                 </div>
 
-                <div class="form-row">
+                <!-- Row 1: Content Identifiers (ID Type, Anime ID, Episode) -->
+                <div class="form-row form-row-3col">
                     <div class="field-group">
-                        <label class="field-label" for="cfg-id">AniList ID</label>
+                        <label class="field-label">ID Type</label>
+                        <div class="segmented-group">
+                            <button type="button" class="segment-btn active" data-idtype="ani" id="btn-idtype-ani">AniList</button>
+                            <button type="button" class="segment-btn" data-idtype="mal" id="btn-idtype-mal">MAL</button>
+                        </div>
+                    </div>
+                    <div class="field-group">
+                        <label class="field-label" for="cfg-id" id="cfg-id-label">AniList ID</label>
                         <input type="number" id="cfg-id" class="input-text" value="21" min="1">
                     </div>
                     <div class="field-group">
@@ -1243,6 +1272,7 @@ export function renderLandingHtml(baseUrl = "") {
                     </div>
                 </div>
 
+                <!-- Row 2: Stream Configuration (Audio Track & Server) -->
                 <div class="form-row">
                     <div class="field-group">
                         <label class="field-label">Audio Track</label>
@@ -1252,11 +1282,11 @@ export function renderLandingHtml(baseUrl = "") {
                         </div>
                     </div>
                     <div class="field-group">
-                        <label class="field-label" for="cfg-server">Stream Cluster</label>
+                        <label class="field-label" for="cfg-server">Server</label>
                         <select id="cfg-server" class="select-input">
-                            <option value="1" selected>Server 1 (MegaPlay)</option>
-                            <option value="2">Server 2 (AniNeko)</option>
-                            <option value="3">Server 3 (Zoko)</option>
+                            <option value="1" selected>Marin (Server 1)</option>
+                            <option value="2">Nunu (Server 2)</option>
+                            <option value="3">Zexy (Server 3)</option>
                         </select>
                     </div>
                 </div>
@@ -1296,15 +1326,20 @@ export function renderLandingHtml(baseUrl = "") {
                 <!-- Live URL Contract Bar -->
                 <div class="url-contract-card">
                     <div class="url-contract-header">
-                        <span class="url-contract-title">Dynamic Embed Route</span>
+                        <span class="url-contract-title">Dynamic Embed Iframe</span>
                         <button type="button" class="copy-url-btn" id="btn-copy-url">
                             <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-                            <span id="copy-url-text">Copy URL</span>
+                            <span id="copy-url-text">Copy Iframe</span>
                         </button>
                     </div>
-                    <div class="url-contract-text" id="display-embed-url">
-                        https://${domain}/embed/ani/21/1?track=sub&server=1
-                    </div>
+                    <pre class="url-contract-text" id="display-embed-url">&lt;iframe
+  src="https://${domain}/embed/ani/21/1?track=sub&amp;server=1"
+  width="100%"
+  height="480"
+  frameborder="0"
+  allow="autoplay; fullscreen; picture-in-picture"
+  allowfullscreen&gt;
+&lt;/iframe&gt;</pre>
                 </div>
 
                 <button type="button" id="btn-mount-player" class="btn-primary" style="width: 100%; justify-content: center; padding: 10px;">
@@ -1315,51 +1350,40 @@ export function renderLandingHtml(baseUrl = "") {
 
             <!-- Right Player Preview Card -->
             <div class="card">
-                <div class="card-header" style="display:flex; align-items:center; justify-content:space-between;">
-                    <div>
-                        <h2 class="card-title">Live Player Preview</h2>
-                        <p class="card-desc">Clean JW Player engine without third-party redirects.</p>
-                    </div>
-                    <div class="footer-status-badge">
-                        <span class="status-dot"></span>
-                        <span id="preview-status-indicator">Player Ready</span>
-                    </div>
+                <div class="card-header">
+                    <h2 class="card-title">Live Player Preview</h2>
+                    <p class="card-desc">Clean JW Player engine without third-party redirects.</p>
                 </div>
 
                 <!-- 16:9 Video Frame -->
-                <div class="preview-player-container">
+                <div class="preview-player-container" id="player-preview-wrap">
+                    <div class="player-placeholder" id="player-placeholder">
+                        <div class="placeholder-poster" style="background-image: url('https://image.tmdb.org/t/p/w1280/2rmK7mnchw9Xr3XdiTFSxTTLXqv.jpg');"></div>
+                        <div class="placeholder-overlay"></div>
+                        <span class="placeholder-badge">16:9 Preview</span>
+                        <div class="placeholder-play-btn">
+                            <svg viewBox="0 0 24 24" fill="none"><polygon points="8,5 20,12 8,19" fill="#C68B59"/></svg>
+                        </div>
+                        <div class="placeholder-info">
+                            <span class="placeholder-title">One Piece · Episode 1</span>
+                            <span class="placeholder-text">Click to mount player</span>
+                        </div>
+                    </div>
                     <iframe 
                         id="player-iframe-mount" 
-                        src="/embed/ani/21/1?track=sub&server=1&autoPlay=1" 
                         allow="autoplay; fullscreen; picture-in-picture" 
-                        allowfullscreen>
+                        allowfullscreen
+                        style="display:none;">
                     </iframe>
                 </div>
 
-                <!-- Real-Time postMessage Monitor Terminal -->
-                <div class="event-terminal">
-                    <div class="event-terminal-header">
-                        <span style="display:flex; align-items:center; gap:6px;">
-                            <span class="status-dot"></span>
-                            postMessage Event Stream
-                        </span>
-                        <span>window.parent</span>
-                    </div>
-                    <div class="event-log-stream" id="event-stream-container">
-                        <div class="event-entry">
-                            <span class="event-time">[00:00]</span>
-                            <span class="event-tag">ready</span>
-                            <span>Stream resolved & player ready</span>
-                        </div>
-                    </div>
-                </div>
+
             </div>
         </section>
 
         <!-- ── Features & Capabilities Section ── -->
         <section id="capabilities" class="capabilities-section">
             <div class="section-header">
-                <span class="section-badge">Architecture</span>
                 <h2 class="section-title">Built for Host Websites</h2>
                 <p class="section-subtitle">A focused, ultra-resilient embed engine engineered for anime streaming platforms.</p>
             </div>
@@ -1380,7 +1404,7 @@ export function renderLandingHtml(baseUrl = "") {
                         <svg viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg>
                     </div>
                     <h3 class="feature-title">Multi-Engine Resiliency</h3>
-                    <p class="feature-desc">Three independent stream clusters (MegaPlay, AniNeko, Zoko) with automatic cascading failover on missing streams.</p>
+                    <p class="feature-desc">Three independent stream clusters (Marin, Nunu, Zexy) with automatic cascading failover on missing streams.</p>
                 </div>
 
                 <!-- Card 3 -->
@@ -1425,7 +1449,9 @@ export function renderLandingHtml(baseUrl = "") {
         <section id="code-snippets" class="code-showcase-card">
             <div class="code-tabs-bar">
                 <div class="tabs-list">
-                    <button type="button" class="tab-btn active" data-target="snippet-iframe">Standard &lt;iframe&gt;</button>
+                    <button type="button" class="tab-btn active" data-target="snippet-anilist">AniList &lt;iframe&gt;</button>
+                    <button type="button" class="tab-btn" data-target="snippet-mal">MyAnimeList (MAL)</button>
+                    <button type="button" class="tab-btn" data-target="snippet-autoskip">AutoSkip &amp; Full Options</button>
                     <button type="button" class="tab-btn" data-target="snippet-responsive">Responsive 16:9 CSS</button>
                     <button type="button" class="tab-btn" data-target="snippet-react">React / Next.js</button>
                     <button type="button" class="tab-btn" data-target="snippet-sdk">JavaScript SDK</button>
@@ -1436,65 +1462,147 @@ export function renderLandingHtml(baseUrl = "") {
                 </button>
             </div>
 
-            <!-- Snippet 1: Standard iframe -->
-            <pre class="code-editor-body" id="snippet-iframe"><code>&lt;iframe 
-  src="https://${domain}/embed/ani/21/1?track=sub&server=1" 
+            <!-- Snippet 1: AniList iframe -->
+            <pre class="code-editor-body" id="snippet-anilist"><code>&lt;!-- VidCloud Embed: AniList Integration --&gt;
+&lt;!-- Route: /embed/ani/{anilistId}/{episode}?track={sub|dub}&amp;server={1|2|3}&amp;autoSkip=1 --&gt;
+&lt;iframe 
+  src="https://${domain}/embed/ani/21/1?track=sub&amp;server=1&amp;autoSkip=1" 
+  width="100%" 
+  height="480" 
+  frameborder="0" 
+  loading="lazy"
+  allow="autoplay; fullscreen; picture-in-picture" 
+  allowfullscreen&gt;
+&lt;/iframe&gt;
+
+&lt;!-- Configuration Reference:
+  • 21        : AniList Anime ID (One Piece)
+  • 1         : Episode number
+  • track=sub : Japanese audio + English subtitles (or track=dub for English Dub)
+  • server=1  : Primary stream engine (Cluster 1: Marin)
+  • autoSkip=1: Automatically skips opening &amp; ending credits via AniSkip
+  * NOTE: Do NOT include 'sandbox' attribute (strict anti-leech protection will block playback)
+--&gt;</code></pre>
+
+            <!-- Snippet 2: MyAnimeList (MAL) iframe -->
+            <pre class="code-editor-body" id="snippet-mal" style="display:none;"><code>&lt;!-- VidCloud Embed: MyAnimeList (MAL) Integration --&gt;
+&lt;!-- Route: /embed/mal/{malId}/{episode}?track={sub|dub}&amp;server={1|2|3}&amp;autoSkip=1&amp;autoNext=1 --&gt;
+&lt;iframe 
+  src="https://${domain}/embed/mal/21/1?track=sub&amp;server=1&amp;autoSkip=1&amp;autoNext=1" 
+  width="100%" 
+  height="480" 
+  frameborder="0" 
+  loading="lazy"
+  allow="autoplay; fullscreen; picture-in-picture" 
+  allowfullscreen&gt;
+&lt;/iframe&gt;
+
+&lt;!-- Alternative Query Parameter Format for MAL:
+&lt;iframe 
+  src="https://${domain}/embed?type=mal&amp;id=21&amp;ep=1&amp;track=sub&amp;server=1&amp;autoSkip=1&amp;autoNext=1" 
   width="100%" 
   height="480" 
   frameborder="0" 
   allow="autoplay; fullscreen; picture-in-picture" 
   allowfullscreen&gt;
-&lt;/iframe&gt;</code></pre>
+&lt;/iframe&gt;
+--&gt;</code></pre>
 
-            <!-- Snippet 2: Responsive CSS -->
-            <pre class="code-editor-body" id="snippet-responsive" style="display:none;"><code>&lt;style&gt;
-  .vidplay-frame {
+            <!-- Snippet 3: Full Feature Stack with AutoSkip -->
+            <pre class="code-editor-body" id="snippet-autoskip" style="display:none;"><code>&lt;!-- VidCloud Embed: Full Production Stack (AutoSkip + AutoPlay + AutoNext) --&gt;
+&lt;iframe 
+  src="https://${domain}/embed/ani/21/1?track=sub&amp;server=1&amp;autoSkip=1&amp;autoPlay=1&amp;autoNext=1" 
+  width="100%" 
+  height="500" 
+  frameborder="0" 
+  loading="lazy"
+  allow="autoplay; fullscreen; picture-in-picture" 
+  allowfullscreen&gt;
+&lt;/iframe&gt;
+
+&lt;!-- Parameters Breakdown:
+  • autoSkip=1 : Detects AniSkip opening (OP) &amp; ending (ED) cue points and skips automatically
+  • autoPlay=1 : Starts playback immediately without requiring an initial user tap
+  • autoNext=1 : Auto-advances to the next episode seamlessly when the current episode ends
+  • server=1   : Cluster 1: Marin (Set server=2 for Nunu, server=3 for Zexy)
+  • track=sub  : Original Japanese with subs (use track=dub for English dub)
+--&gt;</code></pre>
+
+            <!-- Snippet 4: Responsive CSS -->
+            <pre class="code-editor-body" id="snippet-responsive" style="display:none;"><code>&lt;!-- Responsive 16:9 Aspect Ratio Container (Desktop &amp; Mobile) --&gt;
+&lt;style&gt;
+  .vidcloud-player-wrapper {
     position: relative;
     width: 100%;
-    padding-bottom: 56.25%; /* 16:9 ratio */
-    height: 0;
+    aspect-ratio: 16 / 9;
+    background: #09090b;
+    border-radius: 12px;
     overflow: hidden;
-    border-radius: 10px;
-    background: #000;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+    border: 1px solid rgba(255, 255, 255, 0.08);
   }
-  .vidplay-frame iframe {
+  .vidcloud-player-wrapper iframe {
     position: absolute;
-    top: 0;
-    left: 0;
+    inset: 0;
     width: 100%;
     height: 100%;
     border: none;
   }
 &lt;/style&gt;
 
-&lt;div class="vidplay-frame"&gt;
+&lt;div class="vidcloud-player-wrapper"&gt;
   &lt;iframe 
-    src="https://${domain}/embed/ani/21/1?track=sub&server=1" 
+    src="https://${domain}/embed/ani/21/1?track=sub&amp;server=1&amp;autoSkip=1&amp;autoNext=1" 
+    loading="lazy"
     allow="autoplay; fullscreen; picture-in-picture" 
     allowfullscreen&gt;
   &lt;/iframe&gt;
 &lt;/div&gt;</code></pre>
 
-            <!-- Snippet 3: React / Next.js -->
+            <!-- Snippet 5: React / Next.js -->
             <pre class="code-editor-body" id="snippet-react" style="display:none;"><code>import React, { useEffect } from 'react';
 
-export function VidPlayer({ anilistId = 21, episode = 1, track = 'sub', server = 1 }) {
-  useEffect(() => {
-    function handleEvent(e) {
-      if (e.origin !== "https://${domain}") return;
-      if (e.data?.event === "ended") {
-        console.log("Episode ended, advance to next episode.");
+interface VidCloudPlayerProps {
+  id?: number | string;            // AniList or MAL ID (e.g. 21)
+  idType?: 'ani' | 'mal';          // 'ani' for AniList, 'mal' for MyAnimeList
+  episode?: number;                // Target episode number
+  track?: 'sub' | 'dub';           // Subbed or Dubbed
+  server?: 1 | 2 | 3;              // 1: Marin, 2: Nunu, 3: Zexy
+  autoSkip?: boolean;              // Auto skip intro / outro
+  autoPlay?: boolean;              // Auto play on load
+  autoNext?: boolean;              // Auto advance to next episode
+  onEnded?: () =&gt; void;            // Callback when episode finishes
+}
+
+export function VidCloudPlayer({
+  id = 21,
+  idType = 'ani',
+  episode = 1,
+  track = 'sub',
+  server = 1,
+  autoSkip = true,
+  autoPlay = true,
+  autoNext = true,
+  onEnded
+}: VidCloudPlayerProps) {
+  useEffect(() =&gt; {
+    function handleMessage(event: MessageEvent) {
+      if (event.origin !== "https://${domain}") return;
+      if (event.data?.event === "ended") {
+        onEnded?.();
       }
     }
-    window.addEventListener("message", handleEvent);
-    return () => window.removeEventListener("message", handleEvent);
-  }, []);
+    window.addEventListener("message", handleMessage);
+    return () =&gt; window.removeEventListener("message", handleMessage);
+  }, [onEnded]);
+
+  const embedUrl = \`https://${domain}/embed/\\\${idType}/\\\${id}/\\\${episode}?track=\\\${track}&amp;server=\\\${server}&amp;autoSkip=\\\${autoSkip ? 1 : 0}&amp;autoPlay=\\\${autoPlay ? 1 : 0}&amp;autoNext=\\\${autoNext ? 1 : 0}\`;
 
   return (
-    &lt;div style={{ position: 'relative', paddingBottom: '56.25%', height: 0, overflow: 'hidden', borderRadius: 10 }}&gt;
+    &lt;div style={{ position: 'relative', width: '100%', aspectRatio: '16 / 9', borderRadius: 12, overflow: 'hidden', background: '#000' }}&gt;
       &lt;iframe
-        src={\`https://${domain}/embed/ani/\${anilistId}/\${episode}?track=\${track}&server=\${server}\`}
-        style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', border: 'none' }}
+        src={embedUrl}
+        style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', border: 'none' }}
         allow="autoplay; fullscreen; picture-in-picture"
         allowFullScreen
       /&gt;
@@ -1502,23 +1610,48 @@ export function VidPlayer({ anilistId = 21, episode = 1, track = 'sub', server =
   );
 }</code></pre>
 
-            <!-- Snippet 4: SDK -->
-            <pre class="code-editor-body" id="snippet-sdk" style="display:none;"><code>&lt;!-- Include VidPlay Embed SDK --&gt;
+            <!-- Snippet 6: SDK -->
+            <pre class="code-editor-body" id="snippet-sdk" style="display:none;"><code>&lt;!-- Load VidCloud Embed SDK --&gt;
 &lt;script src="https://${domain}/embed-sdk.js"&gt;&lt;/script&gt;
 
 &lt;script&gt;
-  // Initialize client SDK with AniList ID and target episode
-  const embedUrl = window.VidCloudSDK.createEmbedUrl("ani", 21, 1, "sub");
-  console.log("Embed URL:", embedUrl);
+  // 1. Generate embed URL for AniList or MAL with AutoSkip
+  const anilistUrl = window.VidCloudSDK.createEmbedUrl("ani", 21, 1, "sub");
+  console.log("AniList URL:", anilistUrl);
+  // Output: https://${domain}/embed/ani/21/1/sub
+
+  const malUrl = window.VidCloudSDK.createEmbedUrl("mal", 21, 1, "sub");
+  console.log("MAL URL:", malUrl);
+  // Output: https://${domain}/embed/mal/21/1/sub
+
+  // 2. Listen to Bidirectional postMessage Player Events
+  window.addEventListener("message", function(event) {
+    if (event.origin !== "https://${domain}") return;
+
+    const data = event.data;
+    switch(data?.event) {
+      case "ready":
+        console.log("Player initialized &amp; ready");
+        break;
+      case "play":
+        console.log("Video started playing");
+        break;
+      case "autoSkip":
+        console.log("Skipped intro/outro timestamp:", data.type);
+        break;
+      case "ended":
+        console.log("Episode completed — ready for next episode");
+        break;
+    }
+  });
 &lt;/script&gt;</code></pre>
         </section>
 
         <!-- ── Documentation Reference ── -->
         <section id="docs" class="docs-section">
             <div class="section-header">
-                <span class="section-badge">Reference Manual</span>
                 <h2 class="section-title">Embed API Parameters</h2>
-                <p class="section-subtitle">Query parameters supported by the embed player endpoint.</p>
+                <p class="section-subtitle">Query parameters supported across all embed player endpoints.</p>
             </div>
 
             <div class="docs-table-wrapper">
@@ -1542,19 +1675,31 @@ export function VidPlayer({ anilistId = 21, episode = 1, track = 'sub', server =
                             <td><span class="docs-param">server</span></td>
                             <td><span class="docs-type">number</span></td>
                             <td><code>1</code></td>
-                            <td>Primary stream cluster: <code>1</code> (MegaPlay), <code>2</code> (AniNeko), or <code>3</code> (Zoko).</td>
-                        </tr>
-                        <tr>
-                            <td><span class="docs-param">autoPlay</span></td>
-                            <td><span class="docs-type">number</span></td>
-                            <td><code>1</code></td>
-                            <td>Auto-start playback: <code>1</code> for enabled, <code>0</code> for manual click.</td>
+                            <td>Stream server: <code>1</code> (Marin), <code>2</code> (Nunu), or <code>3</code> (Zexy).</td>
                         </tr>
                         <tr>
                             <td><span class="docs-param">autoSkip</span></td>
                             <td><span class="docs-type">number</span></td>
                             <td><code>1</code></td>
-                            <td>Skip opening & ending credits via AniSkip markers: <code>1</code> or <code>0</code>.</td>
+                            <td>Automatically skip opening &amp; ending credits via AniSkip markers: <code>1</code> (enabled) or <code>0</code>.</td>
+                        </tr>
+                        <tr>
+                            <td><span class="docs-param">autoPlay</span></td>
+                            <td><span class="docs-type">number</span></td>
+                            <td><code>1</code></td>
+                            <td>Auto-start playback on load: <code>1</code> for enabled, <code>0</code> for manual click.</td>
+                        </tr>
+                        <tr>
+                            <td><span class="docs-param">autoNext</span></td>
+                            <td><span class="docs-type">number</span></td>
+                            <td><code>1</code></td>
+                            <td>Automatically transition to next episode when current finishes: <code>1</code> or <code>0</code>.</td>
+                        </tr>
+                        <tr>
+                            <td><span class="docs-param">type</span></td>
+                            <td><span class="docs-type">string</span></td>
+                            <td><code>ani</code></td>
+                            <td>ID provider for query route (<code>/embed?type=...</code>): <code>ani</code> (AniList) or <code>mal</code> (MyAnimeList).</td>
                         </tr>
                         <tr>
                             <td><span class="docs-param">start</span></td>
@@ -1585,23 +1730,18 @@ export function VidPlayer({ anilistId = 21, episode = 1, track = 'sub', server =
             <div class="search-results-list" id="search-results-container">
                 <div class="search-result-item" data-id="21" data-title="One Piece">
                     <div><strong>One Piece</strong> <span style="color:var(--text-subtle); margin-left:4px;">#21</span></div>
-                    <span class="brand-badge">Select</span>
                 </div>
                 <div class="search-result-item" data-id="11061" data-title="Hunter x Hunter (2011)">
                     <div><strong>Hunter x Hunter</strong> <span style="color:var(--text-subtle); margin-left:4px;">#11061</span></div>
-                    <span class="brand-badge">Select</span>
                 </div>
                 <div class="search-result-item" data-id="16498" data-title="Attack on Titan">
                     <div><strong>Attack on Titan</strong> <span style="color:var(--text-subtle); margin-left:4px;">#16498</span></div>
-                    <span class="brand-badge">Select</span>
                 </div>
                 <div class="search-result-item" data-id="142838" data-title="Solo Leveling">
                     <div><strong>Solo Leveling</strong> <span style="color:var(--text-subtle); margin-left:4px;">#142838</span></div>
-                    <span class="brand-badge">Select</span>
                 </div>
                 <div class="search-result-item" data-id="113415" data-title="Jujutsu Kaisen">
                     <div><strong>Jujutsu Kaisen</strong> <span style="color:var(--text-subtle); margin-left:4px;">#113415</span></div>
-                    <span class="brand-badge">Select</span>
                 </div>
             </div>
         </div>
@@ -1610,16 +1750,11 @@ export function VidPlayer({ anilistId = 21, episode = 1, track = 'sub', server =
     <!-- Footer -->
     <footer class="footer">
         <div>
-            © 2026 <strong>VidPlay</strong> / <strong>VidCloud</strong> · High-performance edge video infrastructure powered by <a href="https://player.anixo.online" target="_blank">player.anixo.online</a>.
-        </div>
-        <div class="footer-status-badge">
-            <span class="status-dot"></span>
-            Operational (Edge Mesh)
+            © 2026 <strong>VidCloud</strong> · High-performance edge video infrastructure.
         </div>
         <div style="display:flex; gap:18px;">
             <a href="#docs">Docs</a>
             <a href="/admin">Admin</a>
-            <a href="https://github.com/Zayrix-bit/anixo-player" target="_blank">GitHub</a>
         </div>
     </footer>
 
@@ -1641,11 +1776,31 @@ export function VidPlayer({ anilistId = 21, episode = 1, track = 'sub', server =
             const copyUrlText = document.getElementById("copy-url-text");
             const btnMount = document.getElementById("btn-mount-player");
             const playerIframe = document.getElementById("player-iframe-mount");
-            const liveAnimeTitle = document.getElementById("live-anime-title");
-            const eventStreamContainer = document.getElementById("event-stream-container");
-            const previewStatusIndicator = document.getElementById("preview-status-indicator");
 
             let currentVariant = "sub";
+            let currentIdType = "ani";
+
+            const btnIdTypeAni = document.getElementById("btn-idtype-ani");
+            const btnIdTypeMal = document.getElementById("btn-idtype-mal");
+            const cfgIdLabel = document.getElementById("cfg-id-label");
+
+            btnIdTypeAni.addEventListener("click", () => {
+                currentIdType = "ani";
+                btnIdTypeAni.classList.add("active");
+                btnIdTypeMal.classList.remove("active");
+                cfgIdLabel.textContent = "AniList ID";
+                inputId.value = "21";
+                updateContractUrl();
+            });
+
+            btnIdTypeMal.addEventListener("click", () => {
+                currentIdType = "mal";
+                btnIdTypeMal.classList.add("active");
+                btnIdTypeAni.classList.remove("active");
+                cfgIdLabel.textContent = "MAL ID";
+                inputId.value = "21";
+                updateContractUrl();
+            });
 
             btnVariantSub.addEventListener("click", () => {
                 currentVariant = "sub";
@@ -1674,12 +1829,16 @@ export function VidPlayer({ anilistId = 21, episode = 1, track = 'sub', server =
                 if (muted === "1") q += "&muted=1";
                 if (autoSkip === "0") q += "&autoSkip=0";
 
-                return "https://" + domain + "/embed/ani/" + id + "/" + ep + q;
+                return "https://" + domain + "/embed/" + currentIdType + "/" + id + "/" + ep + q;
+            }
+
+            function buildIframeCode(url) {
+                return '<iframe\\n  src="' + url + '"\\n  width="100%"\\n  height="480"\\n  frameborder="0"\\n  allow="autoplay; fullscreen; picture-in-picture"\\n  allowfullscreen>\\n</iframe>';
             }
 
             function updateContractUrl() {
                 const url = buildUrl();
-                displayUrl.textContent = url;
+                displayUrl.textContent = buildIframeCode(url);
             }
 
             [inputId, inputEp, selectServer, toggleAutoplay, toggleMuted, toggleSkipIntro, toggleSkipOutro].forEach(el => {
@@ -1687,59 +1846,28 @@ export function VidPlayer({ anilistId = 21, episode = 1, track = 'sub', server =
                 el.addEventListener("change", updateContractUrl);
             });
 
-            btnMount.addEventListener("click", () => {
+            function mountPlayer() {
                 const url = buildUrl();
+                const placeholder = document.getElementById("player-placeholder");
+                playerIframe.style.display = "block";
                 playerIframe.src = url;
-                previewStatusIndicator.textContent = "Loading...";
-                appendEventLog("action", "Mounted stream: Ani #" + inputId.value + " Ep " + inputEp.value);
-            });
+                if (placeholder) placeholder.classList.add("hidden");
+            }
+
+            btnMount.addEventListener("click", mountPlayer);
+
+            // Clicking the placeholder also mounts
+            const placeholderEl = document.getElementById("player-placeholder");
+            if (placeholderEl) placeholderEl.addEventListener("click", mountPlayer);
 
             btnCopyUrl.addEventListener("click", () => {
                 const text = displayUrl.textContent.trim();
                 navigator.clipboard.writeText(text).then(() => {
                     copyUrlText.textContent = "Copied!";
-                    setTimeout(() => { copyUrlText.textContent = "Copy URL"; }, 2000);
+                    setTimeout(() => { copyUrlText.textContent = "Copy Iframe"; }, 2000);
                 });
             });
 
-            window.addEventListener("message", (event) => {
-                if (!event.data) return;
-                const data = event.data;
-                const eventName = data.event || data.type;
-                if (!eventName) return;
-
-                if (eventName === "ready") {
-                    previewStatusIndicator.textContent = "Ready";
-                    appendEventLog("ready", "Player initialized and ready");
-                } else if (eventName === "play") {
-                    previewStatusIndicator.textContent = "Playing";
-                    appendEventLog("play", "Playback started");
-                } else if (eventName === "pause") {
-                    previewStatusIndicator.textContent = "Paused";
-                    appendEventLog("pause", "Playback paused");
-                } else if (eventName === "timeupdate") {
-                    const time = Math.floor(data.currentTime || 0);
-                    const dur = Math.floor(data.duration || 0);
-                    if (time % 10 === 0) {
-                        appendEventLog("timeupdate", "Position: " + time + "s / " + dur + "s");
-                    }
-                } else if (eventName === "ended") {
-                    previewStatusIndicator.textContent = "Ended";
-                    appendEventLog("ended", "Episode ended");
-                }
-            });
-
-            function appendEventLog(tag, message) {
-                const now = new Date();
-                const timeStr = "[" + String(now.getMinutes()).padStart(2, '0') + ":" + String(now.getSeconds()).padStart(2, '0') + "]";
-                const row = document.createElement("div");
-                row.className = "event-entry";
-                row.innerHTML = '<span class="event-time">' + timeStr + '</span><span class="event-tag">' + tag + '</span><span>' + message + '</span>';
-                eventStreamContainer.appendChild(row);
-                if (eventStreamContainer.children.length > 20) {
-                    eventStreamContainer.removeChild(eventStreamContainer.firstChild);
-                }
-            }
 
             const tabButtons = document.querySelectorAll(".tab-btn");
             const codeSnippets = document.querySelectorAll(".code-editor-body");
@@ -1795,26 +1923,12 @@ export function VidPlayer({ anilistId = 21, episode = 1, track = 'sub', server =
             searchResults.forEach(item => {
                 item.addEventListener("click", () => {
                     const id = item.getAttribute("data-id");
-                    const title = item.getAttribute("data-title");
                     inputId.value = id;
                     inputEp.value = "1";
-                    liveAnimeTitle.textContent = title;
                     updateContractUrl();
                     closeSearch();
                     btnMount.click();
                 });
-            });
-
-            inputId.addEventListener("blur", async () => {
-                const id = inputId.value.trim();
-                if (!id) return;
-                try {
-                    const res = await fetch("/api/anime/" + id);
-                    if (res.ok) {
-                        const data = await res.json();
-                        if (data.title) liveAnimeTitle.textContent = data.title;
-                    }
-                } catch {}
             });
 
             updateContractUrl();

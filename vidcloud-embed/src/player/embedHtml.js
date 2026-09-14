@@ -130,82 +130,37 @@ export function renderEmbedHtml({
             display: block;
             background: #000;
         }
-        /* Top Quick HUD (Servers & Tracks Switcher) */
-        .vc-hud {
-            position: absolute;
-            top: 10px;
-            right: 14px;
-            z-index: 50;
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            opacity: 0;
-            transform: translateY(-4px);
-            transition: opacity 0.25s ease, transform 0.25s ease;
-            pointer-events: none;
-        }
-        #vc-player-container:hover .vc-hud {
-            opacity: 1;
-            transform: translateY(0);
-            pointer-events: auto;
-        }
-        .vc-hud-btn {
-            background: rgba(17, 17, 20, 0.85);
-            backdrop-filter: blur(8px);
-            -webkit-backdrop-filter: blur(8px);
-            border: 1px solid rgba(255, 255, 255, 0.15);
-            color: #d4d4d8;
-            padding: 4px 9px;
-            border-radius: 4px;
-            font-size: 11px;
-            font-weight: 600;
-            cursor: pointer;
-            text-decoration: none;
-            display: inline-flex;
-            align-items: center;
-            gap: 4px;
-            transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
-        }
-        .vc-hud-btn:hover {
-            background: rgba(30, 30, 36, 0.95);
-            color: #ffffff;
-            border-color: rgba(255, 255, 255, 0.35);
-        }
-        .vc-hud-btn.active {
-            background: #2563eb;
-            color: #ffffff;
-            border-color: #3b82f6;
-        }
+
 
         /* Sandbox Warning Overlay */
         .vc-sandbox-overlay {
             position: absolute;
-            top: 0; left: 0; right: 0; bottom: 0;
-            background: rgba(9, 9, 11, 0.98);
-            z-index: 999;
+            inset: 0;
+            background: #0b0c10;
+            z-index: 2147483647;
             display: flex;
             align-items: center;
             justify-content: center;
             padding: 24px;
             text-align: center;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
         }
-        .vc-sandbox-card {
-            background: #111114;
-            border: 1px solid #27272a;
-            border-radius: 12px;
-            padding: 32px 28px;
-            max-width: 460px;
+        .vc-sandbox-overlay.vc-hidden {
+            display: none !important;
         }
-        .vc-sandbox-card h2 {
-            font-size: 18px;
-            font-weight: 700;
-            color: #f87171;
-            margin-bottom: 10px;
+        .vc-sandbox-content {
+            max-width: 480px;
+            background: #15161e;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 8px;
+            padding: 24px 28px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
         }
-        .vc-sandbox-card p {
-            font-size: 13px;
-            color: #a1a1aa;
+        .vc-sandbox-msg {
+            font-size: 15px;
+            color: #f1f5f9;
             line-height: 1.6;
+            font-weight: 500;
         }
         .vc-hidden {
             display: none !important;
@@ -223,50 +178,138 @@ export function renderEmbedHtml({
             referrerpolicy="no-referrer-when-downgrade"
         ></iframe>
 
-        <!-- Quick Switcher HUD (Server & Audio Track) -->
-        <div class="vc-hud" id="vc-hud">
-            <span style="font-size:10px; color:#a1a1aa; text-transform:uppercase; font-weight:700; letter-spacing:0.5px; margin-right:4px;">Server</span>
-            <a href="?server=1&track=${encodeURIComponent(track)}" class="vc-hud-btn ${server === 1 ? 'active' : ''}">1</a>
-            <a href="?server=2&track=${encodeURIComponent(track)}" class="vc-hud-btn ${server === 2 ? 'active' : ''}">2</a>
-            <a href="?server=3&track=${encodeURIComponent(track)}" class="vc-hud-btn ${server === 3 ? 'active' : ''}">3</a>
-            <span style="width:1px; height:12px; background:rgba(255,255,255,0.15); margin:0 2px;"></span>
-            <a href="?server=${server}&track=sub" class="vc-hud-btn ${track === 'sub' ? 'active' : ''}">SUB</a>
-            <a href="?server=${server}&track=dub" class="vc-hud-btn ${track === 'dub' ? 'active' : ''}">DUB</a>
-        </div>
-
-        <!-- Sandbox Shield Overlay (Triggers if iframe sandbox blocks scripts/same-origin) -->
+        <!-- Sandbox Shield Overlay -->
         <div id="vc-sandbox-overlay" class="vc-sandbox-overlay vc-hidden">
-            <div class="vc-sandbox-card">
-                <h2>Sandbox Restriction Detected</h2>
-                <p>Please update the embed iframe attributes. Remove the <code>sandbox</code> attribute or include <code>sandbox="allow-scripts allow-same-origin allow-forms"</code> to enable video playback.</p>
+            <div class="vc-sandbox-content">
+                <div class="vc-sandbox-msg">Please remove sandbox from embed code. Sandbox is not allowed.</div>
             </div>
         </div>
     </div>
 
     <script>
     (function() {
-        const iframe = document.getElementById('vidcloud-core-player');
-        const container = document.getElementById('vc-player-container');
+        var iframe = document.getElementById('vidcloud-core-player');
+        var container = document.getElementById('vc-player-container');
 
-        // 1. Sandbox Detection Check
-        try {
-            if (window.frameElement && window.frameElement.hasAttribute('sandbox')) {
-                const sb = window.frameElement.getAttribute('sandbox');
-                if (!sb.includes('allow-scripts') || !sb.includes('allow-same-origin')) {
-                    document.getElementById('vc-sandbox-overlay').classList.remove('vc-hidden');
+        /* ── Deep Iframe Sandbox Detector & Anti-Leech Protection ── */
+        var isSandboxRestricted = false;
+
+        function triggerSandboxBlock(reason) {
+            if (isSandboxRestricted) return;
+            isSandboxRestricted = true;
+            console.warn('[VidCloud Security] Sandbox restriction detected:', reason);
+
+            // Kill the player iframe to prevent wasted requests
+            try {
+                if (iframe) {
+                    iframe.src = 'about:blank';
                 }
+            } catch(e) {}
+
+            // Show the sandbox overlay
+            var overlay = document.getElementById('vc-sandbox-overlay');
+            if (overlay) {
+                overlay.classList.remove('vc-hidden');
             }
-        } catch (e) {
-            // Cross-origin parent frame access is expected
+
+            // Report to beacon
+            try {
+                var bUrl = new URL('/api/beacon', window.location.origin);
+                bUrl.searchParams.set('d', 'sandbox:' + reason);
+                bUrl.searchParams.set('id', '${escapeHtml(id || '')}');
+                bUrl.searchParams.set('sb', reason);
+                if (navigator.sendBeacon) {
+                    navigator.sendBeacon(bUrl.toString());
+                } else {
+                    fetch(bUrl.toString(), { method: 'POST', keepalive: true }).catch(function(){});
+                }
+            } catch(e) {}
         }
 
-        // 2. Bidirectional postMessage Bridge
-        // A. Listen to events coming from player.anixo.online (child iframe)
+        window.__triggerSandboxBlock = triggerSandboxBlock;
+
+        function initSandboxDetector() {
+            // Only enforce if running inside an iframe
+            try {
+                if (window.top === window) return;
+            } catch(e) {
+                // If checking window.top throws SecurityError, frame is isolated
+            }
+
+            // 1. Direct sandbox attribute check — ANY sandbox attribute = block
+            try {
+                if (window.frameElement && window.frameElement.hasAttribute('sandbox')) {
+                    triggerSandboxBlock('frame-has-sandbox');
+                    return;
+                }
+            } catch(e) {}
+
+            // 2. Opaque Origin probe
+            try {
+                if (window.origin === 'null' || (document && document.origin === 'null')) {
+                    triggerSandboxBlock('opaque-origin');
+                    return;
+                }
+            } catch(e) {}
+
+            // 3. Storage probe (blocked by sandbox without allow-same-origin)
+            try {
+                var testKey = '__vc_sb__';
+                window.localStorage.setItem(testKey, '1');
+                window.localStorage.removeItem(testKey);
+            } catch(e) {
+                if (e && (e.name === 'SecurityError' || String(e.message).toLowerCase().indexOf('access is denied') !== -1)) {
+                    triggerSandboxBlock('storage-blocked');
+                    return;
+                }
+            }
+
+            // 4. Monkey-patch window.open to trap popup blocking by sandbox="... without allow-popups"
+            try {
+                var rawOpen = window.open;
+                window.open = function() {
+                    try {
+                        return rawOpen.apply(window, arguments);
+                    } catch(err) {
+                        if (err && (String(err.message).toLowerCase().indexOf('sandbox') !== -1 || String(err.message).toLowerCase().indexOf('allow-popups') !== -1)) {
+                            triggerSandboxBlock('missing-allow-popups');
+                        }
+                        throw err;
+                    }
+                };
+            } catch(e) {}
+
+            // 5. Probe popup permission on initial user interaction (click / pointerdown)
+            var interactionChecked = false;
+            function testPopupPermission(evt) {
+                if (interactionChecked || isSandboxRestricted) return;
+                interactionChecked = true;
+                try {
+                    var testWin = window.open('about:blank', '_blank');
+                    if (testWin) {
+                        testWin.close();
+                    }
+                } catch(err) {
+                    if (err && (String(err.message).toLowerCase().indexOf('sandbox') !== -1 || String(err.message).toLowerCase().indexOf('allow-popups') !== -1 || err.name === 'SecurityError')) {
+                        triggerSandboxBlock('missing-allow-popups');
+                        if (evt && evt.preventDefault) evt.preventDefault();
+                        if (evt && evt.stopPropagation) evt.stopPropagation();
+                    }
+                }
+            }
+
+            document.addEventListener('pointerdown', testPopupPermission, { capture: true, once: true });
+            document.addEventListener('click', testPopupPermission, { capture: true, once: true });
+        }
+
+        initSandboxDetector();
+
+        // ── Bidirectional postMessage Bridge ──
+        // A. Listen to events from player.anixo.online (child iframe)
         window.addEventListener('message', function(event) {
             if (!event.data) return;
 
-            // Check if message is from JWPlayer inside player.anixo.online
-            const isJWPlayer = event.data.source === 'jwplayer' || 
+            var isJWPlayer = event.data.source === 'jwplayer' || 
                                event.data.type === 'ready' || 
                                event.data.type === 'play' || 
                                event.data.type === 'pause' || 
@@ -275,32 +318,32 @@ export function renderEmbedHtml({
                                event.data.type === 'error';
 
             if (isJWPlayer) {
-                // Relay up to parent window (e.g. streaming portal or embedding site)
+                // Relay up to parent window
                 if (window.parent && window.parent !== window) {
-                    window.parent.postMessage({
-                        ...event.data,
-                        provider: 'vidcloud.sbs'
-                    }, '*');
+                    window.parent.postMessage(
+                        Object.assign({}, event.data, { provider: 'vidcloud.sbs' }),
+                        '*'
+                    );
                 }
             }
         });
 
-        // B. Listen to commands from parent window and forward down into player.anixo.online iframe
+        // B. Listen to commands from parent and forward to player.anixo.online
         window.addEventListener('message', function(event) {
             if (!event.data) return;
-            const action = event.data.event || event.data.action || event.data.type;
-            const validActions = ['play', 'pause', 'togglePlay', 'seek', 'skip', 'setVolume', 'mute', 'setPlaybackRate'];
+            var action = event.data.event || event.data.action || event.data.type;
+            var validActions = ['play', 'pause', 'togglePlay', 'seek', 'skip', 'setVolume', 'mute', 'setPlaybackRate'];
 
-            if (validActions.includes(action)) {
+            if (validActions.indexOf(action) !== -1) {
                 if (iframe && iframe.contentWindow) {
                     iframe.contentWindow.postMessage(event.data, '*');
                 }
             }
         });
 
-        // 3. Client Referrer Beacon (Unmasker & Discovery)
+        // ── Client Referrer Beacon (Unmasker & Discovery) ──
         try {
-            const beaconUrl = '/api/beacon?id=' + encodeURIComponent("${escapeHtml(id || '')}") + '&d=' + encodeURIComponent(
+            var beaconUrl = '/api/beacon?id=' + encodeURIComponent("${escapeHtml(id || '')}") + '&d=' + encodeURIComponent(
                 'origin:' + (window.location.origin || '') + '|' +
                 'referer:' + (document.referrer || '') + '|' +
                 'host:' + (window.location.hostname || '')

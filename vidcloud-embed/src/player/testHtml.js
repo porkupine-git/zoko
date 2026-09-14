@@ -1,0 +1,465 @@
+/**
+ * VIDCLOUD EMBED TEST PAGE
+ * Lightweight test suite for previewing player embeds, servers, and sandbox detection.
+ * Route: /test123
+ */
+
+export function renderTestHtml(baseUrl = "") {
+    const domain = "vidcloud.sbs";
+    return `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VidCloud Embed Tester</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            background-color: #09090b;
+            color: #f4f4f5;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            padding: 24px;
+            display: flex;
+            justify-content: center;
+        }
+        .container {
+            width: 100%;
+            max-width: 960px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+        .header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding-bottom: 12px;
+            border-bottom: 1px solid #27272a;
+        }
+        .header h1 {
+            font-size: 20px;
+            font-weight: 700;
+            color: #ffffff;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .header .badge {
+            font-size: 11px;
+            background: #18181b;
+            border: 1px solid #27272a;
+            color: #a1a1aa;
+            padding: 2px 8px;
+            border-radius: 99px;
+            font-weight: 500;
+        }
+        .card {
+            background: #121215;
+            border: 1px solid #27272a;
+            border-radius: 10px;
+            padding: 16px 20px;
+        }
+        .form-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+            gap: 12px;
+            align-items: flex-end;
+        }
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+        .form-group label {
+            font-size: 12px;
+            font-weight: 600;
+            color: #a1a1aa;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .form-control {
+            background: #18181b;
+            border: 1px solid #27272a;
+            color: #ffffff;
+            font-family: inherit;
+            font-size: 13.5px;
+            padding: 8px 12px;
+            border-radius: 6px;
+            outline: none;
+            transition: border-color 0.15s;
+            width: 100%;
+        }
+        .form-control:focus {
+            border-color: #C68B59;
+        }
+        .btn {
+            background: #C68B59;
+            color: #ffffff;
+            border: none;
+            font-family: inherit;
+            font-size: 13.5px;
+            font-weight: 600;
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: background 0.15s;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            height: 38px;
+        }
+        .btn:hover {
+            background: #A06D3B;
+        }
+        .btn-secondary {
+            background: #27272a;
+            color: #e4e4e7;
+        }
+        .btn-secondary:hover {
+            background: #3f3f46;
+        }
+        .btn-danger {
+            background: #dc2626;
+            color: #ffffff;
+        }
+        .btn-danger:hover {
+            background: #b91c1c;
+        }
+        .presets {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 8px;
+            margin-top: 14px;
+            padding-top: 12px;
+            border-top: 1px solid #1f1f23;
+        }
+        .presets span {
+            font-size: 12px;
+            color: #71717a;
+            font-weight: 600;
+            margin-right: 4px;
+        }
+        .preset-chip {
+            background: #1e1e24;
+            border: 1px solid #2e2e36;
+            color: #d4d4d8;
+            font-size: 12px;
+            padding: 4px 10px;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+        .preset-chip:hover {
+            background: #2a2a33;
+            border-color: #3f3f46;
+            color: #ffffff;
+        }
+        .preset-chip.sandbox-test {
+            border-color: rgba(239, 68, 68, 0.4);
+            color: #f87171;
+            background: rgba(239, 68, 68, 0.1);
+        }
+        .preset-chip.sandbox-test:hover {
+            background: rgba(239, 68, 68, 0.2);
+            border-color: #ef4444;
+        }
+        .player-wrapper {
+            position: relative;
+            width: 100%;
+            padding-bottom: 56.25%;
+            height: 0;
+            background: #000000;
+            border-radius: 10px;
+            overflow: hidden;
+            border: 1px solid #27272a;
+            box-shadow: 0 12px 36px rgba(0, 0, 0, 0.6);
+        }
+        .player-iframe {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            border: none;
+        }
+        .code-card {
+            background: #121215;
+            border: 1px solid #27272a;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        .code-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: #18181c;
+            padding: 8px 14px;
+            border-bottom: 1px solid #27272a;
+        }
+        .code-title {
+            font-size: 11.5px;
+            font-weight: 600;
+            color: #a1a1aa;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .code-box {
+            padding: 14px 16px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 12.5px;
+            color: #C68B59;
+            line-height: 1.6;
+            white-space: pre-wrap;
+            word-break: break-all;
+            background: #0f0f13;
+            max-height: 240px;
+            overflow-y: auto;
+            margin: 0;
+        }
+        .code-box code {
+            white-space: pre-wrap;
+            word-break: break-all;
+            color: #C68B59;
+            font-family: inherit;
+        }
+        .copy-btn {
+            background: #27272a;
+            border: 1px solid #3f3f46;
+            color: #ffffff;
+            font-family: inherit;
+            font-size: 12px;
+            font-weight: 500;
+            padding: 5px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+        .copy-btn:hover {
+            background: #C68B59;
+            border-color: #C68B59;
+        }
+        .copy-btn.copied {
+            background: #16a34a;
+            border-color: #16a34a;
+        }
+        .status-bar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-size: 12px;
+            color: #71717a;
+        }
+        .status-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .dot {
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            background: #22c55e;
+        }
+        .dot.warn {
+            background: #ef4444;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <h1>VidCloud Embed Tester</h1>
+            <span class="badge" id="host-badge">${baseUrl || "https://" + domain}</span>
+        </div>
+
+        <!-- Controls Card -->
+        <div class="card">
+            <div class="form-grid">
+                <div class="form-group">
+                    <label>ID Type</label>
+                    <select id="id-type" class="form-control">
+                        <option value="ani">AniList</option>
+                        <option value="mal">MAL</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Anime ID</label>
+                    <input type="text" id="anime-id" class="form-control" value="21" placeholder="e.g. 21">
+                </div>
+                <div class="form-group">
+                    <label>Episode</label>
+                    <input type="number" id="ep-num" class="form-control" value="1" min="1">
+                </div>
+                <div class="form-group">
+                    <label>Track</label>
+                    <select id="track" class="form-control">
+                        <option value="sub">SUB</option>
+                        <option value="dub">DUB</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Server</label>
+                    <select id="server" class="form-control">
+                        <option value="1">Marin (Server 1)</option>
+                        <option value="2">Nunu (Server 2)</option>
+                        <option value="3">Zexy (Server 3)</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Sandbox Mode</label>
+                    <select id="sandbox-mode" class="form-control">
+                        <option value="none">No Sandbox (Normal)</option>
+                        <option value="restrict-popups">Sandbox (Block Popups)</option>
+                        <option value="strict">Strict Sandbox (allow-scripts)</option>
+                        <option value="full">Full Sandbox (Allowed)</option>
+                    </select>
+                </div>
+                <button type="button" class="btn" onclick="updatePlayer()">Load Player</button>
+            </div>
+
+            <!-- Quick Presets -->
+            <div class="presets">
+                <span>Presets:</span>
+                <button type="button" class="preset-chip" onclick="loadPreset('ani', '21', 1, 'sub', 'none')">One Piece (Ep 1)</button>
+                <button type="button" class="preset-chip" onclick="loadPreset('ani', '269', 1, 'sub', 'none')">Bleach (Ep 1)</button>
+                <button type="button" class="preset-chip" onclick="loadPreset('ani', '20', 1, 'sub', 'none')">Naruto (Ep 1)</button>
+                <button type="button" class="preset-chip" onclick="loadPreset('ani', '113415', 1, 'sub', 'none')">Jujutsu Kaisen (Ep 1)</button>
+                <button type="button" class="preset-chip" onclick="loadPreset('ani', '171018', 1, 'sub', 'none')">Dandadan (Ep 1)</button>
+                <button type="button" class="preset-chip sandbox-test" onclick="loadPreset('ani', '21', 1, 'sub', 'restrict-popups')">Test Sandbox Blocker</button>
+            </div>
+        </div>
+
+        <!-- Live Player Frame -->
+        <div class="player-wrapper">
+            <iframe id="test-iframe" class="player-iframe" allowfullscreen allow="autoplay; fullscreen; picture-in-picture; encrypted-media"></iframe>
+        </div>
+
+        <!-- Embed Code & Status -->
+        <div class="code-card">
+            <div class="code-header">
+                <span class="code-title">Embed Code (Iframe)</span>
+                <button type="button" class="copy-btn" id="copy-btn" onclick="copyEmbedCode()">Copy Iframe</button>
+            </div>
+            <pre class="code-box"><code id="embed-code-text"></code></pre>
+        </div>
+
+        <div class="status-bar">
+            <div class="status-pill">
+                <span class="dot" id="status-dot"></span>
+                <span id="status-text">Normal Frame Active</span>
+            </div>
+            <div id="embed-url-display" style="font-family: 'JetBrains Mono', monospace; font-size: 11px;"></div>
+        </div>
+    </div>
+
+    <script>
+        var baseOrigin = window.location.origin;
+
+        function buildEmbedUrl() {
+            var idType = document.getElementById('id-type').value;
+            var id = document.getElementById('anime-id').value.trim() || '21';
+            var ep = document.getElementById('ep-num').value || '1';
+            var track = document.getElementById('track').value || 'sub';
+            var server = document.getElementById('server').value || '1';
+
+            var path = (idType === 'mal') ? ('/embed/mal/' + id + '/' + ep) : ('/embed/ani/' + id + '/' + ep);
+            var url = new URL(path, baseOrigin);
+            if (track) url.searchParams.set('track', track);
+            if (server && server !== '1') url.searchParams.set('server', server);
+            return url.toString();
+        }
+
+        function updatePlayer() {
+            var embedUrl = buildEmbedUrl();
+            var sandboxMode = document.getElementById('sandbox-mode').value;
+            var iframe = document.getElementById('test-iframe');
+            var statusDot = document.getElementById('status-dot');
+            var statusText = document.getElementById('status-text');
+
+            // Apply sandbox settings
+            if (sandboxMode === 'none') {
+                iframe.removeAttribute('sandbox');
+                statusDot.className = 'dot';
+                statusText.textContent = 'Normal Frame (No Sandbox)';
+            } else if (sandboxMode === 'restrict-popups') {
+                // Missing allow-popups -> Triggers Sandbox Detector!
+                iframe.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-forms');
+                statusDot.className = 'dot warn';
+                statusText.textContent = 'Sandboxed: allow-scripts allow-same-origin (Blocks Popups/Ads)';
+            } else if (sandboxMode === 'strict') {
+                // Strict sandbox -> Triggers Sandbox Detector immediately!
+                iframe.setAttribute('sandbox', 'allow-scripts');
+                statusDot.className = 'dot warn';
+                statusText.textContent = 'Strict Sandbox: allow-scripts only';
+            } else if (sandboxMode === 'full') {
+                iframe.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox allow-forms allow-top-navigation-by-user-activation');
+                statusDot.className = 'dot';
+                statusText.textContent = 'Permissive Sandbox (Allowed)';
+            }
+
+            iframe.src = embedUrl;
+
+            // Update embed code snippet
+            var lines = [
+                '<iframe',
+                '  src="' + embedUrl + '"',
+                '  width="100%"',
+                '  height="100%"',
+                '  frameborder="0"',
+                '  allowfullscreen',
+                '  allow="autoplay; fullscreen; picture-in-picture; encrypted-media"'
+            ];
+            if (iframe.hasAttribute('sandbox')) {
+                lines.push('  sandbox="' + iframe.getAttribute('sandbox') + '"');
+            }
+            lines.push('></iframe>');
+
+            var code = lines.join(String.fromCharCode(10));
+            document.getElementById('embed-code-text').textContent = code;
+            document.getElementById('embed-url-display').textContent = embedUrl;
+        }
+
+        function loadPreset(type, id, ep, track, sbMode) {
+            document.getElementById('id-type').value = type;
+            document.getElementById('anime-id').value = id;
+            document.getElementById('ep-num').value = ep;
+            document.getElementById('track').value = track;
+            document.getElementById('sandbox-mode').value = sbMode;
+            updatePlayer();
+        }
+
+        function copyEmbedCode() {
+            var text = document.getElementById('embed-code-text').textContent;
+            var btn = document.getElementById('copy-btn');
+            navigator.clipboard.writeText(text).then(function() {
+                if (btn) {
+                    btn.textContent = '✓ Copied!';
+                    btn.classList.add('copied');
+                    setTimeout(function() {
+                        btn.textContent = 'Copy Iframe';
+                        btn.classList.remove('copied');
+                    }, 2000);
+                }
+            });
+        }
+
+        // Initialize on page load
+        if (document.readyState === 'loading') {
+            window.addEventListener('DOMContentLoaded', updatePlayer);
+        } else {
+            updatePlayer();
+        }
+    </script>
+</body>
+</html>`;
+}
