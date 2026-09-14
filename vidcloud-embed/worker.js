@@ -138,7 +138,7 @@ export default {
             }
 
             // 1. Landing Page & Developer Studio (Root /)
-            if (pathname === "/") {
+            if (pathname === "/" || pathname === "/docs" || pathname === "/tester") {
                 return new Response(renderLandingHtml(baseUrl), {
                     headers: {
                         ...CORS_HEADERS,
