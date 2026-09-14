@@ -36,7 +36,6 @@ async function runTests() {
         const html = await res.text();
         assert(res.status === 200, "GET / returns 200 OK");
         assert(html.includes("VidCloud"), "Landing page contains 'VidCloud'");
-        assert(html.includes("player.anixo.online"), "Landing page references 'player.anixo.online'");
     } catch (e) {
         assert(false, `Landing Page test exception: ${e.message}`);
     }
@@ -58,7 +57,7 @@ async function runTests() {
         const res = await worker.fetch(req, dummyEnv, dummyCtx);
         const html = await res.text();
         assert(res.status === 200, "GET /embed/ani/21/1 returns 200 OK");
-        assert(html.includes("player.anixo.online"), "Embed HTML loads player.anixo.online iframe");
+        assert(html.includes("/player?id=21-1-1-sub"), "Embed HTML loads /player iframe under vidcloud.sbs");
         assert(html.includes("postMessage"), "Embed HTML contains bidirectional postMessage bridge");
         assert(html.includes("vidcloud.sbs"), "Embed HTML has provider identifier");
     } catch (e) {

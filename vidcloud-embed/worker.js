@@ -108,7 +108,8 @@ export default {
 
         const baseUrl = url.origin;
         const pathname = url.pathname;
-        const playerOrigin = env?.PLAYER_ORIGIN || "https://player.anixo.online";
+        const playerOrigin = `${baseUrl}/player`;
+        const upstreamPlayerOrigin = env?.UPSTREAM_PLAYER || "https://player.anixo.online";
 
         // ── Cloudflare KV Admin State Sync ──
         const kv = env?.VIDCLOUD_ADMIN_STORE || env?.ANIXO_ADMIN_STORE;
@@ -179,6 +180,64 @@ export default {
                         "Content-Type": "text/html; charset=utf-8",
                         "Cache-Control": "no-cache, no-store, must-revalidate"
                     }
+                });
+            }
+
+            // ── Reverse-Proxy Core Player Engine (Native Fullscreen under vidcloud.sbs) ──
+            if (
+                pathname === "/player" ||
+                pathname === "/player/" ||
+                pathname.startsWith("/player/") ||
+                pathname.startsWith("/js/") ||
+                pathname.startsWith("/css/") ||
+                pathname.startsWith("/images/") ||
+                pathname.startsWith("/embed-2/") ||
+                pathname.startsWith("/api/proxy/")
+            ) {
+                const upstreamHost = new URL(upstreamPlayerOrigin).hostname;
+                const targetUrl = new URL(request.url);
+                targetUrl.hostname = upstreamHost;
+                targetUrl.port = "";
+                targetUrl.protocol = "https:";
+                if (pathname === "/player" || pathname === "/player/") {
+                    targetUrl.pathname = "/";
+                }
+
+                const modifiedHeaders = new Headers(request.headers);
+                modifiedHeaders.set("Host", upstreamHost);
+                modifiedHeaders.set("Referer", `${upstreamPlayerOrigin}/`);
+
+                const res = await fetch(targetUrl.toString(), {
+                    method: request.method,
+                    headers: modifiedHeaders,
+                    body: request.method !== "GET" && request.method !== "HEAD" ? request.body : undefined,
+                    redirect: "follow"
+                });
+
+                const contentType = res.headers.get("content-type") || "";
+                if (contentType.includes("text/html")) {
+                    let html = await res.text();
+                    html = html.replace(/<title>.*?<\/title>/i, "<title>VidCloud Player</title>");
+                    
+                    const resHeaders = new Headers(res.headers);
+                    resHeaders.delete("X-Frame-Options");
+                    resHeaders.delete("Content-Security-Policy");
+                    resHeaders.set("Access-Control-Allow-Origin", "*");
+                    resHeaders.set("Content-Type", "text/html; charset=utf-8");
+
+                    return new Response(html, {
+                        status: res.status,
+                        headers: resHeaders
+                    });
+                }
+
+                const resHeaders = new Headers(res.headers);
+                resHeaders.delete("X-Frame-Options");
+                resHeaders.set("Access-Control-Allow-Origin", "*");
+
+                return new Response(res.body, {
+                    status: res.status,
+                    headers: resHeaders
                 });
             }
 

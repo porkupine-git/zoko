@@ -25,4 +25,5 @@ id = "d8743d081b64441099d52e9e175268b1"
 [vars]
 TURNSTILE_SECRET_KEY = "0x4AAAAAADGQxcZgLa0ZRtaJbL3mxiKj4RA"
 TURNSTILE_SITE_KEY = "0x4AAAAAADGQxfMRQroxFG6O"
-PLAYER_ORIGIN = "https://player.anixo.online"
+UPSTREAM_PLAYER = "https://player.anixo.online"
+PLAYER_ORIGIN = "https://vidcloud.sbs/player"

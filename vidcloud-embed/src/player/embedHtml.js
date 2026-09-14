@@ -50,7 +50,7 @@ export function renderEmbedHtml({
     outroStart = 0,
     outroEnd = 0,
     ticket = "",
-    playerOrigin = "https://player.anixo.online"
+    playerOrigin = "https://vidcloud.sbs/player"
 }) {
     const adminConfig = getAdminConfig();
     const monetization = adminConfig?.monetization || {};
@@ -169,7 +169,7 @@ export function renderEmbedHtml({
 </head>
 <body>
     <div id="vc-player-container">
-        <!-- Core Player Iframe pointing directly to player.anixo.online -->
+        <!-- Core Player Iframe pointing directly to VidCloud Core Player (/player) -->
         <iframe
             id="vidcloud-core-player"
             src="${escapeHtml(playerSrc)}"
@@ -305,7 +305,7 @@ export function renderEmbedHtml({
         initSandboxDetector();
 
         // ── Bidirectional postMessage Bridge ──
-        // A. Listen to events from player.anixo.online (child iframe)
+        // A. Listen to events from VidCloud Core Player (child iframe)
         window.addEventListener('message', function(event) {
             if (!event.data) return;
 
@@ -328,7 +328,7 @@ export function renderEmbedHtml({
             }
         });
 
-        // B. Listen to commands from parent and forward to player.anixo.online
+        // B. Listen to commands from parent and forward to VidCloud Core Player
         window.addEventListener('message', function(event) {
             if (!event.data) return;
             var action = event.data.event || event.data.action || event.data.type;
