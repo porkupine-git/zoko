@@ -17,19 +17,6 @@ mode = "smart"
 [observability]
 enabled = true
 
-# Direct 0ms in-memory Edge Service Bindings to the Engines
-[[services]]
-binding = "MEGAPLAY_SERVICE"
-service = "aniko-backend"
-
-[[services]]
-binding = "ANINEKO_SERVICE"
-service = "anineko-api"
-
-[[services]]
-binding = "ZOKO_SERVICE"
-service = "zoko-stream"
-
 # Persistent Cloudflare KV Database for Admin Config, Firewall, and Keys
 [[kv_namespaces]]
 binding = "VIDCLOUD_ADMIN_STORE"

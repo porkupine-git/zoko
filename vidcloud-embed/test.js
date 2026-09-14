@@ -4,7 +4,7 @@
 
 import worker from './worker.js';
 import { createEmbedTicket, verifyEmbedTicket } from './src/security/ticket.js';
-import { encryptStreamToken, decryptStreamToken } from './src/engines/proxyCrypto.js';
+import { checkClusterHealth } from './src/engines/health.js';
 
 let passed = 0;
 let failed = 0;
@@ -130,17 +130,16 @@ async function runTests() {
         assert(false, `Ticket Cryptography test exception: ${e.message}`);
     }
 
-    // Test 8: Proxy Token Encryption & Decryption
+    // Test 8: Health & Upstream Status Route (/health)
     try {
-        const testUrl = "https://cdn.example.com/stream/index.m3u8";
-        const clientIp = "127.0.0.1";
-        const encToken = encryptStreamToken(testUrl, clientIp);
-        assert(encToken && !encToken.includes("http"), "Encrypted token obfuscates URL");
-
-        const decUrl = decryptStreamToken(encToken, clientIp);
-        assert(decUrl === testUrl, "Decrypted stream token matches original URL");
+        const req = new Request("http://vidcloud.sbs/health");
+        const res = await worker.fetch(req, dummyEnv, dummyCtx);
+        const data = await res.json();
+        assert(res.status === 200 || res.status === 503, "GET /health returns valid status code");
+        assert(data.playerEngine && data.playerEngine.endpoint, "Health response includes player engine status");
+        assert(data.metadataApi && data.metadataApi.endpoint, "Health response includes metadata upstream status");
     } catch (e) {
-        assert(false, `Proxy Token Crypto test exception: ${e.message}`);
+        assert(false, `Health Route test exception: ${e.message}`);
     }
 
     console.log(`\n=============================`);

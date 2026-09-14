@@ -1,19 +1,15 @@
 /**
  * VIDCLOUD PUBLIC ANIME EMBED PROVIDER - CLOUDFLARE WORKER
- * Edge router serving the developer playground, cinema embed player,
- * AniList/MAL metadata, and the 3-engine multi-server stream coordinator.
- * Powered by player.anixo.online
+ * Ultra-lightweight edge gateway routing to player.anixo.online
+ * Serves developer platform, embed wrapper, AniList metadata, and origin firewall.
  */
 
 import { renderLandingHtml } from './src/landing/landingHtml.js';
 import { renderEmbedHtml } from './src/player/embedHtml.js';
 import { renderAdminHtml } from './src/admin/adminHtml.js';
 import { searchAnime, getAnimeByAniListId, getAnimeByMalId } from './src/metadata/anilist.js';
-import { resolveStreamWithFailover, resolveSpecificServer } from './src/engines/resolver.js';
 import { checkClusterHealth } from './src/engines/health.js';
-import { maskStreamResult, decryptStreamToken, encryptStreamToken, SCRAPER_NOTICE_HEADER, SCRAPER_NOTICE_TEXT } from './src/engines/proxyCrypto.js';
-import { isScraperRequest, getHoneypotStreamResponse, getHoneypotVttContent } from './src/engines/honeypot.js';
-import { createEmbedTicket, verifyEmbedTicket, isBotRequest } from './src/security/ticket.js';
+import { createEmbedTicket, isBotRequest } from './src/security/ticket.js';
 import {
     verifyAdminPassword,
     createAdminSession,
@@ -27,16 +23,13 @@ import {
     recordStreamAccess,
     clearTelemetry,
     unmaskReferrer,
-    markReferrerSandboxed,
-    recordHoneypotTrap,
-    generateApiKey,
-    toggleApiKey,
-    deleteApiKey,
     syncAdminStoreWithKv,
     persistAdminStoreToKv,
     addBlockedIp,
     removeBlockedIp,
-    isIpBlocked
+    generateApiKey,
+    toggleApiKey,
+    deleteApiKey
 } from './src/admin/adminStore.js';
 
 const CORS_HEADERS = {
@@ -46,40 +39,6 @@ const CORS_HEADERS = {
     "Access-Control-Expose-Headers": "Content-Range, Accept-Ranges, Content-Length, X-Cluster-Status, *",
     "Access-Control-Max-Age": "86400"
 };
-
-const CLUSTER_SECRET = "anixo-cluster-auth-9x82k1";
-
-// Stream rate limiter (30 req / 5m per IP)
-const ipStreamRateLimits = new Map();
-function checkStreamRateLimit(ip) {
-    if (!ip) return true;
-    const now = Date.now();
-    const entry = ipStreamRateLimits.get(ip) || { lastTime: 0, count: 0, windowStart: now };
-
-    if (ipStreamRateLimits.size > 5000) {
-        for (const [k, v] of ipStreamRateLimits.entries()) {
-            if (now - v.windowStart > 300000) ipStreamRateLimits.delete(k);
-        }
-    }
-
-    if (entry.lastTime > 0 && (now - entry.lastTime) < 1500) {
-        return false;
-    }
-
-    if (now - entry.windowStart > 300000) {
-        entry.windowStart = now;
-        entry.count = 1;
-    } else {
-        entry.count++;
-        if (entry.count > 30) {
-            return false;
-        }
-    }
-
-    entry.lastTime = now;
-    ipStreamRateLimits.set(ip, entry);
-    return true;
-}
 
 function getBlockedLeechResponse() {
     return new Response(
@@ -216,7 +175,7 @@ export default {
                 });
             }
 
-            // ── Beacon Endpoint (Discovery & Sandbox Reports) ──
+            // ── Beacon Endpoint (Discovery & Telemetry) ──
             if (pathname === "/api/beacon" || pathname === "/api/admin/beacon") {
                 try {
                     let rawDiscoveries = url.searchParams.get("d") || "";
@@ -313,18 +272,15 @@ export default {
                 }
             }
 
-            // 2. Multi-Server Cluster Health & Telemetry
+            // 2. Health & Telemetry
             if (pathname === "/health" || pathname === "/api/health") {
-                const forceFresh = url.searchParams.get("fresh") === "1" || url.searchParams.get("force") === "true";
-                const healthReport = await checkClusterHealth(env, forceFresh);
-                const statusCode = healthReport.status === "offline" ? 503 : (healthReport.status === "degraded" ? 207 : 200);
+                const healthReport = await checkClusterHealth(env);
                 return new Response(JSON.stringify(healthReport, null, 2), {
-                    status: statusCode,
+                    status: healthReport.status === "offline" ? 503 : 200,
                     headers: {
                         ...CORS_HEADERS,
                         "Content-Type": "application/json",
-                        "Cache-Control": forceFresh ? "no-cache, no-store" : "public, max-age=15",
-                        "X-Cluster-Status": healthReport.status
+                        "Cache-Control": "public, max-age=15"
                     }
                 });
             }
@@ -564,165 +520,6 @@ export default {
                         "Content-Type": "text/html; charset=utf-8",
                         "Cache-Control": "no-cache, no-store, must-revalidate"
                     }
-                });
-            }
-
-            // 8. Stream Resolver API (Called for JSON stream payloads)
-            if (pathname === "/api/stream/resolve") {
-                const clientReferer = extractClientReferer(request, url);
-                if (!isDomainAllowed(clientReferer)) return getBlockedLeechResponse();
-
-                const clientIp = request.headers.get("cf-connecting-ip") || request.headers.get("x-forwarded-for") || request.headers.get("x-real-ip") || "127.0.0.1";
-                if (clientIp && isIpBlocked(clientIp)) {
-                    return new Response(JSON.stringify(getHoneypotStreamResponse(baseUrl), null, 2), {
-                        headers: { ...CORS_HEADERS, "Content-Type": "application/json" }
-                    });
-                }
-
-                if (!checkStreamRateLimit(clientIp)) {
-                    recordHoneypotTrap({ ip: clientIp, userAgent: request.headers.get("user-agent") || "", path: pathname });
-                    return new Response(JSON.stringify({ success: false, error: "Rate limit exceeded." }), {
-                        status: 429,
-                        headers: { ...CORS_HEADERS, "Content-Type": "application/json" }
-                    });
-                }
-
-                const anilistId = url.searchParams.get("anilistId");
-                const malId = url.searchParams.get("malId");
-                const title = url.searchParams.get("title");
-                const episode = parseInt(url.searchParams.get("episode") || "1", 10) || 1;
-                const track = (url.searchParams.get("track") || "sub").toLowerCase();
-
-                const defaultServer = getAdminConfig().servers?.primary || 1;
-                const serverParam = url.searchParams.get("server");
-                const preferredServer = serverParam ? (parseInt(serverParam, 10) || defaultServer) : defaultServer;
-
-                const result = await resolveStreamWithFailover({
-                    anilistId,
-                    malId,
-                    title,
-                    episode,
-                    track,
-                    preferredServer
-                }, env);
-
-                const maskedResult = maskStreamResult(result, baseUrl, clientIp);
-
-                recordStreamAccess({
-                    domain: clientReferer,
-                    anime: title || (anilistId ? `AniList #${anilistId}` : (malId ? `MAL #${malId}` : "")),
-                    serverId: result.serverId || preferredServer
-                });
-                if (kv && ctx && typeof ctx.waitUntil === "function") {
-                    ctx.waitUntil(persistAdminStoreToKv(kv));
-                }
-
-                return new Response(JSON.stringify(maskedResult, null, 2), {
-                    headers: {
-                        ...CORS_HEADERS,
-                        "Content-Type": "application/json",
-                        "Cache-Control": "no-cache, no-store, must-revalidate",
-                        "X-Scraper-Advisory": SCRAPER_NOTICE_HEADER
-                    }
-                });
-            }
-
-            // 9. Specific Server Stream Resolver
-            if (pathname.startsWith("/api/stream/server/")) {
-                const clientReferer = extractClientReferer(request, url);
-                if (!isDomainAllowed(clientReferer)) return getBlockedLeechResponse();
-
-                const serverId = parseInt(pathname.replace("/api/stream/server/", "").split("/")[0], 10) || 1;
-                const anilistId = url.searchParams.get("anilistId");
-                const malId = url.searchParams.get("malId");
-                const title = url.searchParams.get("title");
-                const episode = parseInt(url.searchParams.get("episode") || "1", 10) || 1;
-                const track = (url.searchParams.get("track") || "sub").toLowerCase();
-
-                const result = await resolveSpecificServer({
-                    serverId,
-                    anilistId,
-                    malId,
-                    title,
-                    episode,
-                    track
-                }, env);
-
-                const clientIp = request.headers.get("cf-connecting-ip") || request.headers.get("x-forwarded-for") || request.headers.get("x-real-ip") || "127.0.0.1";
-                const maskedResult = maskStreamResult(result, baseUrl, clientIp);
-
-                recordStreamAccess({
-                    domain: clientReferer,
-                    anime: title || (anilistId ? `AniList #${anilistId}` : (malId ? `MAL #${malId}` : "")),
-                    serverId
-                });
-                if (kv && ctx && typeof ctx.waitUntil === "function") {
-                    ctx.waitUntil(persistAdminStoreToKv(kv));
-                }
-
-                return new Response(JSON.stringify(maskedResult, null, 2), {
-                    headers: {
-                        ...CORS_HEADERS,
-                        "Content-Type": "application/json",
-                        "Cache-Control": "public, max-age=900",
-                        "X-Scraper-Advisory": SCRAPER_NOTICE_HEADER
-                    }
-                });
-            }
-
-            // 10. M3U8 Stream Proxy
-            if (pathname === "/api/stream/m3u8" || pathname === "/api/proxy/m3u8") {
-                const token = url.searchParams.get("t") || url.searchParams.get("token");
-                if (!token) return new Response("Missing token", { status: 400, headers: CORS_HEADERS });
-
-                const clientIp = request.headers.get("cf-connecting-ip") || request.headers.get("x-forwarded-for") || "127.0.0.1";
-                let targetUrl = decryptStreamToken(token, clientIp);
-                if (!targetUrl || !targetUrl.startsWith("http")) {
-                    return new Response("Invalid stream token", { status: 403, headers: CORS_HEADERS });
-                }
-
-                let fetcher = fetch;
-                if (targetUrl.includes("aniko-backend") && env?.MEGAPLAY_SERVICE?.fetch) {
-                    fetcher = (u, init) => env.MEGAPLAY_SERVICE.fetch(u, init);
-                } else if (targetUrl.includes("anineko-api") && env?.ANINEKO_SERVICE?.fetch) {
-                    fetcher = (u, init) => env.ANINEKO_SERVICE.fetch(u, init);
-                } else if (targetUrl.includes("zoko-stream") && env?.ZOKO_SERVICE?.fetch) {
-                    fetcher = (u, init) => env.ZOKO_SERVICE.fetch(u, init);
-                }
-
-                const forwardHeaders = {
-                    "User-Agent": request.headers.get("User-Agent") || "Mozilla/5.0",
-                    "x-cluster-internal": CLUSTER_SECRET
-                };
-                if (request.headers.get("Range")) forwardHeaders["Range"] = request.headers.get("Range");
-
-                const upstreamRes = await fetcher(targetUrl, { headers: forwardHeaders });
-                return new Response(upstreamRes.body, {
-                    status: upstreamRes.status,
-                    headers: {
-                        ...CORS_HEADERS,
-                        "Content-Type": upstreamRes.headers.get("content-type") || "application/vnd.apple.mpegurl"
-                    }
-                });
-            }
-
-            // 11. WebVTT Subtitle Proxy
-            if (pathname === "/api/stream/vtt" || pathname === "/api/proxy/vtt") {
-                const token = url.searchParams.get("t") || url.searchParams.get("token");
-                if (!token) return new Response("Missing token", { status: 400, headers: CORS_HEADERS });
-
-                const clientIp = request.headers.get("cf-connecting-ip") || request.headers.get("x-forwarded-for") || "127.0.0.1";
-                const targetUrl = decryptStreamToken(token, clientIp);
-                if (!targetUrl || !targetUrl.startsWith("http")) {
-                    return new Response("Invalid token", { status: 403, headers: CORS_HEADERS });
-                }
-
-                const res = await fetch(targetUrl, {
-                    headers: { "User-Agent": "Mozilla/5.0", "x-cluster-internal": CLUSTER_SECRET }
-                });
-                return new Response(res.body, {
-                    status: res.status,
-                    headers: { ...CORS_HEADERS, "Content-Type": "text/vtt; charset=utf-8" }
                 });
             }
 
