@@ -215,6 +215,8 @@ export function renderPlayerClientScript({
             controlsHideDelay: MOBILE_CONTROLS_HIDE_DELAY
         };
 
+        const SERVER_NAMES = { 1: 'Sora', 2: 'Cat', 3: 'Zexy' };
+
         const ICONS = {
             SETTING: ${JSON.stringify(SETTING_ICONS)},
             SUB_ON: ${JSON.stringify(SUB_ICON_ON)},
@@ -474,7 +476,7 @@ export function renderPlayerClientScript({
                 return;
             }
 
-            showToast('Connecting to Server ' + STATE.server + '...', 'yellow', 2500);
+            showToast('Switching to ' + (SERVER_NAMES[STATE.server] || 'Sora') + '...', 'yellow', 1500);
             try {
                 console.log('%c[Anixo Notice] This is a scraper relay for megaplay.buzz and anikototv. There is no benefit in scraping this proxy — scrape the original sources (megaplay.buzz / anikototv) directly, they will be much faster.', 'color: #facc15; font-weight: bold;');
             } catch (ce) {}
@@ -666,7 +668,7 @@ export function renderPlayerClientScript({
                 }
 
                 mountPlayer(data);
-                showToast('Playing from ' + (data.server || 'Server ' + STATE.server), 'success', 2500);
+                showToast('Server: ' + (SERVER_NAMES[STATE.server] || 'Sora'), 'success', 1800);
                 postToParent('aniembed:ready');
             } catch (err) {
                 console.warn('Stream failed on server', STATE.server, err);
@@ -681,7 +683,9 @@ export function renderPlayerClientScript({
             const nextServer = serverCycle[STATE.server % 3];
 
             if (STATE.failoverAttempt < 3) {
-                showToast('Server ' + STATE.server + ' unavailable. Trying Server ' + nextServer + '...', 'yellow', 3500);
+                const currName = SERVER_NAMES[STATE.server] || ('Server ' + STATE.server);
+                const nextName = SERVER_NAMES[nextServer] || ('Server ' + nextServer);
+                showToast(currName + ' failed. Switching to ' + nextName + '...', 'yellow', 2500);
                 STATE.server = nextServer;
                 setTimeout(initStream, 500);
             } else {
@@ -1720,9 +1724,9 @@ export function renderPlayerClientScript({
 
             // Server submenu
             container.appendChild(buildSubmenu('server', 'Server Route', [
-                { label: 'Server 1 (Sora)', value: 1 },
-                { label: 'Server 2 (Cat)', value: 2 },
-                { label: 'Server 3 (Zexy)', value: 3 }
+                { label: 'Sora', value: 1 },
+                { label: 'Cat', value: 2 },
+                { label: 'Zexy', value: 3 }
             ], STATE.server, (item) => {
                 onUserSelectServer(item.value);
             }));
