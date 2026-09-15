@@ -159,11 +159,11 @@ export async function resolveMegaPlayStream({ anilistId, malId, episode = 1, tra
         success: true,
         server: "Server 1 (Sora Edge)",
         serverId: 1,
-        streamUrl: data.proxy_stream_url || data.stream_url,
-        rawStreamUrl: data.stream_url,
+        streamUrl: data.stream_url || data.proxy_stream_url,
+        rawStreamUrl: data.stream_url || data.proxy_stream_url,
         fallbackStreams,
         subtitles: (data.subtitles || []).map(s => ({
-            url: s.proxy_url || s.url,
+            url: s.url || s.proxy_url,
             label: s.label || "English",
             default: !!s.default,
             kind: s.kind || "captions"

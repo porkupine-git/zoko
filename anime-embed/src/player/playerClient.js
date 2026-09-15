@@ -25,9 +25,11 @@ export function renderPlayerClientScript({
     autoSkip = 1,
     fragB = '',
     seed = 0,
-    ticket = ''
+    ticket = '',
+    initialStream = null
 }) {
     return `
+        window.__INITIAL_STREAM__ = ${JSON.stringify(initialStream)};
         /* ── Subtitle Settings Storage & Defaults ── */
         const SUB_SETTINGS_STORAGE_KEY = 'aniembed_sub_settings';
         const DEFAULT_SUB_SETTINGS = {
@@ -476,6 +478,30 @@ export function renderPlayerClientScript({
                 return;
             }
 
+            // Check if pre-resolved initial stream data exists (SSR fast startup)
+            if (window.__INITIAL_STREAM__ && window.__INITIAL_STREAM__.streamUrl && (!STATE.server || STATE.server === (window.__INITIAL_STREAM__.serverId || 1))) {
+                const data = window.__INITIAL_STREAM__;
+                window.__INITIAL_STREAM__ = null; // consume once
+                STATE.streamData = data;
+                STATE.failoverAttempt = 0;
+                if (data.resolvedTitle && !STATE.title) {
+                    STATE.title = data.resolvedTitle;
+                    document.title = STATE.title + ' - Episode ' + STATE.currentEp;
+                }
+                if (data.resolvedAniId && !STATE.anilistId) STATE.anilistId = data.resolvedAniId;
+                if (data.resolvedMalId && !STATE.malId) STATE.malId = data.resolvedMalId;
+                if (data.meta && data.meta.episodes && !STATE.totalEpisodes) {
+                    STATE.totalEpisodes = data.meta.episodes;
+                }
+                if (data.serverId && data.serverId !== STATE.server) {
+                    STATE.server = data.serverId;
+                }
+                mountPlayer(data);
+                showToast('Server: ' + (SERVER_NAMES[STATE.server] || 'Sora'), 'success', 1800);
+                postToParent('aniembed:ready');
+                return;
+            }
+
             showToast('Switching to ' + (SERVER_NAMES[STATE.server] || 'Sora') + '...', 'yellow', 1500);
             try {
                 console.log('%c[Anixo Notice] This is a scraper relay for megaplay.buzz and anikototv. There is no benefit in scraping this proxy — scrape the original sources (megaplay.buzz / anikototv) directly, they will be much faster.', 'color: #facc15; font-weight: bold;');
@@ -757,7 +783,10 @@ export function renderPlayerClientScript({
                 const hls = new Hls({
                     enableWorker: true,
                     lowLatencyMode: true,
-                    backBufferLength: 90
+                    capLevelToPlayerSize: true,
+                    backBufferLength: 30,
+                    maxBufferLength: 30,
+                    maxMaxBufferLength: 60
                 });
                 hls.loadSource(data.streamUrl);
                 hls.attachMedia(video);

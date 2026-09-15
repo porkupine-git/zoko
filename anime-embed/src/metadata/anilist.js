@@ -38,6 +38,32 @@ function setCache(key, data, ttlSeconds = 86400) {
     });
 }
 
+async function getEdgeCache(key) {
+    try {
+        if (typeof caches !== 'undefined' && caches?.default) {
+            const req = new Request(`https://cache.anixo.internal/${key}`);
+            const res = await caches.default.match(req);
+            if (res) return await res.json();
+        }
+    } catch {}
+    return null;
+}
+
+async function setEdgeCache(key, data, ttlSeconds = 86400) {
+    try {
+        if (typeof caches !== 'undefined' && caches?.default) {
+            const req = new Request(`https://cache.anixo.internal/${key}`);
+            const res = new Response(JSON.stringify(data), {
+                headers: {
+                    "Content-Type": "application/json",
+                    "Cache-Control": `public, max-age=${ttlSeconds}`
+                }
+            });
+            await caches.default.put(req, res);
+        }
+    } catch {}
+}
+
 /**
  * Searches anime on AniList (with Jikan & Kitsu fallback)
  */
@@ -184,7 +210,13 @@ async function getAnimeByAniListId(aniId) {
     const cached = getCache(cacheKey);
     if (cached) return cached;
 
-    // 1. Try AniList GraphQL
+    const edgeCached = await getEdgeCache(cacheKey);
+    if (edgeCached) {
+        setCache(cacheKey, edgeCached, 86400);
+        return edgeCached;
+    }
+
+    // 1. Try AniList GraphQL (Fast 2s timeout)
     const gqlQuery = `
     query ($id: Int) {
       Media(id: $id, type: ANIME) {
@@ -216,14 +248,17 @@ async function getAnimeByAniListId(aniId) {
     }`;
 
     try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 2000);
         const res = await fetch(ANILIST_GRAPHQL_URL, {
             method: "POST",
             headers: ANILIST_HEADERS,
             body: JSON.stringify({
                 query: gqlQuery,
                 variables: { id: idNum }
-            })
-        });
+            }),
+            signal: controller.signal
+        }).finally(() => clearTimeout(timeoutId));
 
         if (res.ok) {
             const data = await res.json();
@@ -248,7 +283,11 @@ async function getAnimeByAniListId(aniId) {
                 };
 
                 setCache(cacheKey, result, 86400);
-                if (result.idMal) setCache(`mal:${result.idMal}`, result, 86400);
+                setEdgeCache(cacheKey, result, 86400);
+                if (result.idMal) {
+                    setCache(`mal:${result.idMal}`, result, 86400);
+                    setEdgeCache(`mal:${result.idMal}`, result, 86400);
+                }
                 return result;
             }
         }
@@ -328,11 +367,21 @@ async function getAnimeByMalId(malId) {
     const cached = getCache(cacheKey);
     if (cached) return cached;
 
-    // 1. Try Jikan API (Direct MAL database)
+    const edgeCached = await getEdgeCache(cacheKey);
+    if (edgeCached) {
+        setCache(cacheKey, edgeCached, 86400);
+        return edgeCached;
+    }
+
+    // 1. Try Jikan API (Direct MAL database with fast 2s timeout)
     try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 2000);
         const jikanRes = await fetch(`https://api.jikan.moe/v4/anime/${idNum}`, {
-            headers: { "User-Agent": DEFAULT_USER_AGENT }
-        });
+            headers: { "User-Agent": DEFAULT_USER_AGENT },
+            signal: controller.signal
+        }).finally(() => clearTimeout(timeoutId));
+
         if (jikanRes.ok) {
             const jikanData = await jikanRes.json();
             const item = jikanData.data;
@@ -354,6 +403,7 @@ async function getAnimeByMalId(malId) {
                     genres: (item.genres || []).map(g => g.name)
                 };
                 setCache(cacheKey, result, 86400);
+                setEdgeCache(cacheKey, result, 86400);
                 return result;
             }
         }

@@ -32,7 +32,8 @@ export function renderEmbedHtml({
     autoPlay = 1,
     autoNext = 1,
     autoSkip = 1,
-    ticket = ""
+    ticket = "",
+    initialStream = null
 }) {
     const adminConfig = getAdminConfig();
     const monetization = adminConfig?.monetization || {};
@@ -56,7 +57,8 @@ export function renderEmbedHtml({
         autoNext,
         autoSkip,
         fragB,
-        seed
+        seed,
+        initialStream
     });
 
     return `<!DOCTYPE html>
@@ -68,6 +70,8 @@ export function renderEmbedHtml({
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="preload" href="https://cdn.jsdelivr.net/npm/hls.js@latest" as="script">
+    ${initialStream && initialStream.streamUrl ? `<link rel="preload" href="${escapeHtml(initialStream.streamUrl)}" as="fetch" crossorigin>` : ''}
     <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"><\/script>
     ${turnstileEnabled ? '<script src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit" async defer><\/script>' : ''}
     <!-- Profiton Tags -->

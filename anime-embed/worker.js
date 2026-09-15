@@ -272,7 +272,8 @@ export default {
 
         // ── Cloudflare KV Admin State Synchronization ──
         const kv = env?.ANIXO_ADMIN_STORE;
-        if (kv) {
+        const isStreamProxy = pathname === "/api/stream/m3u8" || pathname === "/api/proxy/m3u8" || pathname === "/api/stream/vtt";
+        if (kv && !isStreamProxy) {
             const isAdminRoute = pathname.startsWith("/api/admin") || pathname === "/admin" || pathname === "/dashboard";
             await syncAdminStoreWithKv(kv, isAdminRoute);
         }
@@ -615,7 +616,29 @@ export default {
                 const autoNext = url.searchParams.get("autoNext") !== "0" ? 1 : 0;
                 const autoSkip = url.searchParams.get("autoSkip") !== "0" ? 1 : 0;
 
-                const meta = await getAnimeByAniListId(anilistId);
+                const streamCacheKey = `stream:ani:${anilistId}:${ep}:${track}:${server}`;
+                let initialStream = getMemCache(streamCacheKey);
+
+                // Run metadata fetch and stream pre-resolution in parallel for instant 0ms player startup!
+                const metaPromise = getAnimeByAniListId(anilistId).catch(() => null);
+                const streamPromise = initialStream 
+                    ? Promise.resolve(initialStream)
+                    : resolveStreamWithFailover({
+                        anilistId,
+                        episode: ep,
+                        track,
+                        preferredServer: server
+                    }, env).catch(err => {
+                        console.warn("[Embed] Pre-resolve notice:", err.message);
+                        return null;
+                    });
+
+                const [meta, streamResult] = await Promise.all([metaPromise, streamPromise]);
+                if (streamResult && streamResult.streamUrl) {
+                    initialStream = streamResult;
+                    setMemCache(streamCacheKey, streamResult, 900);
+                }
+
                 recordStreamAccess({ domain: clientReferer, anime: meta?.title || `AniList #${anilistId}`, serverId: server });
                 if (kv && ctx && typeof ctx.waitUntil === "function") {
                     ctx.waitUntil(persistAdminStoreToKv(kv));
@@ -634,6 +657,8 @@ export default {
                 const isCustom = playerParam === "custom" || playerParam === "cinema";
                 const renderFn = isCustom ? renderEmbedHtml : renderJwPlayerHtml;
 
+                const maskedInitialStream = initialStream ? maskStreamResult(initialStream, baseUrl, clientIp) : null;
+
                 const html = renderFn({
                     id: String(anilistId),
                     idType: "ani",
@@ -648,7 +673,8 @@ export default {
                     autoPlay,
                     autoNext,
                     autoSkip,
-                    ticket
+                    ticket,
+                    initialStream: maskedInitialStream
                 });
 
                 return new Response(html, {
@@ -681,7 +707,29 @@ export default {
                 const autoNext = url.searchParams.get("autoNext") !== "0" ? 1 : 0;
                 const autoSkip = url.searchParams.get("autoSkip") !== "0" ? 1 : 0;
 
-                const meta = await getAnimeByMalId(malId);
+                const streamCacheKey = `stream:mal:${malId}:${ep}:${track}:${server}`;
+                let initialStream = getMemCache(streamCacheKey);
+
+                // Run metadata fetch and stream pre-resolution in parallel!
+                const metaPromise = getAnimeByMalId(malId).catch(() => null);
+                const streamPromise = initialStream 
+                    ? Promise.resolve(initialStream)
+                    : resolveStreamWithFailover({
+                        malId,
+                        episode: ep,
+                        track,
+                        preferredServer: server
+                    }, env).catch(err => {
+                        console.warn("[Embed] Pre-resolve notice:", err.message);
+                        return null;
+                    });
+
+                const [meta, streamResult] = await Promise.all([metaPromise, streamPromise]);
+                if (streamResult && streamResult.streamUrl) {
+                    initialStream = streamResult;
+                    setMemCache(streamCacheKey, streamResult, 900);
+                }
+
                 recordStreamAccess({ domain: clientReferer, anime: meta?.title || `MAL #${malId}`, serverId: server });
                 if (kv && ctx && typeof ctx.waitUntil === "function") {
                     ctx.waitUntil(persistAdminStoreToKv(kv));
@@ -700,6 +748,8 @@ export default {
                 const isCustom = playerParam === "custom" || playerParam === "cinema";
                 const renderFn = isCustom ? renderEmbedHtml : renderJwPlayerHtml;
 
+                const maskedInitialStream = initialStream ? maskStreamResult(initialStream, baseUrl, clientIp) : null;
+
                 const html = renderFn({
                     id: String(malId),
                     idType: "mal",
@@ -714,7 +764,8 @@ export default {
                     autoPlay,
                     autoNext,
                     autoSkip,
-                    ticket
+                    ticket,
+                    initialStream: maskedInitialStream
                 });
 
                 return new Response(html, {
@@ -763,6 +814,29 @@ export default {
                 }
 
                 const effectiveId = resolvedAniId || resolvedMalId || idParam || "21";
+                const streamCacheKey = `stream:${resolvedMalId ? `mal:${resolvedMalId}` : `ani:${effectiveId}`}:${ep}:${track}:${server}`;
+                let initialStream = getMemCache(streamCacheKey);
+
+                const streamPromise = initialStream 
+                    ? Promise.resolve(initialStream)
+                    : resolveStreamWithFailover({
+                        anilistId: resolvedAniId,
+                        malId: resolvedMalId,
+                        title: meta?.title,
+                        episode: ep,
+                        track,
+                        preferredServer: server
+                    }, env).catch(err => {
+                        console.warn("[Embed] Pre-resolve notice:", err.message);
+                        return null;
+                    });
+
+                const streamResult = await streamPromise;
+                if (streamResult && streamResult.streamUrl) {
+                    initialStream = streamResult;
+                    setMemCache(streamCacheKey, streamResult, 900);
+                }
+
                 recordStreamAccess({ domain: clientReferer, anime: meta?.title || `Anime #${effectiveId}`, serverId: server });
                 if (kv && ctx && typeof ctx.waitUntil === "function") {
                     ctx.waitUntil(persistAdminStoreToKv(kv));
@@ -781,6 +855,8 @@ export default {
                 const isCustom = playerParam === "custom" || playerParam === "cinema";
                 const renderFn = isCustom ? renderEmbedHtml : renderJwPlayerHtml;
 
+                const maskedInitialStream = initialStream ? maskStreamResult(initialStream, baseUrl, clientIp) : null;
+
                 const html = renderFn({
                     id: String(effectiveId),
                     idType: resolvedAniId ? "ani" : "mal",
@@ -795,7 +871,8 @@ export default {
                     autoPlay,
                     autoNext,
                     autoSkip,
-                    ticket
+                    ticket,
+                    initialStream: maskedInitialStream
                 });
 
                 return new Response(html, {
@@ -929,7 +1006,7 @@ export default {
                 const serverParam = url.searchParams.get("server");
                 const preferredServer = serverParam ? (parseInt(serverParam, 10) || defaultServer) : defaultServer;
 
-                const cacheKey = `stream:${malId || anilistId || ''}:${episode}:${track}:${preferredServer}`;
+                const cacheKey = malId ? `stream:mal:${malId}:${episode}:${track}:${preferredServer}` : `stream:ani:${anilistId || ''}:${episode}:${track}:${preferredServer}`;
                 let result = getMemCache(cacheKey);
                 if (!result) {
                     result = await resolveStreamWithFailover({
@@ -1106,12 +1183,21 @@ export default {
                     forwardHeaders["Range"] = request.headers.get("Range");
                 }
 
-                let upstreamRes = await fetcher(targetUrl, { headers: forwardHeaders });
+                const isLikelyPlaylist = targetUrl.includes(".m3u8") || targetUrl.includes("/m3u8");
+                const fetchInit = {
+                    headers: forwardHeaders,
+                    cf: {
+                        cacheEverything: true,
+                        cacheTtl: isLikelyPlaylist ? 60 : 86400
+                    }
+                };
+
+                let upstreamRes = await fetcher(targetUrl, fetchInit);
 
                 // Automatic failover if blocked
                 if (!upstreamRes.ok && upstreamRes.status !== 206 && targetUrl.includes("nexabloom")) {
                     const fallback = targetUrl.replace("fetch.nexabloom.top", "ncdn.imgnex.top");
-                    const fbRes = await fetcher(fallback, { headers: forwardHeaders });
+                    const fbRes = await fetcher(fallback, fetchInit);
                     if (fbRes.ok || fbRes.status === 206) {
                         upstreamRes = fbRes;
                         targetUrl = fallback;
@@ -1126,7 +1212,7 @@ export default {
                 }
 
                 const contentType = upstreamRes.headers.get("content-type") || "";
-                const isPlaylist = contentType.includes("mpegurl") || contentType.includes("application/x-mpegURL") || contentType.includes("application/vnd.apple.mpegurl") || targetUrl.includes(".m3u8") || targetUrl.includes("/m3u8");
+                const isPlaylist = contentType.includes("mpegurl") || contentType.includes("application/x-mpegURL") || contentType.includes("application/vnd.apple.mpegurl") || isLikelyPlaylist;
 
                 if (isPlaylist) {
                     const text = await upstreamRes.text();
@@ -1159,7 +1245,7 @@ export default {
                         headers: {
                             ...CORS_HEADERS,
                             "Content-Type": "application/vnd.apple.mpegurl",
-                            "Cache-Control": isHoneypot ? "no-cache, no-store" : "public, max-age=60",
+                            "Cache-Control": isHoneypot ? "no-cache, no-store" : "public, max-age=60, s-maxage=60",
                             "X-Scraper-Advisory": SCRAPER_NOTICE_HEADER,
                             ...(isHoneypot ? { "X-Honeypot-Engaged": "1" } : {})
                         }
@@ -1178,7 +1264,7 @@ export default {
                             ...CORS_HEADERS,
                             "Content-Type": "video/MP2T",
                             "Content-Length": stripped.length.toString(),
-                            "Cache-Control": isHoneypot ? "no-cache, no-store" : "public, max-age=86400",
+                            "Cache-Control": isHoneypot ? "no-cache, no-store" : "public, max-age=86400, s-maxage=86400",
                             "X-Scraper-Advisory": SCRAPER_NOTICE_HEADER,
                             ...(isHoneypot ? { "X-Honeypot-Engaged": "1" } : {})
                         }
@@ -1188,7 +1274,7 @@ export default {
                 const responseHeaders = {
                     ...CORS_HEADERS,
                     "Content-Type": contentType || "video/MP2T",
-                    "Cache-Control": isHoneypot ? "no-cache, no-store" : "public, max-age=86400",
+                    "Cache-Control": isHoneypot ? "no-cache, no-store" : "public, max-age=86400, s-maxage=86400",
                     "X-Scraper-Advisory": SCRAPER_NOTICE_HEADER,
                     ...(isHoneypot ? { "X-Honeypot-Engaged": "1" } : {})
                 };

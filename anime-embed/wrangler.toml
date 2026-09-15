@@ -10,8 +10,7 @@ workers_dev = true
 #   { pattern = "anixo.buzz", custom_domain = true }
 # ]
 
-[placement]
-mode = "smart"
+# Smart placement removed: run directly at local edge for 0ms streaming latency
 
 [observability]
 enabled = true

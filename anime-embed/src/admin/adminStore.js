@@ -521,8 +521,8 @@ export async function syncAdminStoreWithKv(kv, force = false) {
     if (!kv) return;
     const now = Date.now();
     if (kvLoaded && !force) {
-        if (hasLocalConfigModifications && (now - state.updatedAt < 5000)) return;
-        if (now - lastSyncTime < 5000) return;
+        if (hasLocalConfigModifications && (now - state.updatedAt < 60000)) return;
+        if (now - lastSyncTime < 60000) return;
     }
     try {
         const saved = await kv.get("anixo_admin_persistent_state", "json");

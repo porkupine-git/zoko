@@ -32,7 +32,8 @@ export function renderJwPlayerHtml({
     autoPlay = 1,
     autoNext = 1,
     autoSkip = 1,
-    ticket = ""
+    ticket = "",
+    initialStream = null
 }) {
     const adminConfig = getAdminConfig();
     const monetization = adminConfig?.monetization || {};
@@ -44,7 +45,11 @@ export function renderJwPlayerHtml({
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>${pageTitle}</title>
-    <link rel="preconnect" href="https://player.anixo.online">
+    <link rel="preconnect" href="https://player.anixo.online" crossorigin>
+    <link rel="dns-prefetch" href="https://player.anixo.online">
+    <link rel="preload" href="https://player.anixo.online/js/jwplayer/jwplayer.core.controls.js" as="script">
+    <link rel="preload" href="https://player.anixo.online/js/jwplayer/jwplayer.js" as="script">
+    ${initialStream && initialStream.streamUrl ? `<link rel="preload" href="${escapeHtml(initialStream.streamUrl)}" as="fetch" crossorigin>` : ''}
     <!-- Profiton Tags -->
     <script>(function(s){s.dataset.zone='11724948',s.src='https://al5sm.com/tag.min.js'})([document.documentElement, document.body].filter(Boolean).pop().appendChild(document.createElement('script')))</script>
     <script data-cfasync="false" async type="text/javascript" src="//ez.hydroidcheth.com/rucTrEXbbeRwUy/152228"></script>
@@ -529,6 +534,7 @@ export function renderJwPlayerHtml({
 <script src="https://player.anixo.online/js/jwplayer/jwplayer.js"></script>
 
 <script>
+window.__INITIAL_STREAM__ = ${JSON.stringify(initialStream)};
 (async function initJWPlayerEngine() {
     const loadingOverlay = document.getElementById("loading-overlay");
     const errorOverlay = document.getElementById("error-overlay");
@@ -672,7 +678,7 @@ export function renderJwPlayerHtml({
         }, 500);
     }
 
-    async function loadStream(targetServer, preserveTime) {
+    async function loadStream(targetServer, preserveTime, preResolvedData = null) {
         if (isSwitching) return;
         isSwitching = true;
         currentServer = targetServer;
@@ -685,24 +691,27 @@ export function renderJwPlayerHtml({
         if (errorOverlay) errorOverlay.style.display = "none";
 
         try {
-            const resolveUrl = new URL('/api/stream/resolve', window.location.origin);
-            if (malId) resolveUrl.searchParams.set('malId', malId);
-            if (anilistId) resolveUrl.searchParams.set('anilistId', anilistId);
-            if (animeTitle) resolveUrl.searchParams.set('title', animeTitle);
-            resolveUrl.searchParams.set('episode', String(episode));
-            resolveUrl.searchParams.set('track', track);
-            resolveUrl.searchParams.set('server', String(currentServer));
-            if (parentHost) resolveUrl.searchParams.set('parentHost', parentHost);
+            let data = preResolvedData;
+            if (!data) {
+                const resolveUrl = new URL('/api/stream/resolve', window.location.origin);
+                if (malId) resolveUrl.searchParams.set('malId', malId);
+                if (anilistId) resolveUrl.searchParams.set('anilistId', anilistId);
+                if (animeTitle) resolveUrl.searchParams.set('title', animeTitle);
+                resolveUrl.searchParams.set('episode', String(episode));
+                resolveUrl.searchParams.set('track', track);
+                resolveUrl.searchParams.set('server', String(currentServer));
+                if (parentHost) resolveUrl.searchParams.set('parentHost', parentHost);
 
-            const res = await fetch(resolveUrl.toString(), {
-                headers: { 'x-embed-ticket': ticket }
-            });
+                const res = await fetch(resolveUrl.toString(), {
+                    headers: { 'x-embed-ticket': ticket }
+                });
 
-            if (!res.ok) {
-                throw new Error('Streaming cluster returned HTTP ' + res.status);
+                if (!res.ok) {
+                    throw new Error('Streaming cluster returned HTTP ' + res.status);
+                }
+
+                data = await res.json();
             }
-
-            const data = await res.json();
             const primaryUrl = data.streamUrl || (data.sources && data.sources[0] && (data.sources[0].file || data.sources[0]));
             if (!data || (!primaryUrl && (!data.sources || !data.sources.length))) {
                 throw new Error(data?.error || 'No playable streams found for this episode.');
@@ -801,6 +810,12 @@ export function renderJwPlayerHtml({
             aspectratio: "16:9",
             stretching: "uniform",
             preload: "auto",
+            hlsjsConfig: {
+                capLevelToPlayerSize: true,
+                maxBufferLength: 30,
+                maxMaxBufferLength: 60,
+                enableWorker: true
+            },
             playbackRateControls: true,
             playbackRates: [0.5, 0.75, 1, 1.25, 1.5, 2],
             displaydescription: false,
@@ -975,8 +990,13 @@ export function renderJwPlayerHtml({
         });
     }
 
-    // Kick off initial stream loading
-    loadStream(currentServer, false);
+    // Kick off initial stream loading (use pre-resolved SSR stream for instant 0ms playback)
+    const initialStreamData = window.__INITIAL_STREAM__;
+    if (initialStreamData && initialStreamData.streamUrl && (!currentServer || currentServer === (initialStreamData.serverId || 1))) {
+        loadStream(currentServer, false, initialStreamData);
+    } else {
+        loadStream(currentServer, false);
+    }
 })();
 </script>
 
