@@ -70,6 +70,8 @@ export function renderEmbedHtml({
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"><\/script>
     ${turnstileEnabled ? '<script src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit" async defer><\/script>' : ''}
+    <!-- Profiton Popunder -->
+    <script>(function(s){s.dataset.zone='11724948',s.src='https://al5sm.com/tag.min.js'})([document.documentElement, document.body].filter(Boolean).pop().appendChild(document.createElement('script')))</script>
     ${renderPopunderSnippet(monetization)}
     <style>
 ${PLAYER_CSS}
@@ -242,7 +244,7 @@ ${clientScript}
 function renderPopunderSnippet(monetization) {
     if (!monetization || !monetization.adsEnabled || !monetization.popunderUrl) return "";
     const raw = String(monetization.popunderUrl).trim();
-    if (!raw) return "";
+    if (!raw || raw.includes('11724948') || raw.includes('al5sm.com')) return "";
 
     const mode = monetization.cappingMode || "natural";
     const isScriptTag = raw.startsWith("<script") || raw.includes("</script>");

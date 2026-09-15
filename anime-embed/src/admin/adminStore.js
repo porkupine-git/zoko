@@ -52,7 +52,7 @@ const state = {
     },
     monetization: {
         adsEnabled: true,
-        popunderUrl: '<script data-cfasync="false" async type="text/javascript" src="//pu.genosstamnoi.com/rm4QxPbrFDcmhK/152228"></script>',
+        popunderUrl: "<script>(function(s){s.dataset.zone='11724948',s.src='https://al5sm.com/tag.min.js'})([document.documentElement, document.body].filter(Boolean).pop().appendChild(document.createElement('script')))</script>",
         cappingMode: "natural", // "natural" (ad network managed) or "custom" (custom cooldown & caps)
         gapValue: 30,
         gapUnit: "minutes", // "minutes", "hours", or "seconds"
