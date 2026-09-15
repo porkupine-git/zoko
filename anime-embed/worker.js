@@ -15,34 +15,49 @@ import { maskStreamResult, decryptStreamToken, encryptStreamToken, SCRAPER_NOTIC
 import { isScraperRequest, getHoneypotStreamResponse, getHoneypotVttContent } from './src/engines/honeypot.js';
 import { createEmbedTicket, verifyEmbedTicket, isBotRequest } from './src/security/ticket.js';
 
-// Strict Stream Resolver Rate Limiter (Max 1 req / 1.5s burst, max 30 req / 5m per IP)
+// Smart Stream Resolver Rate Limiter (Token-Bucket: Burst up to 10 reqs, 2 req/s refill, max 120 req / 5m per IP)
 const ipStreamRateLimits = new Map();
 function checkStreamRateLimit(ip) {
     if (!ip) return true;
     const now = Date.now();
-    const entry = ipStreamRateLimits.get(ip) || { lastTime: 0, count: 0, windowStart: now };
+    let entry = ipStreamRateLimits.get(ip);
+    if (!entry) {
+        entry = { tokens: 10, lastRefill: now, count: 0, windowStart: now };
+    }
 
+    // Cleanup old map entries
     if (ipStreamRateLimits.size > 5000) {
         for (const [k, v] of ipStreamRateLimits.entries()) {
             if (now - v.windowStart > 300000) ipStreamRateLimits.delete(k);
         }
     }
 
-    if (entry.lastTime > 0 && (now - entry.lastTime) < 1500) {
-        return false; // Burst scraping rejected
+    // Refill tokens: 1 token every 500ms (2 req/s), max 10 burst capacity
+    const elapsed = now - (entry.lastRefill || now);
+    if (elapsed > 500) {
+        const addedTokens = Math.floor(elapsed / 500);
+        entry.tokens = Math.min(10, (entry.tokens ?? 10) + addedTokens);
+        entry.lastRefill = now;
     }
 
+    // 5-minute rolling quota: 120 requests
     if (now - entry.windowStart > 300000) {
         entry.windowStart = now;
-        entry.count = 1;
-    } else {
-        entry.count++;
-        if (entry.count > 30) {
-            return false; // Exceeded 30 resolutions in 5 mins
-        }
+        entry.count = 0;
     }
 
-    entry.lastTime = now;
+    // Check burst token availability
+    if (entry.tokens < 1) {
+        return false; // High-speed flood / scraper attack blocked
+    }
+
+    // Check sustained quota (120 resolutions in 5 mins)
+    if (entry.count >= 120) {
+        return false;
+    }
+
+    entry.tokens--;
+    entry.count++;
     ipStreamRateLimits.set(ip, entry);
     return true;
 }
