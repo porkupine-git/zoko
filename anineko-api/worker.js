@@ -101,14 +101,17 @@ function isOriginAllowed(request) {
     if (!ref) return true;
 
     if (
+        ref.includes("vidcloud") ||
         ref.includes("anigo") ||
         ref.includes("anixo") ||
+        ref.includes("zoko") ||
         ref.includes("localhost") ||
         ref.includes("127.0.0.1") ||
         ref.includes("192.168.") ||
         ref.includes("10.") ||
         ref.includes("172.") ||
         ref.includes("pages.dev") ||
+        ref.includes("workers.dev") ||
         ref.includes("vercel.app") ||
         ref.includes("netlify.app") ||
         ref.includes("onrender.com") ||
@@ -1123,21 +1126,21 @@ export default {
             return new Response(null, { headers: CORS_HEADERS });
         }
 
-        // Security: Leech Firewall (Blocks unauthorized 3rd-party domains)
-        if (!isOriginAllowed(request)) {
+        const url = new URL(request.url);
+        const baseUrl = url.origin;
+        const pathname = url.pathname;
+        const colo = request.cf?.colo || "EDGE";
+
+        // Security: Leech Firewall (Blocks unauthorized 3rd-party domains, exempts proxy playback)
+        const isProxyPlayback = pathname.startsWith("/api/proxy") || pathname.startsWith("/api/stream");
+        if (!isProxyPlayback && !isOriginAllowed(request)) {
             return new Response("Access Denied: Unauthorized leeching blocked by Anixo Shield", {
                 status: 403,
                 headers: { ...CORS_HEADERS, "Content-Type": "text/plain" }
             });
         }
 
-        const url = new URL(request.url);
-        const baseUrl = url.origin;
-        const pathname = url.pathname;
-        const colo = request.cf?.colo || "EDGE";
-
         // Security: Datacenter & Cloud Hosting IP Blocker (Blocks automated scraping servers, exempts proxy playback)
-        const isProxyPlayback = pathname.startsWith("/api/proxy");
         if (!isProxyPlayback && isDatacenterIp(request)) {
             return new Response("Access Denied: Datacenter & Cloud hosting networks are blocked by Anixo Shield.", {
                 status: 403,
