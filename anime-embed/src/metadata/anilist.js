@@ -282,11 +282,14 @@ async function getAnimeByAniListId(aniId) {
                     nextEpisode: m.nextAiringEpisode?.episode
                 };
 
-                setCache(cacheKey, result, 86400);
-                setEdgeCache(cacheKey, result, 86400);
+                const isReleasing = m.status === "RELEASING" || Boolean(m.nextAiringEpisode);
+                const ttl = isReleasing ? 300 : 86400; // 5 mins for releasing anime, 24h for finished anime
+
+                setCache(cacheKey, result, ttl);
+                setEdgeCache(cacheKey, result, ttl);
                 if (result.idMal) {
-                    setCache(`mal:${result.idMal}`, result, 86400);
-                    setEdgeCache(`mal:${result.idMal}`, result, 86400);
+                    setCache(`mal:${result.idMal}`, result, ttl);
+                    setEdgeCache(`mal:${result.idMal}`, result, ttl);
                 }
                 return result;
             }
@@ -402,8 +405,10 @@ async function getAnimeByMalId(malId) {
                     score: item.score ? Math.round(item.score * 10) : null,
                     genres: (item.genres || []).map(g => g.name)
                 };
-                setCache(cacheKey, result, 86400);
-                setEdgeCache(cacheKey, result, 86400);
+                const isReleasing = item.status === "Currently Airing" || item.airing;
+                const ttl = isReleasing ? 300 : 86400; // 5 mins for airing anime, 24h for completed anime
+                setCache(cacheKey, result, ttl);
+                setEdgeCache(cacheKey, result, ttl);
                 return result;
             }
         }
