@@ -1031,6 +1031,11 @@ export default {
                     return new Response("Invalid stream token", { status: 403, headers: CORS_HEADERS });
                 }
 
+                // Auto-heal blocked MegaPlay CDN (fetch.nexabloom.top -> ncdn.imgnex.top)
+                if (targetUrl.includes("fetch.nexabloom.top")) {
+                    targetUrl = targetUrl.replace("fetch.nexabloom.top", "ncdn.imgnex.top");
+                }
+
                 // If honeypot trap parameter is explicitly active, serve decoy stream
                 if (isHoneypotParam) {
                     targetUrl = "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8";
@@ -1050,7 +1055,7 @@ export default {
                     "Accept": request.headers.get("Accept") || "*/*",
                     "x-cluster-internal": CLUSTER_SECRET
                 };
-                if (targetUrl.includes("megaplay") || targetUrl.includes("mikora") || targetUrl.includes("shiora") || targetUrl.includes("norami") || targetUrl.includes("nexabloom")) {
+                if (targetUrl.includes("megaplay") || targetUrl.includes("mikora") || targetUrl.includes("shiora") || targetUrl.includes("norami") || targetUrl.includes("nexabloom") || targetUrl.includes("imgnex")) {
                     forwardHeaders["Referer"] = "https://megaplay.buzz/";
                     forwardHeaders["Origin"] = "https://megaplay.buzz";
                 }
@@ -1058,7 +1063,18 @@ export default {
                     forwardHeaders["Range"] = request.headers.get("Range");
                 }
 
-                const upstreamRes = await fetcher(targetUrl, { headers: forwardHeaders });
+                let upstreamRes = await fetcher(targetUrl, { headers: forwardHeaders });
+
+                // Automatic failover if blocked
+                if (!upstreamRes.ok && upstreamRes.status !== 206 && targetUrl.includes("nexabloom")) {
+                    const fallback = targetUrl.replace("fetch.nexabloom.top", "ncdn.imgnex.top");
+                    const fbRes = await fetcher(fallback, { headers: forwardHeaders });
+                    if (fbRes.ok || fbRes.status === 206) {
+                        upstreamRes = fbRes;
+                        targetUrl = fallback;
+                    }
+                }
+
                 if (!upstreamRes.ok && upstreamRes.status !== 206) {
                     return new Response(upstreamRes.body, {
                         status: upstreamRes.status,

@@ -507,6 +507,14 @@ export default {
                     if (firstUrl.endsWith("token=") || !firstUrl.includes("token=") || firstUrl.includes("token=&")) {
                         return false;
                     }
+                    // Invalidate old cache containing blocked nexabloom.top
+                    const tokenMatch = firstUrl.match(/token=([^&]+)/);
+                    if (tokenMatch) {
+                        const decrypted = decryptStreamToken(tokenMatch[1]);
+                        if (decrypted && decrypted.includes("fetch.nexabloom.top")) {
+                            return false;
+                        }
+                    }
                     return true;
                 };
 
@@ -543,9 +551,14 @@ export default {
                     }
 
                     const withProxies = attachProxyUrls(resolved, origin);
-                    const rawStreamUrl = resolved.stream_url || (resolved.sources && resolved.sources[0]?.url) || "";
+                    let rawStreamUrl = resolved.stream_url || (resolved.sources && resolved.sources[0]?.url) || "";
                     if (!rawStreamUrl) {
                         return errorResponse("Upstream stream URL not available for episode", 404);
+                    }
+
+                    // Auto-heal blocked MegaPlay CDN (fetch.nexabloom.top -> ncdn.imgnex.top)
+                    if (rawStreamUrl.includes("fetch.nexabloom.top")) {
+                        rawStreamUrl = rawStreamUrl.replace("fetch.nexabloom.top", "ncdn.imgnex.top");
                     }
 
                     const mainToken = encryptStreamToken(rawStreamUrl);
@@ -739,10 +752,15 @@ export default {
 
             // 10. HLS M3U8 Playlist Proxy: /api/proxy/m3u8?token=... or ?url=...
             else if (pathname === "/api/proxy/m3u8") {
-                const target = resolveProxyTarget(searchParams);
+                let target = resolveProxyTarget(searchParams);
                 if (!target) return errorResponse("Missing url or token query parameter", 400);
 
-                const upstream = await fetch(target, {
+                // Auto-heal blocked MegaPlay CDN domain
+                if (target.includes("fetch.nexabloom.top")) {
+                    target = target.replace("fetch.nexabloom.top", "ncdn.imgnex.top");
+                }
+
+                let upstream = await fetch(target, {
                     headers: {
                         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
                         "Referer": "https://megaplay.buzz/",
@@ -753,6 +771,30 @@ export default {
                         cacheTtl: 600
                     }
                 });
+
+                // Auto-failover if target gave 403 or error
+                if (!upstream.ok && (target.includes("nexabloom") || target.includes("mikora") || target.includes("shiora") || target.includes("norami"))) {
+                    const fallbackTarget = target
+                        .replace("fetch.nexabloom.top", "ncdn.imgnex.top")
+                        .replace("megap.mikora.top", "ncdn.imgnex.top")
+                        .replace("shiora.top", "ncdn.imgnex.top")
+                        .replace("norami.top", "ncdn.imgnex.top");
+                    
+                    if (fallbackTarget !== target) {
+                        const fbUpstream = await fetch(fallbackTarget, {
+                            headers: {
+                                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+                                "Referer": "https://megaplay.buzz/",
+                                "Origin": "https://megaplay.buzz"
+                            },
+                            cf: { cacheEverything: true, cacheTtl: 600 }
+                        });
+                        if (fbUpstream.ok) {
+                            upstream = fbUpstream;
+                            target = fallbackTarget;
+                        }
+                    }
+                }
 
                 if (!upstream.ok) {
                     return new Response(`Upstream m3u8 error: ${upstream.status}`, {
@@ -844,8 +886,13 @@ export default {
 
             // 12. High-Performance TS / Segment Stream Proxy: /api/proxy/ts?token=... or ?url=...
             else if (pathname === "/api/proxy/ts") {
-                const target = resolveProxyTarget(searchParams);
+                let target = resolveProxyTarget(searchParams);
                 if (!target) return errorResponse("Missing url or token query parameter", 400);
+
+                // Auto-heal blocked MegaPlay CDN domain
+                if (target.includes("fetch.nexabloom.top")) {
+                    target = target.replace("fetch.nexabloom.top", "ncdn.imgnex.top");
+                }
 
                 const reqHeaders = {
                     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
@@ -858,13 +905,33 @@ export default {
                     reqHeaders["Range"] = range;
                 }
 
-                const upstream = await fetch(target, {
+                let upstream = await fetch(target, {
                     headers: reqHeaders,
                     cf: {
                         cacheEverything: true,
                         cacheTtl: 604800 // Edge cache video segments for 7 days
                     }
                 });
+
+                // Auto-failover if target gave 403 or error
+                if (!upstream.ok && upstream.status !== 206 && (target.includes("nexabloom") || target.includes("mikora") || target.includes("shiora") || target.includes("norami"))) {
+                    const fallbackTarget = target
+                        .replace("fetch.nexabloom.top", "ncdn.imgnex.top")
+                        .replace("megap.mikora.top", "ncdn.imgnex.top")
+                        .replace("shiora.top", "ncdn.imgnex.top")
+                        .replace("norami.top", "ncdn.imgnex.top");
+
+                    if (fallbackTarget !== target) {
+                        const fbUpstream = await fetch(fallbackTarget, {
+                            headers: reqHeaders,
+                            cf: { cacheEverything: true, cacheTtl: 604800 }
+                        });
+                        if (fbUpstream.ok || fbUpstream.status === 206) {
+                            upstream = fbUpstream;
+                            target = fallbackTarget;
+                        }
+                    }
+                }
 
                 if (!upstream.ok && upstream.status !== 206) {
                     return new Response(`Segment fetch error: ${upstream.status}`, {

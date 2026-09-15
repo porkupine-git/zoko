@@ -119,7 +119,7 @@ export async function extractPlayerIds(embedUrl) {
  * @param {string} [refererUrl] - Optional referer header
  * @returns {Promise<any>}
  */
-export async function getSources(id, server = "tcdn", refererUrl = "") {
+export async function getSources(id, server = "bcdn", refererUrl = "") {
     let url = `${MEGAPLAY_BASE}/stream/getSourcesNew?id=${encodeURIComponent(id)}`;
     if (server) {
         url += `&s=${encodeURIComponent(server)}`;
@@ -150,10 +150,10 @@ export async function getSources(id, server = "tcdn", refererUrl = "") {
  * @param {string} [server="tcdn"] - 'tcdn' or 'bcdn' (default 'tcdn')
  * @returns {Promise<any>}
  */
-export async function resolveFromEmbedUrl(embedUrl, server = "tcdn") {
+export async function resolveFromEmbedUrl(embedUrl, server = "bcdn") {
     const ids = await extractPlayerIds(embedUrl);
     const targetId = ids.dataId || ids.realId;
-    const rawData = await getSources(targetId, server, embedUrl);
+    let rawData = await getSources(targetId, server, embedUrl);
 
     let masterFile = rawData.sources?.file || (Array.isArray(rawData.sources) ? rawData.sources[0]?.file : null);
     if (!masterFile && rawData.enc) {
@@ -161,6 +161,11 @@ export async function resolveFromEmbedUrl(embedUrl, server = "tcdn") {
         if (dec?.file) {
             masterFile = dec.file;
         }
+    }
+
+    // Auto-heal blocked MegaPlay CDN domains (fetch.nexabloom.top -> ncdn.imgnex.top)
+    if (masterFile && masterFile.includes("fetch.nexabloom.top")) {
+        masterFile = masterFile.replace("fetch.nexabloom.top", "ncdn.imgnex.top");
     }
 
     return {
@@ -204,7 +209,7 @@ export async function resolveFromEmbedUrl(embedUrl, server = "tcdn") {
  * @param {string} [track="sub"] - 'sub' or 'dub'
  * @param {string} [server="tcdn"] - 'tcdn' or 'bcdn' (default 'tcdn')
  */
-export async function resolveFromMal(malId, episode = 1, track = "sub", server = "tcdn") {
+export async function resolveFromMal(malId, episode = 1, track = "sub", server = "bcdn") {
     const lang = track.toLowerCase() === "dub" ? "dub" : "sub";
     const embedUrl = `${MEGAPLAY_BASE}/stream/mal/${malId}/${episode}/${lang}`;
     const data = await resolveFromEmbedUrl(embedUrl, server);
@@ -274,7 +279,7 @@ export async function mapAniToMal(aniId) {
  * @param {string} [track="sub"] - 'sub' or 'dub'
  * @param {string} [server="tcdn"] - 'tcdn' or 'bcdn' (default 'tcdn')
  */
-export async function resolveFromAnilist(aniId, episode = 1, track = "sub", server = "tcdn") {
+export async function resolveFromAnilist(aniId, episode = 1, track = "sub", server = "bcdn") {
     const lang = track.toLowerCase() === "dub" ? "dub" : "sub";
     const embedUrl = `${MEGAPLAY_BASE}/stream/ani/${aniId}/${episode}/${lang}`;
     
@@ -310,7 +315,7 @@ export async function resolveFromAnilist(aniId, episode = 1, track = "sub", serv
  * @param {string} [track="sub"] - 'sub' or 'dub'
  * @param {string} [server="tcdn"] - 'tcdn' or 'bcdn' (default 'tcdn')
  */
-export async function resolveFromCatalogId(catalogEpId, track = "sub", server = "tcdn") {
+export async function resolveFromCatalogId(catalogEpId, track = "sub", server = "bcdn") {
     const lang = track.toLowerCase() === "dub" ? "dub" : "sub";
     const embedUrl = `${MEGAPLAY_BASE}/stream/s-2/${catalogEpId}/${lang}`;
     const data = await resolveFromEmbedUrl(embedUrl, server);
