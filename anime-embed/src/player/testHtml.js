@@ -313,6 +313,13 @@ export function renderTestHtml(baseUrl = "") {
                     </select>
                 </div>
                 <div class="form-group">
+                    <label>Player Engine</label>
+                    <select id="player-type" class="form-control">
+                        <option value="jw" selected>JW Player (Default)</option>
+                        <option value="custom">Cinema (Custom)</option>
+                    </select>
+                </div>
+                <div class="form-group">
                     <label>Sandbox Mode</label>
                     <select id="sandbox-mode" class="form-control">
                         <option value="none">No Sandbox (Normal)</option>
@@ -367,11 +374,13 @@ export function renderTestHtml(baseUrl = "") {
             var ep = document.getElementById('ep-num').value || '1';
             var track = document.getElementById('track').value || 'sub';
             var server = document.getElementById('server').value || '1';
+            var player = document.getElementById('player-type') ? document.getElementById('player-type').value : 'jw';
 
             var path = (idType === 'mal') ? ('/embed/mal/' + id + '/' + ep) : ('/embed/ani/' + id + '/' + ep);
             var url = new URL(path, baseOrigin);
             if (track) url.searchParams.set('track', track);
             if (server && server !== '1') url.searchParams.set('server', server);
+            if (player === 'custom') url.searchParams.set('player', 'custom');
             return url.toString();
         }
 

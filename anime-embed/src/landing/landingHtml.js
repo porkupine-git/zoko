@@ -1230,6 +1230,11 @@ export function renderLandingHtml(baseUrl = "") {
                             <option value="2">Server 2 (Neko • Fast CDN)</option>
                             <option value="3">Server 3 (Zozo • Edge Engine)</option>
                         </select>
+
+                        <select id="stream-player" class="config-select" onchange="refreshStreamRoute()">
+                            <option value="jw" selected>Player: JW Player (Default)</option>
+                            <option value="custom">Player: Cinema (Custom)</option>
+                        </select>
                     </div>
 
                     <button type="button" class="btn-mount-stream" onclick="mountActiveStream()">
@@ -1842,11 +1847,14 @@ export function renderLandingHtml(baseUrl = "") {
             const ep = document.getElementById('stream-ep').value.trim() || '1';
             const track = document.getElementById('stream-track').value;
             const server = document.getElementById('stream-server').value;
+            const playerEl = document.getElementById('stream-player');
+            const player = playerEl ? playerEl.value : 'jw';
 
             const path = (catalog === 'mal' ? '/embed/mal/' : '/embed/ani/') + id + '/' + ep;
             const params = new URLSearchParams();
             if (track !== 'sub') params.set('track', track);
             if (server !== '1') params.set('server', server);
+            if (player === 'custom') params.set('player', 'custom');
 
             const qs = params.toString() ? ('?' + params.toString()) : '';
             const fullUrl = window.location.origin + path + qs;

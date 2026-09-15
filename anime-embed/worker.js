@@ -303,10 +303,13 @@ export default {
         init: function(opts) {
             console.log("[AniXo SDK] Initialized", opts);
         },
-        createEmbedUrl: function(type, id, ep, track) {
+        createEmbedUrl: function(type, id, ep, track, player) {
             var host = "";
             try { host = window.location.hostname; } catch(e) {}
-            var q = host ? ("?parentHost=" + encodeURIComponent(host)) : "";
+            var p = new URLSearchParams();
+            if (host) p.set("parentHost", host);
+            if (player && player !== "jw") p.set("player", player);
+            var q = p.toString() ? ("?" + p.toString()) : "";
             return "${baseUrl}/embed/" + (type || "ani") + "/" + id + "/" + (ep || 1) + (track ? ("/" + track) : "") + q;
         }
     };

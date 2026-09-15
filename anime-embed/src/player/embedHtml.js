@@ -65,23 +65,6 @@ export function renderEmbedHtml({
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>${pageTitle}</title>
-    <!-- Instant Client-Side Player Preference Check -->
-    <script>
-    (function() {
-        try {
-            var params = new URLSearchParams(window.location.search);
-            var forced = params.get('player');
-            if (!forced) {
-                var pref = localStorage.getItem('anixo_player_preference');
-                if (pref === 'jw' || !pref) {
-                    var u = new URL(window.location.href);
-                    u.searchParams.set('player', 'jw');
-                    window.location.replace(u.toString());
-                }
-            }
-        } catch(e) {}
-    })();
-    </script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -90,49 +73,10 @@ export function renderEmbedHtml({
     ${renderPopunderSnippet(monetization)}
     <style>
 ${PLAYER_CSS}
-        .cp-switch-jw-pill {
-            position: absolute;
-            top: 14px;
-            right: 14px;
-            z-index: 60;
-            background: rgba(18, 18, 22, 0.85);
-            backdrop-filter: blur(8px);
-            -webkit-backdrop-filter: blur(8px);
-            border: 1px solid rgba(255, 255, 255, 0.14);
-            border-radius: 20px;
-            padding: 5px 12px;
-            color: #e4e4e7;
-            font-size: 11.5px;
-            font-weight: 600;
-            cursor: pointer;
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-            opacity: 0.85;
-            transition: opacity 0.2s ease, background 0.2s ease, transform 0.15s ease;
-            user-select: none;
-        }
-        .cp-switch-jw-pill:hover {
-            opacity: 1;
-            background: rgba(32, 32, 38, 0.95);
-            transform: scale(1.03);
-            border-color: rgba(255, 255, 255, 0.28);
-        }
-        #player-root:not(.cp-controls-visible):not(.cp-settings-open) .cp-switch-jw-pill {
-            opacity: 0;
-            pointer-events: none;
-            transition: opacity 0.3s ease;
-        }
     </style>
 </head>
 <body>
     <div id="player-root" class="cp-controls-visible">
-        <!-- Quick Switch to JW Player Pill -->
-        <button class="cp-switch-jw-pill" type="button" aria-label="Switch to JW Player" title="Switch to JW Player (Default)" onclick="(function(){ try{localStorage.setItem('anixo_player_preference','jw');}catch(e){} var v=document.getElementById('cp-video'); var t=v&&v.currentTime?Math.floor(v.currentTime):0; var u=new URL(window.location.href); u.searchParams.set('player','jw'); if(t>0)u.searchParams.set('time',String(t)); window.location.replace(u.toString()); })()">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="6 3 20 12 6 21 6 3"/></svg>
-            <span>JW Player</span>
-        </button>
-
         <!-- Dynamic Anti-Scraper Session Shield -->
         <div id="cp-core-shield" data-sh="${escapeHtml(fragA)}" style="display:none;" aria-hidden="true"></div>
         <script>

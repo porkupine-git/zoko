@@ -44,23 +44,6 @@ export function renderJwPlayerHtml({
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>${pageTitle}</title>
-    <!-- Instant Client-Side Player Preference Check -->
-    <script>
-    (function() {
-        try {
-            var params = new URLSearchParams(window.location.search);
-            var forced = params.get('player');
-            if (!forced) {
-                var pref = localStorage.getItem('anixo_player_preference');
-                if (pref === 'custom') {
-                    var u = new URL(window.location.href);
-                    u.searchParams.set('player', 'custom');
-                    window.location.replace(u.toString());
-                }
-            }
-        } catch(e) {}
-    })();
-    </script>
     <link rel="preconnect" href="https://player.anixo.online">
     ${renderPopunderSnippet(monetization)}
     <style>
@@ -307,41 +290,6 @@ export function renderJwPlayerHtml({
             transition: background 0.15s ease;
         }
         .error-btn:hover { background: #1d4ed8; }
-
-        /* Top Player Switcher Floating Pill (Mobile & Desktop friendly) */
-        .player-badge-btn {
-            position: absolute;
-            top: 14px;
-            right: 14px;
-            z-index: 50;
-            background: rgba(18, 18, 22, 0.85);
-            backdrop-filter: blur(8px);
-            -webkit-backdrop-filter: blur(8px);
-            border: 1px solid rgba(255, 255, 255, 0.14);
-            border-radius: 20px;
-            padding: 5px 12px;
-            color: #e4e4e7;
-            font-size: 11.5px;
-            font-weight: 600;
-            cursor: pointer;
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-            opacity: 0.85;
-            transition: opacity 0.2s ease, background 0.2s ease, transform 0.15s ease;
-            user-select: none;
-        }
-        .player-badge-btn:hover {
-            opacity: 1;
-            background: rgba(32, 32, 38, 0.95);
-            transform: scale(1.03);
-            border-color: rgba(255, 255, 255, 0.28);
-        }
-        .player-badge-btn svg {
-            width: 13px;
-            height: 13px;
-            stroke-width: 2.2;
-        }
     </style>
 </head>
 <body>
@@ -349,21 +297,6 @@ export function renderJwPlayerHtml({
 <div class="anixo-player-wrapper">
     <!-- JW Player Target Container -->
     <div id="jwplayer-container"></div>
-
-    <!-- Quick Switch to Cinema Player Pill -->
-    <button class="player-badge-btn" id="btn-switch-cinema" type="button" title="Switch to Cinema Player">
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
-            <rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18"></rect>
-            <line x1="7" y1="2" x2="7" y2="22"></line>
-            <line x1="17" y1="2" x2="17" y2="22"></line>
-            <line x1="2" y1="12" x2="22" y2="12"></line>
-            <line x1="2" y1="7" x2="7" y2="7"></line>
-            <line x1="2" y1="17" x2="7" y2="17"></line>
-            <line x1="17" y1="17" x2="22" y2="17"></line>
-            <line x1="17" y1="7" x2="22" y2="7"></line>
-        </svg>
-        <span>Cinema Player</span>
-    </button>
 
     <!-- Fast Loading Spinner -->
     <div class="loading-overlay" id="loading-overlay">
@@ -399,7 +332,6 @@ export function renderJwPlayerHtml({
     const aniskipContainer = document.getElementById("aniskip-container");
     const aniskipBtn = document.getElementById("aniskip-btn");
     const aniskipText = document.getElementById("aniskip-text");
-    const switchCinemaBtn = document.getElementById("btn-switch-cinema");
 
     function showError(msg) {
         if (loadingOverlay) loadingOverlay.style.display = "none";
@@ -417,32 +349,6 @@ export function renderJwPlayerHtml({
     const autoPlay = ${autoPlay ? 'true' : 'false'};
     const startTime = parseFloat(urlParams.get("time")) || parseFloat(urlParams.get("t")) || 0;
     const ticket = "${escapeJs(ticket)}";
-
-    // ── Player Switcher Helper: Switches to Custom Cinema Player with Time Saved ──
-    function switchToCustomPlayer(currentPos) {
-        try {
-            localStorage.setItem('anixo_player_preference', 'custom');
-        } catch(e) {}
-        const u = new URL(window.location.href);
-        u.searchParams.set('player', 'custom');
-        const pos = typeof currentPos === 'number' && currentPos > 0 ? Math.floor(currentPos) : 0;
-        if (pos > 0) {
-            u.searchParams.set('time', String(pos));
-        }
-        window.location.replace(u.toString());
-    }
-
-    if (switchCinemaBtn) {
-        switchCinemaBtn.addEventListener('click', function() {
-            let cur = 0;
-            try {
-                if (window.jwplayer && jwplayer("jwplayer-container").getState) {
-                    cur = jwplayer("jwplayer-container").getPosition() || 0;
-                }
-            } catch(e) {}
-            switchToCustomPlayer(cur);
-        });
-    }
 
     try {
         // ── Resolve Stream via Ultra-Fast Endpoint ──
@@ -580,10 +486,6 @@ export function renderJwPlayerHtml({
                 player.addButton(rewindSvg, "Rewind 10s", function() {
                     player.seek(Math.max(0, player.getPosition() - 10));
                 }, "custom-rewind-10");
-
-                player.addButton(cinemaSwitcherSvg, "Switch to Cinema Player", function() {
-                    switchToCustomPlayer(player.getPosition());
-                }, "custom-switch-cinema");
             } catch(e) {
                 console.warn("[JWPlayer] Custom buttons init error:", e);
             }

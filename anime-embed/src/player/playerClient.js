@@ -1715,26 +1715,6 @@ export function renderPlayerClientScript({
             });
             mainBody.appendChild(autoSkipItem);
 
-            // 6. Player Engine Switcher: Switch to JW Player (Default)
-            const jwPlayIcon = '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="6 3 20 12 6 21 6 3"></polygon></svg>';
-            mainBody.appendChild(createSettingItem({
-                icon: jwPlayIcon,
-                text: 'Player Engine',
-                tooltip: 'Switch to JW',
-                arrow: true,
-                onClick: () => {
-                    try {
-                        localStorage.setItem('anixo_player_preference', 'jw');
-                    } catch(e) {}
-                    const vEl = document.getElementById('cp-video');
-                    const curTime = vEl && vEl.currentTime ? Math.floor(vEl.currentTime) : 0;
-                    const u = new URL(window.location.href);
-                    u.searchParams.set('player', 'jw');
-                    if (curTime > 0) u.searchParams.set('time', String(curTime));
-                    window.location.replace(u.toString());
-                }
-            }));
-
             mainPanel.appendChild(mainBody);
             container.appendChild(mainPanel);
 
