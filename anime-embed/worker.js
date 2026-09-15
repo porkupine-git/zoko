@@ -156,6 +156,12 @@ function isDatacenterIp(request) {
 }
 
 async function verifyTurnstileToken(request, env, ctx) {
+    const turnstileRequired = getAdminConfig().firewall?.turnstileEnabled === true;
+    if (!turnstileRequired) {
+        return { valid: true, reason: "turnstile_disabled" };
+    }
+
+    const clientIp = request.headers.get("CF-Connecting-IP") || request.headers.get("x-real-ip") || "";
     const token = request.headers.get("cf-turnstile-token") || new URL(request.url).searchParams.get("turnstileToken");
     if (!token) {
         return { valid: false, error: "Cloudflare Turnstile token required" };
@@ -871,8 +877,8 @@ export default {
 
                 // If ticket is missing or invalid, require Turnstile verification (if enabled)
                 if (!ticketCheck.valid) {
-                    const turnstileGate = getAdminConfig().firewall?.turnstileEnabled !== false;
-                    const turnstile = turnstileGate ? await verifyTurnstileToken(request, env, ctx) : { valid: false };
+                    const turnstileGate = getAdminConfig().firewall?.turnstileEnabled === true;
+                    const turnstile = turnstileGate ? await verifyTurnstileToken(request, env, ctx) : { valid: true };
                     if (!turnstile.valid) {
                         const userAgent = request.headers.get("user-agent") || "automated-scraper";
                         recordHoneypotTrap({ ip: clientIp, userAgent, path: pathname });
@@ -960,7 +966,7 @@ export default {
                 }
 
                 // Turnstile Human Verification Check (Configurable from Admin Panel)
-                if (getAdminConfig().firewall?.turnstileEnabled !== false) {
+                if (getAdminConfig().firewall?.turnstileEnabled === true) {
                     const turnstile = await verifyTurnstileToken(request, env, ctx);
                     if (!turnstile.valid) {
                         if (isScraperRequest(request)) {

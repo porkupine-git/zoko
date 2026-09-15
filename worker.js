@@ -169,6 +169,12 @@ async function verifyTurnstileToken(request, env, ctx) {
         return { valid: true, reason: "internal_service" };
     }
 
+    // Turnstile verification disabled unless explicitly enabled in environment variables
+    const turnstileRequired = env?.TURNSTILE_ENABLED === "true" || env?.ENABLE_TURNSTILE === "true";
+    if (!turnstileRequired) {
+        return { valid: true, reason: "turnstile_disabled" };
+    }
+
     const clientIp = request.headers.get("CF-Connecting-IP") || request.headers.get("x-real-ip") || "";
 
     // 1. Check IP Pre-Clearance (MemCache & KV) - Allows verified humans to browse smoothly without repeated challenges
