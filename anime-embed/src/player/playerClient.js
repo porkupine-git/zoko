@@ -1721,8 +1721,8 @@ export function renderPlayerClientScript({
             // Server submenu
             container.appendChild(buildSubmenu('server', 'Server Route', [
                 { label: 'Server 1 (Sora)', value: 1 },
-                { label: 'Server 2 (Neko)', value: 2 },
-                { label: 'Server 3 (Zozo)', value: 3 }
+                { label: 'Server 2 (Cat)', value: 2 },
+                { label: 'Server 3 (Zexy)', value: 3 }
             ], STATE.server, (item) => {
                 onUserSelectServer(item.value);
             }));

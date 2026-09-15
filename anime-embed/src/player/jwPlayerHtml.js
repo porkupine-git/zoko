@@ -275,9 +275,9 @@ export function renderJwPlayerHtml({
             transform: scale(0.97);
         }
         .server-corner-control.is-open .server-corner-btn {
-            background: rgba(24, 24, 32, 0.98);
-            border-color: #008da7;
-            box-shadow: 0 0 10px rgba(0, 141, 167, 0.4);
+            background: rgba(24, 24, 30, 0.98);
+            border-color: rgba(255, 255, 255, 0.35);
+            box-shadow: none !important;
         }
         .server-chevron {
             transition: transform 0.2s ease;
@@ -292,16 +292,16 @@ export function renderJwPlayerHtml({
             top: calc(100% + 6px);
             left: 0;
             width: 170px;
-            background: rgba(14, 14, 18, 0.96);
+            background: #111115;
             backdrop-filter: blur(14px);
             -webkit-backdrop-filter: blur(14px);
-            border: 1px solid rgba(255, 255, 255, 0.14);
-            border-radius: 9px;
-            padding: 6px;
-            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.65);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            border-radius: 8px;
+            padding: 5px;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.7);
             display: none;
             flex-direction: column;
-            gap: 3px;
+            gap: 2px;
             z-index: 2147483642 !important;
             animation: serverDropdownAnim 0.15s ease;
         }
@@ -316,7 +316,7 @@ export function renderJwPlayerHtml({
             font-size: 10px;
             font-weight: 700;
             letter-spacing: 0.8px;
-            color: #858592;
+            color: #71717a;
             padding: 4px 8px 3px 8px;
             border-bottom: 1px solid rgba(255, 255, 255, 0.08);
             margin-bottom: 3px;
@@ -331,22 +331,24 @@ export function renderJwPlayerHtml({
             border: none;
             border-radius: 6px;
             color: #d1d5db;
-            font-size: 12px;
+            font-size: 12.5px;
             font-weight: 500;
             font-family: inherit;
             cursor: pointer;
             text-align: left;
             transition: background 0.12s ease, color 0.12s ease;
             outline: none;
+            box-shadow: none !important;
         }
         .server-menu-item:hover {
-            background: rgba(255, 255, 255, 0.1);
+            background: rgba(255, 255, 255, 0.08);
             color: #ffffff;
         }
         .server-menu-item.active {
-            background: rgba(0, 141, 167, 0.22);
-            color: #38bdf8;
+            background: rgba(255, 255, 255, 0.12) !important;
+            color: #ffffff !important;
             font-weight: 600;
+            box-shadow: none !important;
         }
         .server-item-dot {
             width: 6px;
@@ -354,26 +356,31 @@ export function renderJwPlayerHtml({
             border-radius: 50%;
             background: #52525b;
             flex-shrink: 0;
-            transition: background 0.15s ease, box-shadow 0.15s ease;
+            box-shadow: none !important;
+            transition: background 0.15s ease;
         }
         .server-menu-item.active .server-item-dot {
-            background: #10b981;
-            box-shadow: 0 0 6px rgba(16, 185, 129, 0.7);
+            background: #22c55e !important;
+            box-shadow: none !important;
         }
         .server-item-title {
             flex: 1;
         }
         .server-item-badge {
-            font-size: 9.5px;
-            font-weight: 700;
-            background: rgba(255, 255, 255, 0.1);
-            padding: 1px 6px;
+            font-size: 10px;
+            font-weight: 600;
+            background: rgba(255, 255, 255, 0.06);
+            padding: 2px 7px;
             border-radius: 4px;
             color: #9ca3af;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            box-shadow: none !important;
         }
         .server-menu-item.active .server-item-badge {
-            background: rgba(56, 189, 248, 0.2);
-            color: #38bdf8;
+            background: rgba(255, 255, 255, 0.18) !important;
+            color: #ffffff !important;
+            border-color: rgba(255, 255, 255, 0.22) !important;
+            box-shadow: none !important;
         }
 
         /* ── Auto-Switch / Server Toast Pill ── */
@@ -382,10 +389,10 @@ export function renderJwPlayerHtml({
             top: 56px !important;
             left: 14px !important;
             z-index: 2147483641 !important;
-            background: rgba(15, 15, 20, 0.88);
+            background: rgba(18, 18, 22, 0.92);
             backdrop-filter: blur(12px);
             -webkit-backdrop-filter: blur(12px);
-            border: 1px solid rgba(255, 255, 255, 0.18);
+            border: 1px solid rgba(255, 255, 255, 0.15);
             color: #f3f4f6;
             font-size: 12px;
             font-weight: 600;
@@ -394,7 +401,7 @@ export function renderJwPlayerHtml({
             display: flex;
             align-items: center;
             gap: 8px;
-            box-shadow: 0 4px 18px rgba(0, 0, 0, 0.5);
+            box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5);
             opacity: 0;
             transform: translateY(-6px);
             pointer-events: none;
@@ -411,17 +418,13 @@ export function renderJwPlayerHtml({
             transform: translateY(0) !important;
         }
         .server-toast-dot {
-            width: 7px;
-            height: 7px;
+            width: 6px;
+            height: 6px;
             border-radius: 50%;
-            background: #facc15;
-            box-shadow: 0 0 8px #facc15;
+            background: #eab308;
+            box-shadow: none !important;
+            animation: none !important;
             flex-shrink: 0;
-            animation: pulseToastDot 1.2s infinite ease-in-out;
-        }
-        @keyframes pulseToastDot {
-            0%, 100% { transform: scale(1); opacity: 1; }
-            50% { transform: scale(1.3); opacity: 0.7; }
         }
 
         /* Loading Spinner Overlay */
@@ -509,7 +512,7 @@ export function renderJwPlayerHtml({
                 <line x1="6" y1="6" x2="6.01" y2="6"></line>
                 <line x1="6" y1="18" x2="6.01" y2="18"></line>
             </svg>
-            <span class="server-active-label" id="server-active-label">Server 1</span>
+            <span class="server-active-label" id="server-active-label">Sora</span>
             <svg class="server-chevron" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
                 <polyline points="6 9 12 15 18 9"></polyline>
             </svg>
@@ -518,18 +521,18 @@ export function renderJwPlayerHtml({
             <div class="server-dropdown-header">STREAM SERVER</div>
             <button type="button" class="server-menu-item active" data-server="1" id="server-item-1">
                 <span class="server-item-dot"></span>
-                <span class="server-item-title">Server 1</span>
-                <span class="server-item-badge">Primary</span>
+                <span class="server-item-title">Sora</span>
+                <span class="server-item-badge">Server 1</span>
             </button>
             <button type="button" class="server-menu-item" data-server="2" id="server-item-2">
                 <span class="server-item-dot"></span>
-                <span class="server-item-title">Server 2</span>
-                <span class="server-item-badge">CDN 2</span>
+                <span class="server-item-title">Cat</span>
+                <span class="server-item-badge">Server 2</span>
             </button>
             <button type="button" class="server-menu-item" data-server="3" id="server-item-3">
                 <span class="server-item-dot"></span>
-                <span class="server-item-title">Server 3</span>
-                <span class="server-item-badge">Edge 3</span>
+                <span class="server-item-title">Zexy</span>
+                <span class="server-item-badge">Server 3</span>
             </button>
         </div>
     </div>
@@ -619,8 +622,11 @@ export function renderJwPlayerHtml({
     let currentOutro = { start: 0, end: 0 };
     let markersRendered = false;
 
+    const SERVER_NAMES = { 1: "Sora", 2: "Cat", 3: "Zexy" };
+
     function updateServerUI(srv) {
-        if (serverActiveLabel) serverActiveLabel.textContent = "Server " + srv;
+        const name = SERVER_NAMES[srv] || ("Server " + srv);
+        if (serverActiveLabel) serverActiveLabel.textContent = name;
         for (let i = 1; i <= 3; i++) {
             const el = document.getElementById("server-item-" + i);
             if (el) {
@@ -660,7 +666,8 @@ export function renderJwPlayerHtml({
     function selectServer(s) {
         if (s === currentServer && !errorOverlay.style.display.includes("flex")) return;
         failoverAttempts = 0;
-        showServerToast("Connecting to Server " + s + "...", 2000);
+        const name = SERVER_NAMES[s] || ("Server " + s);
+        showServerToast("Connecting to " + name + "...", 2000);
         loadStream(s, true);
     }
 
@@ -693,12 +700,14 @@ export function renderJwPlayerHtml({
         }
         failoverAttempts++;
         if (failoverAttempts >= 3) {
-            showError("All 3 streaming servers failed. Please retry or select another server from the top-left menu.");
+            showError("All streaming servers failed. Please retry or select another server from the top-left menu.");
             return;
         }
         const nextServer = (currentServer % 3) + 1;
-        console.warn("[JWPlayer] Server " + currentServer + " failed (" + reason + "). Auto-switching to Server " + nextServer + "...");
-        showServerToast("Server " + currentServer + " unavailable. Auto-switching to Server " + nextServer + "...", 3500);
+        const currentName = SERVER_NAMES[currentServer] || ("Server " + currentServer);
+        const nextName = SERVER_NAMES[nextServer] || ("Server " + nextServer);
+        console.warn("[JWPlayer] " + currentName + " failed (" + reason + "). Auto-switching to " + nextName + "...");
+        showServerToast(currentName + " unavailable. Auto-switching to " + nextName + "...", 3500);
         setTimeout(() => {
             loadStream(nextServer, true);
         }, 500);
@@ -811,7 +820,7 @@ export function renderJwPlayerHtml({
             if (loadingOverlay) loadingOverlay.style.display = 'none';
             isSwitching = false;
             failoverAttempts = 0;
-            showServerToast("Connected to Server " + currentServer, 2000);
+            showServerToast("Connected to " + (SERVER_NAMES[currentServer] || ("Server " + currentServer)), 2000);
 
         } catch (err) {
             isSwitching = false;
