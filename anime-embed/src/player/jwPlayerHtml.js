@@ -74,6 +74,11 @@ export function renderJwPlayerHtml({
         .jw-rightclick {
             display: none !important;
         }
+        /* Hide default left rewind button */
+        .jw-controlbar .jw-icon-rewind,
+        .jw-display-icon-rewind {
+            display: none !important;
+        }
         /* Invisible controlbar backdrop */
         .jw-controls-backdrop {
             display: none !important;
