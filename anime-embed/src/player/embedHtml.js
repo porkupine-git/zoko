@@ -36,6 +36,7 @@ export function renderEmbedHtml({
     const adminConfig = getAdminConfig();
     const monetization = adminConfig?.monetization || {};
     const popunderEnabled = Boolean(monetization.adsEnabled && monetization.popunderUrl);
+    const turnstileEnabled = adminConfig?.firewall?.turnstileEnabled === true;
     const pageTitle = escapeHtml(title ? `${title} - Episode ${episode}` : `Episode ${episode}`);
 
     const { fragA, fragB, seed } = fragmentTicket(ticket);
@@ -67,7 +68,7 @@ export function renderEmbedHtml({
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"><\/script>
-    <script src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit" async defer><\/script>
+    ${turnstileEnabled ? '<script src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit" async defer><\/script>' : ''}
     ${renderPopunderSnippet(monetization)}
     <style>
 ${PLAYER_CSS}
@@ -126,7 +127,7 @@ ${PLAYER_CSS}
             </div>
         </div>
 
-        <!-- Cloudflare Turnstile Verification Overlay (Centered directly over video player) -->
+        ${turnstileEnabled ? `<!-- Cloudflare Turnstile Verification Overlay (Centered directly over video player) -->
         <div id="cp-turnstile-overlay" class="cp-turnstile-overlay">
             <div class="cp-turnstile-card">
                 <div class="cp-turnstile-header">
@@ -135,7 +136,7 @@ ${PLAYER_CSS}
                 </div>
                 <div id="cp-turnstile-container" class="cp-turnstile-container"></div>
             </div>
-        </div>
+        </div>` : ''}
 
         <!-- Center Play/Pause Button -->
         <div class="cp-center-play">

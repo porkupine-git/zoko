@@ -854,9 +854,10 @@ export default {
                     ctx
                 });
 
-                // If ticket is missing or invalid, require Turnstile verification
+                // If ticket is missing or invalid, require Turnstile verification (if enabled)
                 if (!ticketCheck.valid) {
-                    const turnstile = await verifyTurnstileToken(request, env, ctx);
+                    const turnstileGate = getAdminConfig().firewall?.turnstileEnabled !== false;
+                    const turnstile = turnstileGate ? await verifyTurnstileToken(request, env, ctx) : { valid: false };
                     if (!turnstile.valid) {
                         const userAgent = request.headers.get("user-agent") || "automated-scraper";
                         recordHoneypotTrap({ ip: clientIp, userAgent, path: pathname });
@@ -877,7 +878,7 @@ export default {
                         return new Response(JSON.stringify({
                             success: false,
                             error: `Access Denied: ${ticketCheck.error || "Valid embed ticket required"}`,
-                            verificationRequired: true
+                            verificationRequired: turnstileGate
                         }), {
                             status: 403,
                             headers: {
