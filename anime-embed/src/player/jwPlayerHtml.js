@@ -227,6 +227,203 @@ export function renderJwPlayerHtml({
             transform: scale(0.96);
         }
 
+        /* ── Server Switcher Top-Left Corner ── */
+        .server-corner-control {
+            position: absolute !important;
+            top: 14px !important;
+            left: 14px !important;
+            z-index: 2147483640 !important;
+            font-family: inherit;
+            user-select: none;
+            transition: opacity 0.25s ease, transform 0.25s ease;
+        }
+        .jwplayer.jw-flag-fullscreen .server-corner-control,
+        :fullscreen .server-corner-control,
+        :-webkit-full-screen .server-corner-control {
+            top: 22px !important;
+            left: 22px !important;
+        }
+        .jwplayer.jw-flag-user-inactive:not(.jw-state-paused) .server-corner-control:not(:hover):not(.is-open) {
+            opacity: 0 !important;
+            pointer-events: none !important;
+            transform: translateY(-4px);
+        }
+        .server-corner-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
+            background: rgba(15, 15, 20, 0.78);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.16);
+            color: #ffffff;
+            padding: 6px 12px;
+            border-radius: 8px;
+            font-size: 12px;
+            font-weight: 600;
+            font-family: inherit;
+            cursor: pointer;
+            box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45);
+            transition: background 0.15s ease, border-color 0.15s ease, transform 0.1s ease;
+            outline: none;
+        }
+        .server-corner-btn:hover {
+            background: rgba(28, 28, 36, 0.95);
+            border-color: rgba(255, 255, 255, 0.3);
+        }
+        .server-corner-btn:active {
+            transform: scale(0.97);
+        }
+        .server-corner-control.is-open .server-corner-btn {
+            background: rgba(24, 24, 32, 0.98);
+            border-color: #008da7;
+            box-shadow: 0 0 10px rgba(0, 141, 167, 0.4);
+        }
+        .server-chevron {
+            transition: transform 0.2s ease;
+            opacity: 0.8;
+        }
+        .server-corner-control.is-open .server-chevron {
+            transform: rotate(180deg);
+            opacity: 1;
+        }
+        .server-dropdown-menu {
+            position: absolute;
+            top: calc(100% + 6px);
+            left: 0;
+            width: 170px;
+            background: rgba(14, 14, 18, 0.96);
+            backdrop-filter: blur(14px);
+            -webkit-backdrop-filter: blur(14px);
+            border: 1px solid rgba(255, 255, 255, 0.14);
+            border-radius: 9px;
+            padding: 6px;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.65);
+            display: none;
+            flex-direction: column;
+            gap: 3px;
+            z-index: 2147483642 !important;
+            animation: serverDropdownAnim 0.15s ease;
+        }
+        .server-corner-control.is-open .server-dropdown-menu {
+            display: flex;
+        }
+        @keyframes serverDropdownAnim {
+            from { opacity: 0; transform: translateY(-4px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .server-dropdown-header {
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: 0.8px;
+            color: #858592;
+            padding: 4px 8px 3px 8px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+            margin-bottom: 3px;
+        }
+        .server-menu-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            width: 100%;
+            padding: 7px 10px;
+            background: transparent;
+            border: none;
+            border-radius: 6px;
+            color: #d1d5db;
+            font-size: 12px;
+            font-weight: 500;
+            font-family: inherit;
+            cursor: pointer;
+            text-align: left;
+            transition: background 0.12s ease, color 0.12s ease;
+            outline: none;
+        }
+        .server-menu-item:hover {
+            background: rgba(255, 255, 255, 0.1);
+            color: #ffffff;
+        }
+        .server-menu-item.active {
+            background: rgba(0, 141, 167, 0.22);
+            color: #38bdf8;
+            font-weight: 600;
+        }
+        .server-item-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: #52525b;
+            flex-shrink: 0;
+            transition: background 0.15s ease, box-shadow 0.15s ease;
+        }
+        .server-menu-item.active .server-item-dot {
+            background: #10b981;
+            box-shadow: 0 0 6px rgba(16, 185, 129, 0.7);
+        }
+        .server-item-title {
+            flex: 1;
+        }
+        .server-item-badge {
+            font-size: 9.5px;
+            font-weight: 700;
+            background: rgba(255, 255, 255, 0.1);
+            padding: 1px 6px;
+            border-radius: 4px;
+            color: #9ca3af;
+        }
+        .server-menu-item.active .server-item-badge {
+            background: rgba(56, 189, 248, 0.2);
+            color: #38bdf8;
+        }
+
+        /* ── Auto-Switch / Server Toast Pill ── */
+        .server-toast-pill {
+            position: absolute !important;
+            top: 56px !important;
+            left: 14px !important;
+            z-index: 2147483641 !important;
+            background: rgba(15, 15, 20, 0.88);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.18);
+            color: #f3f4f6;
+            font-size: 12px;
+            font-weight: 600;
+            padding: 6px 14px;
+            border-radius: 20px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            box-shadow: 0 4px 18px rgba(0, 0, 0, 0.5);
+            opacity: 0;
+            transform: translateY(-6px);
+            pointer-events: none;
+            transition: opacity 0.25s ease, transform 0.25s ease;
+        }
+        .jwplayer.jw-flag-fullscreen .server-toast-pill,
+        :fullscreen .server-toast-pill,
+        :-webkit-full-screen .server-toast-pill {
+            top: 64px !important;
+            left: 22px !important;
+        }
+        .server-toast-pill.show {
+            opacity: 1 !important;
+            transform: translateY(0) !important;
+        }
+        .server-toast-dot {
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            background: #facc15;
+            box-shadow: 0 0 8px #facc15;
+            flex-shrink: 0;
+            animation: pulseToastDot 1.2s infinite ease-in-out;
+        }
+        @keyframes pulseToastDot {
+            0%, 100% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.3); opacity: 0.7; }
+        }
+
         /* Loading Spinner Overlay */
         .loading-overlay {
             position: absolute;
@@ -303,6 +500,46 @@ export function renderJwPlayerHtml({
     <!-- JW Player Target Container -->
     <div id="jwplayer-container"></div>
 
+    <!-- Server Switcher Top-Left Corner Option -->
+    <div class="server-corner-control" id="server-corner-control">
+        <button type="button" class="server-corner-btn" id="server-corner-btn" title="Switch Video Server">
+            <svg class="server-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="2" y="2" width="20" height="8" rx="2" ry="2"></rect>
+                <rect x="2" y="14" width="20" height="8" rx="2" ry="2"></rect>
+                <line x1="6" y1="6" x2="6.01" y2="6"></line>
+                <line x1="6" y1="18" x2="6.01" y2="18"></line>
+            </svg>
+            <span class="server-active-label" id="server-active-label">Server 1</span>
+            <svg class="server-chevron" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <polyline points="6 9 12 15 18 9"></polyline>
+            </svg>
+        </button>
+        <div class="server-dropdown-menu" id="server-dropdown-menu">
+            <div class="server-dropdown-header">STREAM SERVER</div>
+            <button type="button" class="server-menu-item active" data-server="1" id="server-item-1">
+                <span class="server-item-dot"></span>
+                <span class="server-item-title">Server 1</span>
+                <span class="server-item-badge">Primary</span>
+            </button>
+            <button type="button" class="server-menu-item" data-server="2" id="server-item-2">
+                <span class="server-item-dot"></span>
+                <span class="server-item-title">Server 2</span>
+                <span class="server-item-badge">CDN 2</span>
+            </button>
+            <button type="button" class="server-menu-item" data-server="3" id="server-item-3">
+                <span class="server-item-dot"></span>
+                <span class="server-item-title">Server 3</span>
+                <span class="server-item-badge">Edge 3</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Auto-Switch Notification Toast Pill -->
+    <div class="server-toast-pill" id="server-toast-pill">
+        <span class="server-toast-dot"></span>
+        <span class="server-toast-text" id="server-toast-text">Connecting...</span>
+    </div>
+
     <!-- Fast Loading Spinner -->
     <div class="loading-overlay" id="loading-overlay">
         <div class="spinner"></div>
@@ -338,6 +575,24 @@ export function renderJwPlayerHtml({
     const aniskipBtn = document.getElementById("aniskip-btn");
     const aniskipText = document.getElementById("aniskip-text");
 
+    const serverControl = document.getElementById("server-corner-control");
+    const serverBtn = document.getElementById("server-corner-btn");
+    const serverActiveLabel = document.getElementById("server-active-label");
+    const serverDropdown = document.getElementById("server-dropdown-menu");
+    const serverToast = document.getElementById("server-toast-pill");
+    const serverToastText = document.getElementById("server-toast-text");
+
+    let toastTimer = null;
+    function showServerToast(msg, duration = 3000) {
+        if (!serverToast || !serverToastText) return;
+        serverToastText.textContent = msg;
+        serverToast.classList.add("show");
+        if (toastTimer) clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => {
+            serverToast.classList.remove("show");
+        }, duration);
+    }
+
     function showError(msg) {
         if (loadingOverlay) loadingOverlay.style.display = "none";
         if (errorDesc && msg) errorDesc.textContent = msg;
@@ -350,92 +605,223 @@ export function renderJwPlayerHtml({
     const animeTitle = "${escapeJs(title || '')}";
     const episode = parseInt(urlParams.get("ep") || urlParams.get("episode") || "${episode}", 10) || 1;
     const track = (urlParams.get("track") || "${escapeJs(track)}").toLowerCase();
-    const server = parseInt(urlParams.get("server") || "${server}", 10) || 1;
+    let currentServer = parseInt(urlParams.get("server") || "${server}", 10) || 1;
     const autoPlay = ${autoPlay ? 'true' : 'false'};
     const startTime = parseFloat(urlParams.get("time")) || parseFloat(urlParams.get("t")) || 0;
     const ticket = "${escapeJs(ticket)}";
+    const parentHost = urlParams.get('parentHost') || urlParams.get('ref');
 
-    try {
-        // ── Resolve Stream via Ultra-Fast Endpoint ──
-        const resolveUrl = new URL('/api/stream/resolve', window.location.origin);
-        if (malId) resolveUrl.searchParams.set('malId', malId);
-        if (anilistId) resolveUrl.searchParams.set('anilistId', anilistId);
-        if (animeTitle) resolveUrl.searchParams.set('title', animeTitle);
-        resolveUrl.searchParams.set('episode', String(episode));
-        resolveUrl.searchParams.set('track', track);
-        resolveUrl.searchParams.set('server', String(server));
+    let player = null;
+    let failoverAttempts = 0;
+    let currentPosition = startTime;
+    let isSwitching = false;
+    let currentIntro = { start: 0, end: 0 };
+    let currentOutro = { start: 0, end: 0 };
+    let markersRendered = false;
 
-        // Parent website discovery
-        const parentHost = urlParams.get('parentHost') || urlParams.get('ref');
-        if (parentHost) resolveUrl.searchParams.set('parentHost', parentHost);
-
-        const res = await fetch(resolveUrl.toString(), {
-            headers: {
-                'x-embed-ticket': ticket
+    function updateServerUI(srv) {
+        if (serverActiveLabel) serverActiveLabel.textContent = "Server " + srv;
+        for (let i = 1; i <= 3; i++) {
+            const el = document.getElementById("server-item-" + i);
+            if (el) {
+                if (i === srv) el.classList.add("active");
+                else el.classList.remove("active");
             }
+        }
+    }
+
+    // Toggle dropdown
+    if (serverBtn) {
+        serverBtn.addEventListener("click", function(e) {
+            e.stopPropagation();
+            serverControl.classList.toggle("is-open");
         });
+    }
 
-        if (!res.ok) {
-            throw new Error('Streaming cluster returned HTTP ' + res.status);
+    // Close dropdown on click outside
+    document.addEventListener("click", function(e) {
+        if (serverControl && !serverControl.contains(e.target)) {
+            serverControl.classList.remove("is-open");
         }
+    });
 
-        const data = await res.json();
-        const primaryUrl = data.streamUrl || (data.sources && data.sources[0] && (data.sources[0].file || data.sources[0]));
-        if (!data || (!primaryUrl && (!data.sources || !data.sources.length))) {
-            throw new Error(data?.error || 'No playable streams found for this episode.');
-        }
-
-        // Format Sources for JW Player
-        let formattedSources = [];
-        if (data.streamUrl) {
-            formattedSources.push({
-                file: data.streamUrl,
-                type: 'hls',
-                label: data.server || '1080p Full HD',
-                default: true
+    // Wire server menu items
+    for (let s = 1; s <= 3; s++) {
+        const item = document.getElementById("server-item-" + s);
+        if (item) {
+            item.addEventListener("click", function(e) {
+                e.stopPropagation();
+                serverControl.classList.remove("is-open");
+                selectServer(s);
             });
-            if (Array.isArray(data.fallbackStreams)) {
-                data.fallbackStreams.forEach(function(fb, idx) {
-                    if (fb && typeof fb === 'string') {
-                        formattedSources.push({
-                            file: fb,
-                            type: 'hls',
-                            label: 'Fallback CDN ' + (idx + 1),
-                            default: false
-                        });
-                    }
+        }
+    }
+
+    function selectServer(s) {
+        if (s === currentServer && !errorOverlay.style.display.includes("flex")) return;
+        failoverAttempts = 0;
+        showServerToast("Connecting to Server " + s + "...", 2000);
+        loadStream(s, true);
+    }
+
+    function ensureOverlaysInPlayer() {
+        try {
+            const jwContainer = (player && typeof player.getContainer === 'function' ? player.getContainer() : null) ||
+                                document.querySelector('.jwplayer') ||
+                                document.getElementById('jwplayer-container');
+            if (jwContainer) {
+                if (serverControl && serverControl.parentElement !== jwContainer) {
+                    jwContainer.appendChild(serverControl);
+                }
+                if (serverToast && serverToast.parentElement !== jwContainer) {
+                    jwContainer.appendChild(serverToast);
+                }
+                if (aniskipContainer && aniskipContainer.parentElement !== jwContainer) {
+                    jwContainer.appendChild(aniskipContainer);
+                }
+            }
+        } catch(e) {}
+    }
+
+    function triggerAutoFailover(reason) {
+        if (isSwitching) return;
+        if (player) {
+            try {
+                const pos = player.getPosition();
+                if (pos && pos > 0) currentPosition = pos;
+            } catch(e) {}
+        }
+        failoverAttempts++;
+        if (failoverAttempts >= 3) {
+            showError("All 3 streaming servers failed. Please retry or select another server from the top-left menu.");
+            return;
+        }
+        const nextServer = (currentServer % 3) + 1;
+        console.warn("[JWPlayer] Server " + currentServer + " failed (" + reason + "). Auto-switching to Server " + nextServer + "...");
+        showServerToast("Server " + currentServer + " unavailable. Auto-switching to Server " + nextServer + "...", 3500);
+        setTimeout(() => {
+            loadStream(nextServer, true);
+        }, 500);
+    }
+
+    async function loadStream(targetServer, preserveTime) {
+        if (isSwitching) return;
+        isSwitching = true;
+        currentServer = targetServer;
+        updateServerUI(currentServer);
+
+        if (loadingOverlay) {
+            loadingOverlay.style.display = "flex";
+            loadingOverlay.style.opacity = "1";
+        }
+        if (errorOverlay) errorOverlay.style.display = "none";
+
+        try {
+            const resolveUrl = new URL('/api/stream/resolve', window.location.origin);
+            if (malId) resolveUrl.searchParams.set('malId', malId);
+            if (anilistId) resolveUrl.searchParams.set('anilistId', anilistId);
+            if (animeTitle) resolveUrl.searchParams.set('title', animeTitle);
+            resolveUrl.searchParams.set('episode', String(episode));
+            resolveUrl.searchParams.set('track', track);
+            resolveUrl.searchParams.set('server', String(currentServer));
+            if (parentHost) resolveUrl.searchParams.set('parentHost', parentHost);
+
+            const res = await fetch(resolveUrl.toString(), {
+                headers: { 'x-embed-ticket': ticket }
+            });
+
+            if (!res.ok) {
+                throw new Error('Streaming cluster returned HTTP ' + res.status);
+            }
+
+            const data = await res.json();
+            const primaryUrl = data.streamUrl || (data.sources && data.sources[0] && (data.sources[0].file || data.sources[0]));
+            if (!data || (!primaryUrl && (!data.sources || !data.sources.length))) {
+                throw new Error(data?.error || 'No playable streams found for this episode.');
+            }
+
+            if (data.serverId && data.serverId !== currentServer) {
+                currentServer = data.serverId;
+                updateServerUI(currentServer);
+            }
+
+            // Format Sources
+            let formattedSources = [];
+            if (data.streamUrl) {
+                formattedSources.push({
+                    file: data.streamUrl,
+                    type: 'hls',
+                    label: data.server || '1080p Full HD',
+                    default: true
+                });
+                if (Array.isArray(data.fallbackStreams)) {
+                    data.fallbackStreams.forEach(function(fb, idx) {
+                        if (fb && typeof fb === 'string') {
+                            formattedSources.push({
+                                file: fb,
+                                type: 'hls',
+                                label: 'Fallback CDN ' + (idx + 1),
+                                default: false
+                            });
+                        }
+                    });
+                }
+            } else if (Array.isArray(data.sources)) {
+                formattedSources = data.sources.map(function(s, idx) {
+                    return {
+                        file: s.file || s,
+                        type: s.type || 'hls',
+                        label: s.label || (idx === 0 ? '1080p Full HD' : ('Server ' + (idx + 1))),
+                        default: idx === 0
+                    };
                 });
             }
-        } else if (Array.isArray(data.sources)) {
-            formattedSources = data.sources.map(function(s, idx) {
+
+            // Format Subtitles
+            const rawTracks = data.subtitles || data.tracks || [];
+            const formattedTracks = rawTracks.map(function(t) {
                 return {
-                    file: s.file || s,
-                    type: s.type || 'hls',
-                    label: s.label || (idx === 0 ? '1080p Full HD' : ('Server ' + (idx + 1))),
-                    default: idx === 0
+                    file: t.file || t.url,
+                    label: t.label || t.name || 'English',
+                    kind: t.kind || 'captions',
+                    default: !!t.default
                 };
             });
+
+            currentIntro = data.intro || { start: 0, end: 0 };
+            currentOutro = data.outro || { start: 0, end: 0 };
+
+            if (!player) {
+                setupPlayer(formattedSources, formattedTracks);
+            } else {
+                markersRendered = false;
+                player.load([{
+                    image: "${escapeJs(poster)}" || undefined,
+                    sources: formattedSources,
+                    tracks: formattedTracks
+                }]);
+                player.play();
+                if (preserveTime && currentPosition > 0) {
+                    player.once('firstFrame', function() {
+                        if (currentPosition > 0) player.seek(currentPosition);
+                    });
+                }
+            }
+
+            if (loadingOverlay) loadingOverlay.style.display = 'none';
+            isSwitching = false;
+            failoverAttempts = 0;
+            showServerToast("Connected to Server " + currentServer, 2000);
+
+        } catch (err) {
+            isSwitching = false;
+            console.warn("[JWPlayer] Server " + currentServer + " load error:", err);
+            triggerAutoFailover(err.message || "Cluster connection error");
         }
+    }
 
-        // Format Subtitles / VTT Tracks (data.subtitles or data.tracks)
-        const rawTracks = data.subtitles || data.tracks || [];
-        const formattedTracks = rawTracks.map(function(t) {
-            return {
-                file: t.file || t.url,
-                label: t.label || t.name || 'English',
-                kind: t.kind || 'captions',
-                default: !!t.default
-            };
-        });
-
-        let intro = data.intro || { start: 0, end: 0 };
-        let outro = data.outro || { start: 0, end: 0 };
-
-        // Hide loading spinner
-        if (loadingOverlay) loadingOverlay.style.display = 'none';
-
-        // ── Setup JW Player 8 Instance ──
-        const player = jwplayer("jwplayer-container").setup({
+    function setupPlayer(formattedSources, formattedTracks) {
+        player = jwplayer("jwplayer-container").setup({
             playlist: [{
                 image: "${escapeJs(poster)}" || undefined,
                 sources: formattedSources,
@@ -463,26 +849,12 @@ export function renderJwPlayerHtml({
             }
         });
 
-        // ── Custom SVGs for Controlbar ──
         const rewindSvg = '<svg class="jw-svg-icon jw-svg-icon-rewind" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 240" focusable="false"><path d="M113.2,131.078a21.589,21.589,0,0,0-17.7-10.6,21.589,21.589,0,0,0-17.7,10.6,44.769,44.769,0,0,0,0,46.3,21.589,21.589,0,0,0,17.7,10.6,21.589,21.589,0,0,0,17.7-10.6,44.769,44.769,0,0,0,0-46.3Zm-17.7,47.2c-7.8,0-14.4-11-14.4-24.1s6.6-24.1,14.4-24.1,14.4,11,14.4,24.1S103.4,178.278,95.5,178.278Zm-43.4,9.7v-51l-4.8,4.8-6.8-6.8,13-13a4.8,4.8,0,0,1,8.2,3.4v62.7l-9.6-.1Zm162-130.2v125.3a4.867,4.867,0,0,1-4.8,4.8H146.6v-19.3h48.2v-96.4H79.1v19.3c0,5.3-3.6,7.2-8,4.3l-41.8-27.9a6.013,6.013,0,0,1-2.7-8,5.887,5.887,0,0,1,2.7-2.7l41.8-27.9c4.4-2.9,8-1,8,4.3v19.3H209.2A4.974,4.974,0,0,1,214.1,57.778Z"></path></svg>';
         const forwardSvg = '<svg class="jw-svg-icon jw-svg-icon-forward" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 240" focusable="false"><g transform="scale(-1, 1) translate(-240, 0)"><path d="M214.1,57.778v125.3a4.867,4.867,0,0,1-4.8,4.8H146.6v-19.3h48.2v-96.4H79.1v19.3c0,5.3-3.6,7.2-8,4.3l-41.8-27.9a6.013,6.013,0,0,1-2.7-8,5.887,5.887,0,0,1,2.7-2.7l41.8-27.9c4.4-2.9,8-1,8,4.3v19.3H209.2A4.974,4.974,0,0,1,214.1,57.778Z"></path></g><g transform="translate(74, 0)"><path d="M113.2,131.078a21.589,21.589,0,0,0-17.7-10.6,21.589,21.589,0,0,0-17.7,10.6,44.769,44.769,0,0,0,0,46.3,21.589,21.589,0,0,0,17.7,10.6,21.589,21.589,0,0,0,17.7-10.6,44.769,44.769,0,0,0,0-46.3Zm-17.7,47.2c-7.8,0-14.4-11-14.4-24.1s6.6-24.1,14.4-24.1,14.4,11,14.4,24.1S103.4,178.278,95.5,178.278Zm-43.4,9.7v-51l-4.8,4.8-6.8-6.8,13-13a4.8,4.8,0,0,1,8.2,3.4v62.7l-9.6-.1Z"></path></g></svg>';
-        const cinemaSwitcherSvg = '<svg class="jw-svg-icon jw-svg-icon-switcher" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18"></rect><line x1="7" y1="2" x2="7" y2="22"></line><line x1="17" y1="2" x2="17" y2="22"></line><line x1="2" y1="12" x2="22" y2="12"></line><line x1="2" y1="7" x2="7" y2="7"></line><line x1="2" y1="17" x2="7" y2="17"></line><line x1="17" y1="17" x2="22" y2="17"></line><line x1="17" y1="7" x2="22" y2="7"></line></svg>';
-
-        function ensureAniSkipInPlayer() {
-            try {
-                const jwContainer = (typeof player.getContainer === 'function' ? player.getContainer() : null) ||
-                                    document.querySelector('.jwplayer') ||
-                                    document.getElementById('jwplayer-container');
-                if (jwContainer && aniskipContainer && aniskipContainer.parentElement !== jwContainer) {
-                    jwContainer.appendChild(aniskipContainer);
-                }
-            } catch(e) {}
-        }
 
         player.on('ready', function() {
-            ensureAniSkipInPlayer();
+            ensureOverlaysInPlayer();
 
-            // Register custom buttons in control bar
             try {
                 player.addButton(forwardSvg, "Forward 10s", function() {
                     player.seek(player.getPosition() + 10);
@@ -495,7 +867,6 @@ export function renderJwPlayerHtml({
                 console.warn("[JWPlayer] Custom buttons init error:", e);
             }
 
-            // Seek to initial time if resume param present
             if (startTime > 0) {
                 player.once('play', function() {
                     player.seek(startTime);
@@ -504,11 +875,9 @@ export function renderJwPlayerHtml({
         });
 
         player.on('fullscreen', function() {
-            ensureAniSkipInPlayer();
+            ensureOverlaysInPlayer();
         });
 
-        // ── Seekbar Intro / Outro Yellow Highlights ──
-        let markersRendered = false;
         function updateTimelineMarkers() {
             const dur = player.getDuration();
             if (!dur || dur <= 0) return;
@@ -517,76 +886,62 @@ export function renderJwPlayerHtml({
 
             slider.querySelectorAll('.jw-intro-marker, .jw-outro-marker').forEach(function(el) { el.remove(); });
 
-            if (intro && intro.end > intro.start) {
+            if (currentIntro && currentIntro.end > currentIntro.start) {
                 const im = document.createElement('div');
                 im.className = 'jw-intro-marker';
-                im.style.left = ((intro.start / dur) * 100) + '%';
-                im.style.width = (((intro.end - intro.start) / dur) * 100) + '%';
+                im.style.left = ((currentIntro.start / dur) * 100) + '%';
+                im.style.width = (((currentIntro.end - currentIntro.start) / dur) * 100) + '%';
                 slider.appendChild(im);
             }
 
-            if (outro && outro.end > outro.start) {
+            if (currentOutro && currentOutro.end > currentOutro.start) {
                 const om = document.createElement('div');
                 om.className = 'jw-outro-marker';
-                om.style.left = ((outro.start / dur) * 100) + '%';
-                om.style.width = (((outro.end - outro.start) / dur) * 100) + '%';
+                om.style.left = ((currentOutro.start / dur) * 100) + '%';
+                om.style.width = (((currentOutro.end - currentOutro.start) / dur) * 100) + '%';
                 slider.appendChild(om);
             }
             markersRendered = true;
         }
 
-        player.on('time', function() {
-            if (!markersRendered) updateTimelineMarkers();
-        });
-        player.on('meta', updateTimelineMarkers);
-
-        // ── AniSkip Interactive Skip Intro / Outro Button ──
-        let currentSkipTarget = null;
-        player.on('time', function(e) {
-            const pos = e.position;
-            if (intro && intro.end > 0 && pos >= intro.start && pos < intro.end) {
-                ensureAniSkipInPlayer();
-                aniskipText.textContent = "Skip Intro";
-                aniskipContainer.style.display = "flex";
-                currentSkipTarget = intro.end;
-            } else if (outro && outro.end > 0 && pos >= outro.start && pos < outro.end) {
-                ensureAniSkipInPlayer();
-                aniskipText.textContent = "Skip Outro";
-                aniskipContainer.style.display = "flex";
-                currentSkipTarget = outro.end;
-            } else {
-                aniskipContainer.style.display = "none";
-                currentSkipTarget = null;
-            }
-        });
-
-        aniskipBtn.addEventListener("click", function(e) {
-            e.stopPropagation();
-            if (currentSkipTarget !== null) {
-                player.seek(currentSkipTarget);
-                aniskipContainer.style.display = "none";
-            }
-        });
-
-        // ── Universal Parent Communication Bridge (postMessage) ──
-        player.on('ready', function() {
-            window.parent.postMessage({ event: 'ready', type: 'ready', source: 'jwplayer' }, '*');
-        });
-
-        player.on('play', function() {
-            window.parent.postMessage({ event: 'play', type: 'play', source: 'jwplayer' }, '*');
-        });
-
-        player.on('pause', function() {
-            window.parent.postMessage({ event: 'pause', type: 'pause', source: 'jwplayer' }, '*');
-        });
-
-        player.on('complete', function() {
-            window.parent.postMessage({ event: 'ended', type: 'ended', source: 'jwplayer' }, '*');
-        });
+        // AniSkip button handling
+        if (aniskipBtn) {
+            aniskipBtn.addEventListener('click', function(e) {
+                e.stopPropagation();
+                const pos = player.getPosition();
+                if (currentIntro && pos >= currentIntro.start && pos < currentIntro.end) {
+                    player.seek(currentIntro.end);
+                    if (aniskipContainer) aniskipContainer.style.display = "none";
+                } else if (currentOutro && pos >= currentOutro.start && pos < currentOutro.end) {
+                    player.seek(currentOutro.end);
+                    if (aniskipContainer) aniskipContainer.style.display = "none";
+                }
+            });
+        }
 
         let lastSentTime = 0;
         player.on('time', function(e) {
+            currentPosition = e.position;
+            if (!markersRendered) updateTimelineMarkers();
+
+            const pos = e.position;
+            const inIntro = currentIntro && currentIntro.end > 0 && pos >= currentIntro.start && pos < currentIntro.end;
+            const inOutro = currentOutro && currentOutro.end > 0 && pos >= currentOutro.start && pos < currentOutro.end;
+
+            if (inIntro) {
+                ensureOverlaysInPlayer();
+                if (aniskipText) aniskipText.textContent = "Skip Intro";
+                if (aniskipContainer) aniskipContainer.style.display = "flex";
+            } else if (inOutro) {
+                ensureOverlaysInPlayer();
+                if (aniskipText) aniskipText.textContent = "Skip Outro";
+                if (aniskipContainer) aniskipContainer.style.display = "flex";
+            } else {
+                if (aniskipContainer && aniskipContainer.style.display !== "none") {
+                    aniskipContainer.style.display = "none";
+                }
+            }
+
             const now = Date.now();
             if (now - lastSentTime > 1000) {
                 lastSentTime = now;
@@ -602,18 +957,39 @@ export function renderJwPlayerHtml({
             }
         });
 
+        player.on('meta', updateTimelineMarkers);
+
+        // Universal parent communication bridge
+        player.on('ready', function() {
+            window.parent.postMessage({ event: 'ready', type: 'ready', source: 'jwplayer' }, '*');
+        });
+        player.on('play', function() {
+            window.parent.postMessage({ event: 'play', type: 'play', source: 'jwplayer' }, '*');
+        });
+        player.on('pause', function() {
+            window.parent.postMessage({ event: 'pause', type: 'pause', source: 'jwplayer' }, '*');
+        });
+        player.on('complete', function() {
+            window.parent.postMessage({ event: 'ended', type: 'ended', source: 'jwplayer' }, '*');
+        });
+
         player.on('error', function(err) {
-            console.warn("[JWPlayer] Playback error:", err);
+            console.warn("[JWPlayer] Playback error event on Server " + currentServer + ":", err);
             window.parent.postMessage({
                 event: 'error',
                 type: 'error',
                 message: err.message || "Playback error",
                 source: 'jwplayer'
             }, '*');
-            showError("Video stream disconnected. Please retry or switch servers.");
+            triggerAutoFailover(err.message || "Playback error");
         });
 
-        // ── Parent Command Dispatcher ──
+        player.on('setupError', function(err) {
+            console.warn("[JWPlayer] Setup error event on Server " + currentServer + ":", err);
+            triggerAutoFailover(err.message || "Setup error");
+        });
+
+        // Parent commands
         window.addEventListener('message', function(event) {
             if (!event.data) return;
             const d = event.data;
@@ -627,12 +1003,12 @@ export function renderJwPlayerHtml({
             else if (action === 'setVolume' && typeof d.volume === 'number') player.setVolume(d.volume);
             else if (action === 'mute') player.setMute(typeof d.mute === 'boolean' ? d.mute : true);
             else if (action === 'setPlaybackRate' && typeof d.rate === 'number') player.setPlaybackRate(d.rate);
+            else if (action === 'changeServer' && d.server) selectServer(parseInt(d.server, 10));
         });
-
-    } catch (err) {
-        console.error("[JWPlayer] Init error:", err);
-        showError(err.message || "Could not load video source.");
     }
+
+    // Kick off initial stream loading
+    loadStream(currentServer, false);
 })();
 </script>
 

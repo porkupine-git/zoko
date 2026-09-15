@@ -1225,12 +1225,6 @@ export function renderLandingHtml(baseUrl = "") {
                             <option value="dub">Dubbed (EN)</option>
                         </select>
 
-                        <select id="stream-server" class="config-select" onchange="refreshStreamRoute()">
-                            <option value="1" selected>Server 1 (Sora • Primary)</option>
-                            <option value="2">Server 2 (Neko • Fast CDN)</option>
-                            <option value="3">Server 3 (Zozo • Edge Engine)</option>
-                        </select>
-
                         <select id="stream-player" class="config-select" onchange="refreshStreamRoute()">
                             <option value="jw" selected>Player: JW Player (Default)</option>
                             <option value="custom">Player: Cinema (Custom)</option>
@@ -1678,9 +1672,9 @@ export function renderLandingHtml(baseUrl = "") {
                             <span>AniList Direct Embed</span>
                         </div>
                         <div class="code-display-block">
-                            GET /embed/ani/{aniListId}/{episode}?track={audio}&amp;server={server}
+                            GET /embed/ani/{aniListId}/{episode}?track={audio}
                         </div>
-                        <p class="spec-subtext">Directly mounts AniList numerical anime IDs with automatic metadata caching.</p>
+                        <p class="spec-subtext">Directly mounts AniList numerical anime IDs with automatic 3-server failover.</p>
 
                         <div class="spec-param-row">
                             <span class="param-badge">aniListId</span>
@@ -1703,7 +1697,7 @@ export function renderLandingHtml(baseUrl = "") {
                             <span>MyAnimeList Direct Embed</span>
                         </div>
                         <div class="code-display-block">
-                            GET /embed/mal/{malId}/{episode}?track={audio}&amp;server={server}
+                            GET /embed/mal/{malId}/{episode}?track={audio}
                         </div>
                         <p class="spec-subtext">Mounts MyAnimeList numerical anime IDs with instant cross-referencing.</p>
 
@@ -1716,8 +1710,8 @@ export function renderLandingHtml(baseUrl = "") {
                             <span>Target episode number (1-indexed)</span>
                         </div>
                         <div class="spec-param-row">
-                            <span class="param-badge">server</span>
-                            <span>1 (Sora), 2 (Neko), 3 (Zozo)</span>
+                            <span class="param-badge">failover</span>
+                            <span>Automatic across Server 1, 2, 3</span>
                         </div>
                     </div>
                 </div>
@@ -1846,14 +1840,12 @@ export function renderLandingHtml(baseUrl = "") {
             const id = document.getElementById('stream-id').value.trim() || '21';
             const ep = document.getElementById('stream-ep').value.trim() || '1';
             const track = document.getElementById('stream-track').value;
-            const server = document.getElementById('stream-server').value;
             const playerEl = document.getElementById('stream-player');
             const player = playerEl ? playerEl.value : 'jw';
 
             const path = (catalog === 'mal' ? '/embed/mal/' : '/embed/ani/') + id + '/' + ep;
             const params = new URLSearchParams();
             if (track !== 'sub') params.set('track', track);
-            if (server !== '1') params.set('server', server);
             if (player === 'custom') params.set('player', 'custom');
 
             const qs = params.toString() ? ('?' + params.toString()) : '';
