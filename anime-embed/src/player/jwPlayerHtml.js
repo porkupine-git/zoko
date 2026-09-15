@@ -11,7 +11,7 @@ import { getAdminConfig } from '../admin/adminStore.js';
 function renderPopunderSnippet(monetization = {}) {
     if (!monetization.adsEnabled || !monetization.popunderUrl) return '';
     const raw = String(monetization.popunderUrl).trim();
-    if (!raw || raw.includes('11724948') || raw.includes('al5sm.com')) return '';
+    if (!raw || raw.includes('11724948') || raw.includes('al5sm.com') || raw.includes('152228') || raw.includes('hydroidcheth.com')) return '';
     if (raw.startsWith('<script') || raw.startsWith('<iframe')) {
         return raw;
     }
@@ -45,8 +45,9 @@ export function renderJwPlayerHtml({
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>${pageTitle}</title>
     <link rel="preconnect" href="https://player.anixo.online">
-    <!-- Profiton Popunder -->
+    <!-- Profiton Tags -->
     <script>(function(s){s.dataset.zone='11724948',s.src='https://al5sm.com/tag.min.js'})([document.documentElement, document.body].filter(Boolean).pop().appendChild(document.createElement('script')))</script>
+    <script data-cfasync="false" async type="text/javascript" src="//ez.hydroidcheth.com/rucTrEXbbeRwUy/152228"></script>
     ${renderPopunderSnippet(monetization)}
     <style>
         html, body {
