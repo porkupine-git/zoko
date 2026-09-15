@@ -5,7 +5,7 @@
  */
 
 import { renderLandingHtml } from './src/landing/landingHtml.js';
-import { renderEmbedHtml } from './src/player/embedHtml.js';
+import { renderEmbedHtml, renderJwPlayerHtml } from './src/player/embedHtml.js';
 import { renderAdminHtml } from './src/admin/adminHtml.js';
 import { renderTestHtml } from './src/player/testHtml.js';
 import { searchAnime, getAnimeByAniListId, getAnimeByMalId } from './src/metadata/anilist.js';
@@ -627,7 +627,11 @@ export default {
                     secret: env?.TICKET_SECRET
                 });
 
-                const html = renderEmbedHtml({
+                const playerParam = (url.searchParams.get("player") || "jw").toLowerCase();
+                const isCustom = playerParam === "custom" || playerParam === "cinema";
+                const renderFn = isCustom ? renderEmbedHtml : renderJwPlayerHtml;
+
+                const html = renderFn({
                     id: String(anilistId),
                     idType: "ani",
                     anilistId,
@@ -689,7 +693,11 @@ export default {
                     secret: env?.TICKET_SECRET
                 });
 
-                const html = renderEmbedHtml({
+                const playerParam = (url.searchParams.get("player") || "jw").toLowerCase();
+                const isCustom = playerParam === "custom" || playerParam === "cinema";
+                const renderFn = isCustom ? renderEmbedHtml : renderJwPlayerHtml;
+
+                const html = renderFn({
                     id: String(malId),
                     idType: "mal",
                     anilistId: meta?.id || null,
@@ -766,7 +774,11 @@ export default {
                     secret: env?.TICKET_SECRET
                 });
 
-                const html = renderEmbedHtml({
+                const playerParam = (url.searchParams.get("player") || "jw").toLowerCase();
+                const isCustom = playerParam === "custom" || playerParam === "cinema";
+                const renderFn = isCustom ? renderEmbedHtml : renderJwPlayerHtml;
+
+                const html = renderFn({
                     id: String(effectiveId),
                     idType: resolvedAniId ? "ani" : "mal",
                     anilistId: resolvedAniId,
@@ -914,14 +926,21 @@ export default {
                 const serverParam = url.searchParams.get("server");
                 const preferredServer = serverParam ? (parseInt(serverParam, 10) || defaultServer) : defaultServer;
 
-                const result = await resolveStreamWithFailover({
-                    anilistId,
-                    malId,
-                    title,
-                    episode,
-                    track,
-                    preferredServer
-                }, env);
+                const cacheKey = `stream:${malId || anilistId || ''}:${episode}:${track}:${preferredServer}`;
+                let result = getMemCache(cacheKey);
+                if (!result) {
+                    result = await resolveStreamWithFailover({
+                        anilistId,
+                        malId,
+                        title,
+                        episode,
+                        track,
+                        preferredServer
+                    }, env);
+                    if (result && result.streamUrl) {
+                        setMemCache(cacheKey, result, 900);
+                    }
+                }
 
                 const maskedResult = maskStreamResult(result, baseUrl, clientIp);
 

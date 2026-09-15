@@ -408,7 +408,7 @@ export function renderPlayerClientScript({
             var titleEl = document.getElementById('cp-turnstile-title');
             var dotEl = overlay ? overlay.querySelector('.cp-turnstile-dot') : null;
 
-            if (!container) return Promise.resolve(null);
+            if (!container || !window.turnstile) return Promise.resolve(null);
 
             turnstilePromise = new Promise(function(resolve) {
                 var isResolved = false;
@@ -419,60 +419,50 @@ export function renderPlayerClientScript({
                     resolve(token);
                 }
 
-                var checkCount = 0;
-                var checkTimer = setInterval(function() {
-                    checkCount++;
-                    if (window.turnstile && typeof window.turnstile.render === 'function') {
-                        clearInterval(checkTimer);
-                        if (turnstileWidgetId !== null) {
-                            if (turnstileToken) finish(turnstileToken);
-                            return;
-                        }
-                        try {
-                            turnstileWidgetId = window.turnstile.render(container, {
-                                sitekey: turnstileSiteKey,
-                                action: 'embed_watch',
-                                theme: 'dark',
-                                callback: function(token) {
-                                    if (titleEl) titleEl.textContent = 'Verified';
-                                    if (dotEl) dotEl.classList.add('success');
-                                    setTimeout(function() {
-                                        if (overlay) overlay.classList.add('cp-hidden');
-                                    }, 400);
-                                    finish(token);
-                                },
-                                'error-callback': function(err) {
-                                    console.warn('[Turnstile] Embed verification challenge:', err);
-                                    setTimeout(function() {
-                                        if (overlay) overlay.classList.add('cp-hidden');
-                                    }, 1200);
-                                    finish(null);
-                                },
-                                'expired-callback': function() {
-                                    turnstileToken = null;
-                                    turnstilePromise = null;
-                                    if (turnstileWidgetId !== null && window.turnstile) {
-                                        try { window.turnstile.reset(turnstileWidgetId); } catch(e){}
-                                    }
-                                }
-                            });
-                        } catch(renderErr) {
-                            console.warn('[Turnstile] Render failed:', renderErr);
-                            if (overlay) overlay.classList.add('cp-hidden');
+                if (!window.turnstile || typeof window.turnstile.render !== 'function') {
+                    finish(null);
+                    return;
+                }
+
+                try {
+                    turnstileWidgetId = window.turnstile.render(container, {
+                        sitekey: turnstileSiteKey,
+                        action: 'embed_watch',
+                        theme: 'dark',
+                        callback: function(token) {
+                            if (titleEl) titleEl.textContent = 'Verified';
+                            if (dotEl) dotEl.classList.add('success');
+                            setTimeout(function() {
+                                if (overlay) overlay.classList.add('cp-hidden');
+                            }, 400);
+                            finish(token);
+                        },
+                        'error-callback': function(err) {
+                            console.warn('[Turnstile] Embed verification challenge:', err);
+                            setTimeout(function() {
+                                if (overlay) overlay.classList.add('cp-hidden');
+                            }, 1200);
                             finish(null);
+                        },
+                        'expired-callback': function() {
+                            turnstileToken = null;
+                            turnstilePromise = null;
+                            if (turnstileWidgetId !== null && window.turnstile) {
+                                try { window.turnstile.reset(turnstileWidgetId); } catch(e){}
+                            }
                         }
-                    } else if (checkCount > 50) { // 5s timeout fallback
-                        clearInterval(checkTimer);
-                        if (overlay) overlay.classList.add('cp-hidden');
-                        finish(null);
-                    }
-                }, 100);
+                    });
+                } catch(renderErr) {
+                    console.warn('[Turnstile] Render failed:', renderErr);
+                    if (overlay) overlay.classList.add('cp-hidden');
+                    finish(null);
+                }
             });
 
             return turnstilePromise;
         }
 
-        // Trigger early verification immediately on load
+        // Trigger early verification in background if turnstile is loaded
         if (typeof window !== 'undefined') {
             setTimeout(obtainTurnstileToken, 50);
         }
@@ -482,11 +472,6 @@ export function renderPlayerClientScript({
             if (isSandboxRestricted) {
                 triggerSandboxBlock('stream-blocked');
                 return;
-            }
-
-            // Ensure Turnstile token is obtained before resolving stream
-            if (!turnstileToken) {
-                await obtainTurnstileToken();
             }
 
             showToast('Connecting to Server ' + STATE.server + '...', 'yellow', 2500);
@@ -798,6 +783,14 @@ export function renderPlayerClientScript({
                         STATE.qualities = [{ label: 'Auto', level: -1 }, ...parsed];
                         STATE.currentQuality = -1;
                     }
+                    // Check initial resume time parameter
+                    try {
+                        const urlParams = new URLSearchParams(window.location.search);
+                        const resumeTime = parseFloat(urlParams.get("time")) || parseFloat(urlParams.get("t")) || 0;
+                        if (resumeTime > 0) {
+                            video.currentTime = resumeTime;
+                        }
+                    } catch(e) {}
                     if (STATE.autoPlay) {
                         video.play().catch(err => {
                             console.warn('Autoplay blocked, trying muted:', err);
@@ -829,6 +822,13 @@ export function renderPlayerClientScript({
                 });
             } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
                 video.src = data.streamUrl;
+                try {
+                    const urlParams = new URLSearchParams(window.location.search);
+                    const resumeTime = parseFloat(urlParams.get("time")) || parseFloat(urlParams.get("t")) || 0;
+                    if (resumeTime > 0) {
+                        video.currentTime = resumeTime;
+                    }
+                } catch(e) {}
                 if (STATE.autoPlay) {
                     video.play().catch(() => {});
                 }
@@ -1714,6 +1714,26 @@ export function renderPlayerClientScript({
                 }
             });
             mainBody.appendChild(autoSkipItem);
+
+            // 6. Player Engine Switcher: Switch to JW Player (Default)
+            const jwPlayIcon = '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="6 3 20 12 6 21 6 3"></polygon></svg>';
+            mainBody.appendChild(createSettingItem({
+                icon: jwPlayIcon,
+                text: 'Player Engine',
+                tooltip: 'Switch to JW',
+                arrow: true,
+                onClick: () => {
+                    try {
+                        localStorage.setItem('anixo_player_preference', 'jw');
+                    } catch(e) {}
+                    const vEl = document.getElementById('cp-video');
+                    const curTime = vEl && vEl.currentTime ? Math.floor(vEl.currentTime) : 0;
+                    const u = new URL(window.location.href);
+                    u.searchParams.set('player', 'jw');
+                    if (curTime > 0) u.searchParams.set('time', String(curTime));
+                    window.location.replace(u.toString());
+                }
+            }));
 
             mainPanel.appendChild(mainBody);
             container.appendChild(mainPanel);
