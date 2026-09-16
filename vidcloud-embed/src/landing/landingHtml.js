@@ -1282,12 +1282,11 @@ export function renderLandingHtml(baseUrl = "") {
                         </div>
                     </div>
                     <div class="field-group">
-                        <label class="field-label" for="cfg-server">Server</label>
-                        <select id="cfg-server" class="select-input">
-                            <option value="1" selected>Marin (Server 1)</option>
-                            <option value="2">Nunu (Server 2)</option>
-                            <option value="3">Zexy (Server 3)</option>
-                        </select>
+                        <label class="field-label">Server Selection</label>
+                        <div class="select-input" style="display:flex; align-items:center; color:var(--coffee-cream); font-weight:600; font-size:12px; cursor:default; pointer-events:none; background-image:none; border-color:var(--coffee-border); background:var(--coffee-tint);">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:6px;"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg>
+                            Automatic (In-Player Switcher)
+                        </div>
                     </div>
                 </div>
 
@@ -1333,7 +1332,7 @@ export function renderLandingHtml(baseUrl = "") {
                         </button>
                     </div>
                     <pre class="url-contract-text" id="display-embed-url">&lt;iframe
-  src="https://${domain}/embed/ani/21/1?track=sub&amp;server=1"
+  src="https://${domain}/embed/ani/21/1?track=sub"
   width="100%"
   height="480"
   frameborder="0"
@@ -1404,7 +1403,7 @@ export function renderLandingHtml(baseUrl = "") {
                         <svg viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg>
                     </div>
                     <h3 class="feature-title">Multi-Engine Resiliency</h3>
-                    <p class="feature-desc">Three independent stream clusters (Marin, Nunu, Zexy) with automatic cascading failover on missing streams.</p>
+                    <p class="feature-desc">Three independent stream clusters (Sora, Cat, Zexy) with automatic failover and an authentic in-player server switcher.</p>
                 </div>
 
                 <!-- Card 3 -->
@@ -1464,9 +1463,9 @@ export function renderLandingHtml(baseUrl = "") {
 
             <!-- Snippet 1: AniList iframe -->
             <pre class="code-editor-body" id="snippet-anilist"><code>&lt;!-- VidCloud Embed: AniList Integration --&gt;
-&lt;!-- Route: /embed/ani/{anilistId}/{episode}?track={sub|dub}&amp;server={1|2|3}&amp;autoSkip=1 --&gt;
+&lt;!-- Route: /embed/ani/{anilistId}/{episode}?track={sub|dub}&amp;autoSkip=1 --&gt;
 &lt;iframe 
-  src="https://${domain}/embed/ani/21/1?track=sub&amp;server=1&amp;autoSkip=1" 
+  src="https://${domain}/embed/ani/21/1?track=sub&amp;autoSkip=1" 
   width="100%" 
   height="480" 
   frameborder="0" 
@@ -1479,16 +1478,16 @@ export function renderLandingHtml(baseUrl = "") {
   • 21        : AniList Anime ID (One Piece)
   • 1         : Episode number
   • track=sub : Japanese audio + English subtitles (or track=dub for English Dub)
-  • server=1  : Primary stream engine (Cluster 1: Marin)
+  • server    : Fully automatic with in-player switcher (Sora / Cat / Zexy)
   • autoSkip=1: Automatically skips opening &amp; ending credits via AniSkip
   * NOTE: Do NOT include 'sandbox' attribute (strict anti-leech protection will block playback)
 --&gt;</code></pre>
 
             <!-- Snippet 2: MyAnimeList (MAL) iframe -->
             <pre class="code-editor-body" id="snippet-mal" style="display:none;"><code>&lt;!-- VidCloud Embed: MyAnimeList (MAL) Integration --&gt;
-&lt;!-- Route: /embed/mal/{malId}/{episode}?track={sub|dub}&amp;server={1|2|3}&amp;autoSkip=1&amp;autoNext=1 --&gt;
+&lt;!-- Route: /embed/mal/{malId}/{episode}?track={sub|dub}&amp;autoSkip=1&amp;autoNext=1 --&gt;
 &lt;iframe 
-  src="https://${domain}/embed/mal/21/1?track=sub&amp;server=1&amp;autoSkip=1&amp;autoNext=1" 
+  src="https://${domain}/embed/mal/21/1?track=sub&amp;autoSkip=1&amp;autoNext=1" 
   width="100%" 
   height="480" 
   frameborder="0" 
@@ -1499,7 +1498,7 @@ export function renderLandingHtml(baseUrl = "") {
 
 &lt;!-- Alternative Query Parameter Format for MAL:
 &lt;iframe 
-  src="https://${domain}/embed?type=mal&amp;id=21&amp;ep=1&amp;track=sub&amp;server=1&amp;autoSkip=1&amp;autoNext=1" 
+  src="https://${domain}/embed?type=mal&amp;id=21&amp;ep=1&amp;track=sub&amp;autoSkip=1&amp;autoNext=1" 
   width="100%" 
   height="480" 
   frameborder="0" 
@@ -1511,7 +1510,7 @@ export function renderLandingHtml(baseUrl = "") {
             <!-- Snippet 3: Full Feature Stack with AutoSkip -->
             <pre class="code-editor-body" id="snippet-autoskip" style="display:none;"><code>&lt;!-- VidCloud Embed: Full Production Stack (AutoSkip + AutoPlay + AutoNext) --&gt;
 &lt;iframe 
-  src="https://${domain}/embed/ani/21/1?track=sub&amp;server=1&amp;autoSkip=1&amp;autoPlay=1&amp;autoNext=1" 
+  src="https://${domain}/embed/ani/21/1?track=sub&amp;autoSkip=1&amp;autoPlay=1&amp;autoNext=1" 
   width="100%" 
   height="500" 
   frameborder="0" 
@@ -1524,7 +1523,7 @@ export function renderLandingHtml(baseUrl = "") {
   • autoSkip=1 : Detects AniSkip opening (OP) &amp; ending (ED) cue points and skips automatically
   • autoPlay=1 : Starts playback immediately without requiring an initial user tap
   • autoNext=1 : Auto-advances to the next episode seamlessly when the current episode ends
-  • server=1   : Cluster 1: Marin (Set server=2 for Nunu, server=3 for Zexy)
+  • server     : Fully automatic with in-player switcher (Sora / Cat / Zexy)
   • track=sub  : Original Japanese with subs (use track=dub for English dub)
 --&gt;</code></pre>
 
@@ -1552,7 +1551,7 @@ export function renderLandingHtml(baseUrl = "") {
 
 &lt;div class="vidcloud-player-wrapper"&gt;
   &lt;iframe 
-    src="https://${domain}/embed/ani/21/1?track=sub&amp;server=1&amp;autoSkip=1&amp;autoNext=1" 
+    src="https://${domain}/embed/ani/21/1?track=sub&amp;autoSkip=1&amp;autoNext=1" 
     loading="lazy"
     allow="autoplay; fullscreen; picture-in-picture" 
     allowfullscreen&gt;
@@ -1567,7 +1566,6 @@ interface VidCloudPlayerProps {
   idType?: 'ani' | 'mal';          // 'ani' for AniList, 'mal' for MyAnimeList
   episode?: number;                // Target episode number
   track?: 'sub' | 'dub';           // Subbed or Dubbed
-  server?: 1 | 2 | 3;              // 1: Marin, 2: Nunu, 3: Zexy
   autoSkip?: boolean;              // Auto skip intro / outro
   autoPlay?: boolean;              // Auto play on load
   autoNext?: boolean;              // Auto advance to next episode
@@ -1579,7 +1577,6 @@ export function VidCloudPlayer({
   idType = 'ani',
   episode = 1,
   track = 'sub',
-  server = 1,
   autoSkip = true,
   autoPlay = true,
   autoNext = true,
@@ -1596,7 +1593,7 @@ export function VidCloudPlayer({
     return () =&gt; window.removeEventListener("message", handleMessage);
   }, [onEnded]);
 
-  const embedUrl = \`https://${domain}/embed/\\\${idType}/\\\${id}/\\\${episode}?track=\\\${track}&amp;server=\\\${server}&amp;autoSkip=\\\${autoSkip ? 1 : 0}&amp;autoPlay=\\\${autoPlay ? 1 : 0}&amp;autoNext=\\\${autoNext ? 1 : 0}\`;
+  const embedUrl = \`https://${domain}/embed/\\\${idType}/\\\${id}/\\\${episode}?track=\\\${track}&amp;autoSkip=\\\${autoSkip ? 1 : 0}&amp;autoPlay=\\\${autoPlay ? 1 : 0}&amp;autoNext=\\\${autoNext ? 1 : 0}\`;
 
   return (
     &lt;div style={{ position: 'relative', width: '100%', aspectRatio: '16 / 9', borderRadius: 12, overflow: 'hidden', background: '#000' }}&gt;
@@ -1673,9 +1670,9 @@ export function VidCloudPlayer({
                         </tr>
                         <tr>
                             <td><span class="docs-param">server</span></td>
-                            <td><span class="docs-type">number</span></td>
-                            <td><code>1</code></td>
-                            <td>Stream server: <code>1</code> (Marin), <code>2</code> (Nunu), or <code>3</code> (Zexy).</td>
+                            <td><span class="docs-type">optional</span></td>
+                            <td><code>auto</code></td>
+                            <td>Stream server: Automatic multi-CDN. Developers do not need to specify server in embed code; the player includes an authentic in-player server switcher (Sora / Cat / Zexy) with auto-failover.</td>
                         </tr>
                         <tr>
                             <td><span class="docs-param">autoSkip</span></td>
@@ -1764,7 +1761,6 @@ export function VidCloudPlayer({
             const domain = "${domain}";
             const inputId = document.getElementById("cfg-id");
             const inputEp = document.getElementById("cfg-ep");
-            const selectServer = document.getElementById("cfg-server");
             const toggleAutoplay = document.getElementById("cfg-autoplay");
             const toggleMuted = document.getElementById("cfg-muted");
             const toggleSkipIntro = document.getElementById("cfg-skipintro");
@@ -1819,12 +1815,11 @@ export function VidCloudPlayer({
             function buildUrl() {
                 const id = inputId.value.trim() || "21";
                 const ep = inputEp.value.trim() || "1";
-                const server = selectServer.value;
                 const autoPlay = toggleAutoplay.checked ? "1" : "0";
                 const muted = toggleMuted.checked ? "1" : "0";
                 const autoSkip = toggleSkipIntro.checked ? "1" : "0";
 
-                let q = "?track=" + currentVariant + "&server=" + server;
+                let q = "?track=" + currentVariant;
                 if (autoPlay === "0") q += "&autoPlay=0";
                 if (muted === "1") q += "&muted=1";
                 if (autoSkip === "0") q += "&autoSkip=0";
@@ -1841,7 +1836,7 @@ export function VidCloudPlayer({
                 displayUrl.textContent = buildIframeCode(url);
             }
 
-            [inputId, inputEp, selectServer, toggleAutoplay, toggleMuted, toggleSkipIntro, toggleSkipOutro].forEach(el => {
+            [inputId, inputEp, toggleAutoplay, toggleMuted, toggleSkipIntro, toggleSkipOutro].forEach(el => {
                 el.addEventListener("input", updateContractUrl);
                 el.addEventListener("change", updateContractUrl);
             });
