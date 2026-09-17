@@ -544,14 +544,15 @@ export default {
 
                 if (!streamData) {
                     let resolved = null;
-                    const num = parseInt(id);
-                    if (num && num > 60000) {
+                    // /api/watch is queried with AniList ID from Anigo2 and embed players.
+                    // resolveFromAnilist maps AniList ID -> MAL ID accurately via AniList GraphQL.
+                    try {
                         resolved = await resolveFromAnilist(id, ep, lang);
-                    } else {
+                    } catch (aniErr) {
                         try {
                             resolved = await resolveFromMal(id, ep, lang);
                         } catch {
-                            resolved = await resolveFromAnilist(id, ep, lang);
+                            resolved = null;
                         }
                     }
 
@@ -818,7 +819,10 @@ export default {
                     if (!trimmed) return line;
                     if (trimmed.startsWith('#')) {
                         return line.replace(/URI=["']([^"']+)["']/g, (m, u) => {
-                            const resolved = new URL(u, target).toString();
+                            let resolved = new URL(u, target).toString();
+                            if (resolved.includes("bb.akirax.buzz") || resolved.includes("yoot.akirax.buzz") || resolved.includes("akirax.buzz")) {
+                                resolved = resolved.replace(/https?:\/\/[^\/]*akirax\.buzz/g, "https://f0ja7.zhaevor.top");
+                            }
                             if (resolved.includes('.m3u8') || resolved.includes('master') || resolved.includes('playlist')) {
                                 return `URI="${origin}/api/proxy/m3u8?token=${encryptStreamToken(resolved)}"`;
                             }
@@ -827,7 +831,10 @@ export default {
                         });
                     }
 
-                    const resolved = new URL(trimmed, target).toString();
+                    let resolved = new URL(trimmed, target).toString();
+                    if (resolved.includes("bb.akirax.buzz") || resolved.includes("yoot.akirax.buzz") || resolved.includes("akirax.buzz")) {
+                        resolved = resolved.replace(/https?:\/\/[^\/]*akirax\.buzz/g, "https://f0ja7.zhaevor.top");
+                    }
                     if (resolved.includes('.m3u8') || resolved.includes('master') || resolved.includes('playlist')) {
                         return `${origin}/api/proxy/m3u8?token=${encryptStreamToken(resolved)}`;
                     }
@@ -898,9 +905,11 @@ export default {
                 let target = resolveProxyTarget(searchParams);
                 if (!target) return errorResponse("Missing url or token query parameter", 400);
 
-                // Auto-heal blocked MegaPlay CDN domain
-                if (target.includes("fetch.nexabloom.top")) {
-                    target = target.replace("fetch.nexabloom.top", "ncdn.imgnex.top");
+                // Auto-heal dead/blocked MegaPlay CDN domains to current working CDN
+                if (target.includes("bb.akirax.buzz") || target.includes("yoot.akirax.buzz") || target.includes("akirax.buzz") || target.includes("fetch.nexabloom.top")) {
+                    target = target
+                        .replace(/https?:\/\/[^\/]*akirax\.buzz/g, "https://f0ja7.zhaevor.top")
+                        .replace("fetch.nexabloom.top", "f0ja7.zhaevor.top");
                 }
 
                 const reqHeaders = {
@@ -922,7 +931,23 @@ export default {
                     }
                 });
 
-                // Auto-failover if target gave 403 or error
+                // Auto-failover if target gave 404, 403 or error: try fallback to f0ja7.zhaevor.top or ncdn.imgnex.top
+                if (!upstream.ok && upstream.status !== 206) {
+                    const fallbackTarget = target.replace(/https?:\/\/[^\/]+/, "https://f0ja7.zhaevor.top");
+                    if (fallbackTarget !== target) {
+                        try {
+                            const fbUpstream = await fetch(fallbackTarget, {
+                                headers: reqHeaders,
+                                cf: { cacheEverything: true, cacheTtl: 604800 }
+                            });
+                            if (fbUpstream.ok || fbUpstream.status === 206) {
+                                upstream = fbUpstream;
+                                target = fallbackTarget;
+                            }
+                        } catch {}
+                    }
+                }
+
                 if (!upstream.ok && upstream.status !== 206 && (target.includes("nexabloom") || target.includes("mikora") || target.includes("shiora") || target.includes("norami"))) {
                     const fallbackTarget = target
                         .replace("fetch.nexabloom.top", "ncdn.imgnex.top")
@@ -931,14 +956,16 @@ export default {
                         .replace("norami.top", "ncdn.imgnex.top");
 
                     if (fallbackTarget !== target) {
-                        const fbUpstream = await fetch(fallbackTarget, {
-                            headers: reqHeaders,
-                            cf: { cacheEverything: true, cacheTtl: 604800 }
-                        });
-                        if (fbUpstream.ok || fbUpstream.status === 206) {
-                            upstream = fbUpstream;
-                            target = fallbackTarget;
-                        }
+                        try {
+                            const fbUpstream = await fetch(fallbackTarget, {
+                                headers: reqHeaders,
+                                cf: { cacheEverything: true, cacheTtl: 604800 }
+                            });
+                            if (fbUpstream.ok || fbUpstream.status === 206) {
+                                upstream = fbUpstream;
+                                target = fallbackTarget;
+                            }
+                        } catch {}
                     }
                 }
 

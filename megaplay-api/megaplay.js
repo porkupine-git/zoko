@@ -163,9 +163,12 @@ export async function resolveFromEmbedUrl(embedUrl, server = "bcdn") {
         }
     }
 
-    // Auto-heal blocked MegaPlay CDN domains (fetch.nexabloom.top -> ncdn.imgnex.top)
-    if (masterFile && masterFile.includes("fetch.nexabloom.top")) {
-        masterFile = masterFile.replace("fetch.nexabloom.top", "ncdn.imgnex.top");
+    // Auto-heal blocked/dead MegaPlay CDN domains
+    if (masterFile) {
+        masterFile = masterFile
+            .replace("fetch.nexabloom.top", "ncdn.imgnex.top")
+            .replace("bb.akirax.buzz", "f0ja7.zhaevor.top")
+            .replace("yoot.akirax.buzz", "f0ja7.zhaevor.top");
     }
 
     return {
@@ -281,22 +284,11 @@ export async function mapAniToMal(aniId) {
  */
 export async function resolveFromAnilist(aniId, episode = 1, track = "sub", server = "bcdn") {
     const lang = track.toLowerCase() === "dub" ? "dub" : "sub";
-    const embedUrl = `${MEGAPLAY_BASE}/stream/ani/${aniId}/${episode}/${lang}`;
-    
-    // 1. Try direct MegaPlay AniList endpoint
-    try {
-        const data = await resolveFromEmbedUrl(embedUrl, server);
-        return {
-            ...data,
-            anilist_id: aniId,
-            episode: parseInt(episode),
-            track: lang,
-            embed_url: embedUrl
-        };
-    } catch (err) {
-        // 2. Automatic Fallback: If MegaPlay hasn't mapped the AniList ID, resolve MAL ID and query MegaPlay
-        const malId = await mapAniToMal(aniId);
-        if (malId) {
+
+    // 1. Resolve MAL ID mapping first for guaranteed accurate stream resolution
+    const malId = await mapAniToMal(aniId);
+    if (malId) {
+        try {
             const malData = await resolveFromMal(malId, episode, lang, server);
             return {
                 ...malData,
@@ -304,9 +296,21 @@ export async function resolveFromAnilist(aniId, episode = 1, track = "sub", serv
                 fallback_mal_id: malId,
                 note: "Resolved via automatic MAL fallback mapping"
             };
+        } catch (err) {
+            console.warn(`[MegaPlay] MAL fallback ${malId} query failed:`, err.message);
         }
-        throw err;
     }
+
+    // 2. Fallback to direct MegaPlay AniList endpoint
+    const embedUrl = `${MEGAPLAY_BASE}/stream/ani/${aniId}/${episode}/${lang}`;
+    const data = await resolveFromEmbedUrl(embedUrl, server);
+    return {
+        ...data,
+        anilist_id: aniId,
+        episode: parseInt(episode),
+        track: lang,
+        embed_url: embedUrl
+    };
 }
 
 /**

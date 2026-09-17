@@ -546,23 +546,51 @@ async function handleM3U8Proxy(targetUrl, baseUrl, request, ctx) {
 // Edge TS Video Chunk Streamer (Ultra-Low CPU Zero-Copy Pipe)
 // -------------------------------------------------------------
 async function handleTsProxy(targetUrl, request) {
+    // Auto-heal dead upstream CDNs
+    let fixedTarget = targetUrl;
+    if (fixedTarget.includes("bb.akirax.buzz") || fixedTarget.includes("yoot.akirax.buzz") || fixedTarget.includes("akirax.buzz") || fixedTarget.includes("fetch.nexabloom.top")) {
+        fixedTarget = fixedTarget
+            .replace(/https?:\/\/[^\/]*akirax\.buzz/g, "https://f0ja7.zhaevor.top")
+            .replace("fetch.nexabloom.top", "f0ja7.zhaevor.top");
+    }
+
     const rangeHeader = request.headers.get("Range");
+    const isMegaplayCdn = fixedTarget.includes("zhaevor") || fixedTarget.includes("imgnex") || fixedTarget.includes("megaplay") || fixedTarget.includes("qeltrix");
+    const referer = isMegaplayCdn ? "https://megaplay.buzz/" : "https://zokoanime.video/";
+    const origin = isMegaplayCdn ? "https://megaplay.buzz" : "https://zokoanime.video";
+
     const fetchHeaders = {
         "User-Agent": DEFAULT_HEADERS["User-Agent"],
-        "Referer": "https://zokoanime.video/",
-        "Origin": "https://zokoanime.video"
+        "Referer": referer,
+        "Origin": origin
     };
     if (rangeHeader) fetchHeaders["Range"] = rangeHeader;
 
     // Use Cloudflare Edge CDN C++ socket cache (0ms V8 CPU, 7-day cache)
-    const upstreamRes = await fetch(targetUrl, {
+    let upstreamRes = await fetch(fixedTarget, {
         headers: fetchHeaders,
         cf: {
             cacheEverything: true,
             cacheTtl: 604800,
-            cacheKey: targetUrl
+            cacheKey: fixedTarget
         }
     });
+
+    // Auto-failover if initial target returned 404 or 403
+    if (!upstreamRes.ok && (upstreamRes.status === 404 || upstreamRes.status === 403)) {
+        const fallbackTarget = fixedTarget.replace(/https?:\/\/[^\/]+/, "https://f0ja7.zhaevor.top");
+        if (fallbackTarget !== fixedTarget) {
+            try {
+                const fbRes = await fetch(fallbackTarget, {
+                    headers: { ...fetchHeaders, "Referer": "https://megaplay.buzz/", "Origin": "https://megaplay.buzz" },
+                    cf: { cacheEverything: true, cacheTtl: 604800 }
+                });
+                if (fbRes.ok) {
+                    upstreamRes = fbRes;
+                }
+            } catch {}
+        }
+    }
 
     const responseHeaders = new Headers(CORS_HEADERS);
     responseHeaders.set("Content-Type", upstreamRes.headers.get("Content-Type") || "video/mp2t");
@@ -837,9 +865,10 @@ export default {
                     });
                 }
 
-                let targetMalId = parseInt(id);
-                if (!targetMalId || targetMalId > 60000) {
-                    targetMalId = await resolveMalId(id, url.searchParams.get("title"), env, ctx);
+                // Always resolve AniList ID -> MAL ID accurately (supports AniList IDs in any range)
+                let targetMalId = await resolveMalId(id, url.searchParams.get("title"), env, ctx);
+                if (!targetMalId) {
+                    targetMalId = parseInt(id) || null;
                 }
 
                 if (!targetMalId) {
@@ -966,10 +995,9 @@ export default {
                 let ep = parseInt(parts[1] || url.searchParams.get("ep")) || 1;
                 const track = (url.searchParams.get("track") || "sub").toLowerCase();
 
-                let targetMalId = id;
-                const num = parseInt(id);
-                if (num && num > 60000) {
-                    targetMalId = await resolveMalId(id, url.searchParams.get("title"), env, ctx);
+                let targetMalId = await resolveMalId(id, url.searchParams.get("title"), env, ctx);
+                if (!targetMalId) {
+                    targetMalId = id;
                 }
 
                 const dlCacheKey = `dl:${targetMalId || id}:${ep}:${track}`;
