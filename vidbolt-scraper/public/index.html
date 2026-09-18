@@ -1,0 +1,1177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VidBolt Stream Tester - ArtPlayer Edition</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <!-- HLS.js Core -->
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+    <!-- ArtPlayer Core -->
+    <script src="https://cdn.jsdelivr.net/npm/artplayer/dist/artplayer.js"></script>
+    <style>
+        :root {
+            --bg-base: #090d16;
+            --bg-card: rgba(17, 24, 39, 0.75);
+            --bg-card-hover: rgba(31, 41, 55, 0.85);
+            --border-color: rgba(255, 255, 255, 0.1);
+            --border-glow: rgba(59, 130, 246, 0.4);
+            --accent-blue: #3b82f6;
+            --accent-cyan: #06b6d4;
+            --accent-purple: #8b5cf6;
+            --accent-green: #10b981;
+            --accent-amber: #f59e0b;
+            --text-primary: #f3f4f6;
+            --text-secondary: #9ca3af;
+            --text-muted: #6b7280;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Outfit', sans-serif;
+            background-color: var(--bg-base);
+            background-image: 
+                radial-gradient(at 0% 0%, rgba(59, 130, 246, 0.12) 0px, transparent 50%),
+                radial-gradient(at 100% 100%, rgba(139, 92, 246, 0.12) 0px, transparent 50%);
+            color: var(--text-primary);
+            min-height: 100vh;
+            padding: 24px;
+        }
+
+        .container {
+            max-width: 1280px;
+            margin: 0 auto;
+        }
+
+        /* Header */
+        header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding-bottom: 24px;
+            border-bottom: 1px solid var(--border-color);
+            margin-bottom: 24px;
+            flex-wrap: wrap;
+            gap: 16px;
+        }
+
+        .logo-group {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+        }
+
+        .logo-badge {
+            background: linear-gradient(135deg, var(--accent-blue), var(--accent-purple));
+            width: 44px;
+            height: 44px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 22px;
+            box-shadow: 0 0 20px rgba(59, 130, 246, 0.5);
+        }
+
+        h1 {
+            font-size: 24px;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+            background: linear-gradient(to right, #fff, #93c5fd);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .tagline {
+            font-size: 13px;
+            color: var(--text-secondary);
+        }
+
+        .header-badges {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .art-pill {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            background: rgba(139, 92, 246, 0.15);
+            border: 1px solid rgba(139, 92, 246, 0.3);
+            color: #c084fc;
+            font-size: 12px;
+            font-weight: 600;
+            padding: 5px 12px;
+            border-radius: 999px;
+        }
+
+        .api-pill {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(16, 185, 129, 0.1);
+            border: 1px solid rgba(16, 185, 129, 0.3);
+            color: #34d399;
+            font-size: 13px;
+            font-weight: 500;
+            padding: 5px 12px;
+            border-radius: 999px;
+        }
+
+        .pulse-dot {
+            width: 8px;
+            height: 8px;
+            background-color: #10b981;
+            border-radius: 50%;
+            animation: pulse 1.8s infinite;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
+            70% { transform: scale(1); box-shadow: 0 0 0 6px rgba(16, 185, 129, 0); }
+            100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+        }
+
+        /* Presets */
+        .preset-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 20px;
+            overflow-x: auto;
+            padding-bottom: 6px;
+        }
+
+        .preset-label {
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+            color: var(--text-muted);
+            font-weight: 600;
+            white-space: nowrap;
+        }
+
+        .chip {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            color: var(--text-primary);
+            font-size: 13px;
+            font-weight: 500;
+            padding: 6px 14px;
+            border-radius: 999px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            white-space: nowrap;
+        }
+
+        .chip:hover {
+            background: var(--bg-card-hover);
+            border-color: var(--accent-cyan);
+            transform: translateY(-1px);
+        }
+
+        /* Main Grid */
+        .grid-layout {
+            display: grid;
+            grid-template-columns: 340px 1fr;
+            gap: 24px;
+        }
+
+        @media (max-width: 980px) {
+            .grid-layout {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .card {
+            background: var(--bg-card);
+            backdrop-filter: blur(16px);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            padding: 22px;
+            box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.5);
+        }
+
+        .card-title {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 18px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        /* Form Controls */
+        .form-group {
+            margin-bottom: 16px;
+        }
+
+        label {
+            display: block;
+            font-size: 12px;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.6px;
+            color: var(--text-secondary);
+            margin-bottom: 6px;
+        }
+
+        .segmented-control {
+            display: flex;
+            background: rgba(0, 0, 0, 0.35);
+            padding: 4px;
+            border-radius: 10px;
+            border: 1px solid var(--border-color);
+        }
+
+        .seg-btn {
+            flex: 1;
+            padding: 8px 12px;
+            border: none;
+            background: transparent;
+            color: var(--text-secondary);
+            font-size: 14px;
+            font-weight: 500;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-align: center;
+        }
+
+        .seg-btn.active {
+            background: linear-gradient(135deg, var(--accent-blue), var(--accent-cyan));
+            color: #fff;
+            box-shadow: 0 2px 10px rgba(59, 130, 246, 0.4);
+        }
+
+        input, select {
+            width: 100%;
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            padding: 10px 14px;
+            color: var(--text-primary);
+            font-family: inherit;
+            font-size: 14px;
+            transition: border-color 0.2s;
+        }
+
+        input:focus, select:focus {
+            outline: none;
+            border-color: var(--accent-blue);
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+        }
+
+        .row-2 {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+        }
+
+        .btn-submit {
+            width: 100%;
+            padding: 13px 20px;
+            background: linear-gradient(135deg, var(--accent-blue), var(--accent-purple));
+            border: none;
+            border-radius: 10px;
+            color: #fff;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            transition: all 0.2s;
+            box-shadow: 0 4px 20px rgba(59, 130, 246, 0.4);
+            margin-top: 20px;
+        }
+
+        .btn-submit:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 24px rgba(59, 130, 246, 0.6);
+        }
+
+        .btn-submit:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        /* ArtPlayer Container Wrapper */
+        .player-wrapper {
+            position: relative;
+            width: 100%;
+            background: #000;
+            border-radius: 14px;
+            overflow: hidden;
+            aspect-ratio: 16 / 9;
+            border: 1px solid var(--border-color);
+            box-shadow: 0 14px 40px rgba(0, 0, 0, 0.85);
+        }
+
+        #artplayer-container {
+            width: 100%;
+            height: 100%;
+        }
+
+        /* Custom ArtPlayer Styling Overrides */
+        .art-video-player {
+            font-family: 'Outfit', sans-serif !important;
+        }
+
+        .art-subtitle {
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.95), 0 0 8px rgba(0, 0, 0, 0.8) !important;
+            font-weight: 600 !important;
+            padding: 4px 12px !important;
+            border-radius: 6px !important;
+            background: rgba(0, 0, 0, 0.5) !important;
+            backdrop-filter: blur(4px) !important;
+        }
+
+        /* Quick Controls below player */
+        .player-quick-bar {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 14px;
+            margin-top: 14px;
+        }
+
+        @media (max-width: 600px) {
+            .player-quick-bar {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .quick-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .quick-label {
+            font-size: 13px;
+            color: var(--text-secondary);
+            font-weight: 500;
+            white-space: nowrap;
+        }
+
+        /* Status Banner */
+        .status-banner {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: rgba(0, 0, 0, 0.4);
+            border: 1px solid var(--border-color);
+            padding: 10px 16px;
+            border-radius: 10px;
+            margin-top: 14px;
+            font-size: 13px;
+            font-family: 'JetBrains Mono', monospace;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .stat-item {
+            display: flex;
+            gap: 6px;
+        }
+
+        .stat-name {
+            color: var(--text-muted);
+        }
+
+        .stat-val {
+            color: var(--accent-cyan);
+            font-weight: 500;
+        }
+
+        /* Tabs Section */
+        .tabs-nav {
+            display: flex;
+            gap: 10px;
+            border-bottom: 1px solid var(--border-color);
+            margin-top: 24px;
+            padding-bottom: 12px;
+        }
+
+        .tab-btn {
+            background: transparent;
+            border: none;
+            color: var(--text-secondary);
+            font-size: 14px;
+            font-weight: 600;
+            padding: 6px 14px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .tab-btn.active {
+            background: rgba(59, 130, 246, 0.15);
+            color: var(--accent-blue);
+        }
+
+        .tab-pane {
+            display: none;
+            margin-top: 16px;
+        }
+
+        .tab-pane.active {
+            display: block;
+        }
+
+        /* Table */
+        .table-wrap {
+            overflow-x: auto;
+            border-radius: 10px;
+            border: 1px solid var(--border-color);
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+            text-align: left;
+        }
+
+        th {
+            background: rgba(0, 0, 0, 0.4);
+            padding: 10px 14px;
+            color: var(--text-secondary);
+            font-weight: 600;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        td {
+            padding: 10px 14px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            color: var(--text-primary);
+        }
+
+        tr:hover td {
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 6px;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .badge-fastva { background: rgba(16, 185, 129, 0.2); color: #34d399; }
+        .badge-moviebox { background: rgba(59, 130, 246, 0.2); color: #60a5fa; }
+        .badge-saffron { background: rgba(245, 158, 11, 0.2); color: #fbbf24; }
+
+        .btn-table {
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid var(--border-color);
+            color: var(--text-primary);
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+            margin-right: 4px;
+        }
+
+        .btn-table:hover {
+            background: var(--accent-blue);
+            border-color: var(--accent-blue);
+        }
+
+        /* Subtitles Grid */
+        .sub-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+            gap: 10px;
+            max-height: 320px;
+            overflow-y: auto;
+            padding-right: 6px;
+        }
+
+        .sub-card {
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 8px 12px;
+            font-size: 13px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 6px;
+        }
+
+        .sub-card-btn {
+            background: rgba(59, 130, 246, 0.2);
+            color: #93c5fd;
+            border: 1px solid rgba(59, 130, 246, 0.4);
+            padding: 3px 8px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 11px;
+            text-decoration: none;
+        }
+
+        .sub-card-btn:hover {
+            background: var(--accent-blue);
+            color: #fff;
+        }
+
+        /* JSON box */
+        pre {
+            background: #000;
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            padding: 16px;
+            color: #10b981;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 12px;
+            max-height: 380px;
+            overflow: auto;
+        }
+
+        /* Spinner */
+        .spinner {
+            width: 18px;
+            height: 18px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-top-color: #fff;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            display: none;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <header>
+        <div class="logo-group">
+            <div class="logo-badge">⚡</div>
+            <div>
+                <h1>VidBolt Stream Tester</h1>
+                <p class="tagline">Powered by ArtPlayer 5 + HLS.js with Multi-Audio & Subtitle Sync</p>
+            </div>
+        </div>
+        <div class="header-badges">
+            <div class="art-pill">🎨 ArtPlayer 5.x</div>
+            <div class="api-pill">
+                <div class="pulse-dot"></div>
+                <span>API Server Active</span>
+            </div>
+        </div>
+    </header>
+
+    <!-- Quick Presets -->
+    <div class="preset-row">
+        <span class="preset-label">Quick Presets:</span>
+        <button class="chip" onclick="loadPreset('movie', 550, 'Fight Club', 1999)">🥊 Fight Club</button>
+        <button class="chip" onclick="loadPreset('movie', 157336, 'Interstellar', 2014)">🚀 Interstellar</button>
+        <button class="chip" onclick="loadPreset('movie', 579974, 'RRR', 2022)">🇮🇳 RRR (Hindi Dub)</button>
+        <button class="chip" onclick="loadPreset('tv', 1396, 'Breaking Bad', 2008, 1, 1)">⚗️ Breaking Bad S1E1</button>
+        <button class="chip" onclick="loadPreset('tv', 76479, 'The Boys', 2019, 1, 1)">🦸 The Boys S1E1</button>
+    </div>
+
+    <div class="grid-layout">
+        <!-- Controls Column -->
+        <div class="card">
+            <div class="card-title">🔍 Target Media</div>
+
+            <div class="form-group">
+                <label>Type</label>
+                <div class="segmented-control">
+                    <button class="seg-btn active" id="btnTypeMovie" onclick="setType('movie')">Movie</button>
+                    <button class="seg-btn" id="btnTypeTv" onclick="setType('tv')">TV Series</button>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label for="tmdbId">TMDB ID *</label>
+                <input type="number" id="tmdbId" value="550" placeholder="e.g. 550">
+            </div>
+
+            <div id="tvFields" style="display: none;">
+                <div class="row-2">
+                    <div class="form-group">
+                        <label for="season">Season</label>
+                        <input type="number" id="season" value="1" min="1">
+                    </div>
+                    <div class="form-group">
+                        <label for="episode">Episode</label>
+                        <input type="number" id="episode" value="1" min="1">
+                    </div>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label for="title">Title (Optional - Helps Matching)</label>
+                <input type="text" id="title" value="Fight Club" placeholder="e.g. Fight Club">
+            </div>
+
+            <div class="form-group">
+                <label for="year">Release Year (Optional)</label>
+                <input type="number" id="year" value="1999" placeholder="e.g. 1999">
+            </div>
+
+            <button class="btn-submit" id="btnScrape" onclick="scrapeMedia()">
+                <span class="spinner" id="loadingSpinner"></span>
+                <span id="btnText">🚀 Scrape & Play in ArtPlayer</span>
+            </button>
+        </div>
+
+        <!-- ArtPlayer Column -->
+        <div class="card">
+            <div class="card-title">
+                <span>▶️ ArtPlayer Live Preview</span>
+                <span style="font-size: 12px; color: var(--accent-cyan); font-family: 'JetBrains Mono', monospace;">HLS Adaptive + Full Settings</span>
+            </div>
+
+            <div class="player-wrapper">
+                <div id="artplayer-container"></div>
+            </div>
+
+            <!-- Quick External Bar -->
+            <div class="player-quick-bar">
+                <div class="quick-group">
+                    <span class="quick-label">Stream:</span>
+                    <select id="quickStreamSelect" onchange="switchArtStream(this.value)">
+                        <option value="">No streams scraped yet</option>
+                    </select>
+                </div>
+                <div class="quick-group">
+                    <span class="quick-label">Captions:</span>
+                    <select id="quickSubSelect" onchange="switchArtSubtitle(this.value)">
+                        <option value="">None / Off</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="status-banner" id="statusBanner">
+                <div class="stat-item">
+                    <span class="stat-name">Status:</span>
+                    <span class="stat-val" id="statStatus">Ready</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-name">Scrape Time:</span>
+                    <span class="stat-val" id="statTime">-</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-name">Sources:</span>
+                    <span class="stat-val" id="statSources">-</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-name">Subtitles:</span>
+                    <span class="stat-val" id="statSubs">-</span>
+                </div>
+            </div>
+
+            <!-- Tabs Section -->
+            <div class="tabs-nav">
+                <button class="tab-btn active" onclick="switchTab('sourcesTab')">Streams Table</button>
+                <button class="tab-btn" onclick="switchTab('subsTab')">Subtitles (<span id="subCount">0</span>)</button>
+                <button class="tab-btn" onclick="switchTab('jsonTab')">Raw JSON</button>
+            </div>
+
+            <!-- Tab 1: Sources Table -->
+            <div class="tab-pane active" id="sourcesTab">
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Server</th>
+                                <th>Provider</th>
+                                <th>Quality</th>
+                                <th>Audio/Lang</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="sourcesTableBody">
+                            <tr>
+                                <td colspan="5" style="text-align: center; color: var(--text-muted);">Click "Scrape & Play" to load streams</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Tab 2: Subtitles Grid -->
+            <div class="tab-pane" id="subsTab">
+                <div class="sub-grid" id="subGrid">
+                    <p style="color: var(--text-muted); grid-column: 1/-1;">No subtitles loaded yet.</p>
+                </div>
+            </div>
+
+            <!-- Tab 3: JSON -->
+            <div class="tab-pane" id="jsonTab">
+                <pre id="jsonViewer">// Scraper JSON payload will appear here</pre>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    let currentType = 'movie';
+    let art = null;
+    let currentData = null;
+    let hlsGlobal = null;
+
+    function setType(type) {
+        currentType = type;
+        const btnMovie = document.getElementById('btnTypeMovie');
+        const btnTv = document.getElementById('btnTypeTv');
+        const tvFields = document.getElementById('tvFields');
+
+        if (type === 'tv') {
+            btnTv.classList.add('active');
+            btnMovie.classList.remove('active');
+            tvFields.style.display = 'block';
+        } else {
+            btnMovie.classList.add('active');
+            btnTv.classList.remove('active');
+            tvFields.style.display = 'none';
+        }
+    }
+
+    function loadPreset(type, tmdbId, title, year, season = 1, episode = 1) {
+        setType(type);
+        document.getElementById('tmdbId').value = tmdbId;
+        document.getElementById('title').value = title;
+        document.getElementById('year').value = year;
+        if (type === 'tv') {
+            document.getElementById('season').value = season;
+            document.getElementById('episode').value = episode;
+        }
+        scrapeMedia();
+    }
+
+    async function scrapeMedia() {
+        const tmdbId = document.getElementById('tmdbId').value.trim();
+        if (!tmdbId) {
+            alert('Please enter a TMDB ID');
+            return;
+        }
+
+        const title = document.getElementById('title').value.trim();
+        const year = document.getElementById('year').value.trim();
+        const season = document.getElementById('season').value.trim();
+        const episode = document.getElementById('episode').value.trim();
+
+        const btn = document.getElementById('btnScrape');
+        const spinner = document.getElementById('loadingSpinner');
+        const btnText = document.getElementById('btnText');
+        const statStatus = document.getElementById('statStatus');
+
+        btn.disabled = true;
+        spinner.style.display = 'inline-block';
+        btnText.textContent = 'Scraping Sources...';
+        statStatus.textContent = 'Scraping...';
+
+        try {
+            const params = new URLSearchParams({
+                id: tmdbId,
+                type: currentType,
+                title: title,
+                year: year
+            });
+
+            if (currentType === 'tv') {
+                params.set('season', season);
+                params.set('episode', episode);
+            }
+
+            const res = await fetch(`/api/stream?${params.toString()}`);
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            const data = await res.json();
+            currentData = data;
+
+            renderData(data);
+        } catch (err) {
+            alert('Scraping error: ' + err.message);
+            statStatus.textContent = 'Failed: ' + err.message;
+        } finally {
+            btn.disabled = false;
+            spinner.style.display = 'none';
+            btnText.textContent = '🚀 Scrape & Play in ArtPlayer';
+        }
+    }
+
+    function renderData(data) {
+        document.getElementById('statStatus').textContent = data.success ? 'Success' : 'No Sources';
+        document.getElementById('statTime').textContent = `${data.durationMs}ms`;
+        document.getElementById('statSources').textContent = data.totalSources;
+        document.getElementById('statSubs').textContent = data.totalSubtitles;
+        document.getElementById('subCount').textContent = data.totalSubtitles;
+
+        // Render JSON Box
+        document.getElementById('jsonViewer').textContent = JSON.stringify(data, null, 2);
+
+        // Sort Subtitles (English, Hindi, Spanish, French at top)
+        const sortedSubs = [...(data.subtitles || [])].sort((a, b) => {
+            const aL = a.label.toLowerCase();
+            const bL = b.label.toLowerCase();
+            const isAEng = aL.includes('eng');
+            const isBEng = bL.includes('eng');
+            if (isAEng && !isBEng) return -1;
+            if (!isAEng && isBEng) return 1;
+
+            const isAHin = aL.includes('hin');
+            const isBHin = bL.includes('hin');
+            if (isAHin && !isBHin) return -1;
+            if (!isAHin && isBHin) return 1;
+
+            return a.label.localeCompare(b.label);
+        });
+
+        // Quick Stream Dropdown
+        const streamSelect = document.getElementById('quickStreamSelect');
+        streamSelect.innerHTML = '';
+        data.sources.forEach(s => {
+            const opt = document.createElement('option');
+            opt.value = s.url;
+            opt.textContent = `[${s.provider?.toUpperCase() || 'SRC'}] ${s.server} (${s.quality} - ${s.language})`;
+            streamSelect.appendChild(opt);
+        });
+
+        // Quick Subtitle Dropdown
+        const subSelect = document.getElementById('quickSubSelect');
+        subSelect.innerHTML = '<option value="">None / Off</option>';
+        sortedSubs.forEach(s => {
+            const opt = document.createElement('option');
+            opt.value = s.url;
+            opt.textContent = s.label;
+            subSelect.appendChild(opt);
+        });
+
+        // Populate Sources Table
+        const tbody = document.getElementById('sourcesTableBody');
+        tbody.innerHTML = '';
+        data.sources.forEach(s => {
+            const tr = document.createElement('tr');
+            const badgeClass = s.provider === 'fastva' ? 'badge-fastva' : (s.provider === 'moviebox' ? 'badge-moviebox' : 'badge-saffron');
+            tr.innerHTML = `
+                <td><strong>${s.server}</strong></td>
+                <td><span class="badge ${badgeClass}">${s.provider || 'custom'}</span></td>
+                <td>${s.quality}</td>
+                <td>${s.language}</td>
+                <td>
+                    <button class="btn-table" onclick="switchArtStream('${encodeURIComponent(s.url)}')">▶ Play</button>
+                    <button class="btn-table" onclick="copyToClipboard('${encodeURIComponent(s.url)}')">📋 Copy</button>
+                    <a href="${s.url}" target="_blank" class="btn-table" style="text-decoration:none;">🔗 Open</a>
+                </td>
+            `;
+            tbody.appendChild(tr);
+        });
+
+        // Populate Subtitles Tab Grid
+        const subGrid = document.getElementById('subGrid');
+        subGrid.innerHTML = '';
+        sortedSubs.forEach(sub => {
+            const div = document.createElement('div');
+            div.className = 'sub-card';
+            div.innerHTML = `
+                <span>${sub.label}</span>
+                <button class="sub-card-btn" onclick="switchArtSubtitle('${sub.url}', '${sub.label}')">Attach</button>
+            `;
+            subGrid.appendChild(div);
+        });
+
+        // Find primary default stream & subtitle
+        const defaultStream = data.sources[0]?.url || '';
+        let defaultSub = sortedSubs.find(s => s.label.toLowerCase() === 'english')?.url 
+                      || sortedSubs.find(s => s.label.toLowerCase().includes('english'))?.url 
+                      || '';
+
+        // Initialize or Update ArtPlayer
+        initArtPlayer(defaultStream, sortedSubs, defaultSub);
+    }
+
+    /* ====================================================================
+       ARTPLAYER INITIALIZATION WITH FULL SETTINGS
+       ==================================================================== */
+
+    function initArtPlayer(streamUrl, subtitlesList = [], defaultSubtitleUrl = '') {
+        if (!streamUrl) return;
+
+        // Destroy previous instance
+        if (art && typeof art.destroy === 'function') {
+            art.destroy(false);
+            art = null;
+        }
+
+        // Prepare Subtitles Selector list for ArtPlayer's in-player menu
+        const subtitleSelectorItems = [
+            {
+                default: !defaultSubtitleUrl,
+                html: 'Off / None',
+                url: ''
+            },
+            ...subtitlesList.map(sub => ({
+                default: sub.url === defaultSubtitleUrl,
+                html: sub.label,
+                url: sub.url
+            }))
+        ];
+
+        // Prepare Server / Stream Selector list for ArtPlayer
+        const serverSelectorItems = (currentData?.sources || []).map((s, idx) => ({
+            default: idx === 0,
+            html: `${s.server} (${s.quality} - ${s.language})`,
+            url: s.url
+        }));
+
+        art = new Artplayer({
+            container: '#artplayer-container',
+            url: streamUrl,
+            type: 'm3u8',
+            theme: '#3b82f6',
+            volume: 0.8,
+            isLive: false,
+            muted: false,
+            autoplay: false,
+            pip: true,
+            autoSize: false,
+            autoMini: true,
+            screenshot: true,
+            setting: true,
+            loop: false,
+            flip: true,
+            playbackRate: true,
+            aspectRatio: true,
+            fullscreen: true,
+            fullscreenWeb: true,
+            subtitleOffset: true,
+            miniProgressBar: true,
+            mutex: true,
+            backdrop: true,
+            playsInline: true,
+            autoPlayback: true,
+            airplay: true,
+            hotkey: true,
+
+            // Subtitle Configuration
+            subtitle: {
+                url: defaultSubtitleUrl,
+                type: 'vtt',
+                style: {
+                    color: '#ffffff',
+                    fontSize: '20px',
+                },
+                encoding: 'utf-8',
+            },
+
+            // Custom HLS Type Handler
+            customType: {
+                m3u8: function (video, url, artInstance) {
+                    if (Hls.isSupported()) {
+                        if (hlsGlobal) {
+                            hlsGlobal.destroy();
+                        }
+                        const hls = new Hls({
+                            enableWorker: true,
+                            lowLatencyMode: true,
+                            backBufferLength: 90
+                        });
+                        hlsGlobal = hls;
+
+                        hls.loadSource(url);
+                        hls.attachMedia(video);
+
+                        // Extract HLS resolution quality levels dynamically
+                        hls.on(Hls.Events.MANIFEST_PARSED, (event, data) => {
+                            if (data.levels && data.levels.length > 1) {
+                                const qualityLevels = data.levels.map((lvl, index) => ({
+                                    default: index === hls.currentLevel,
+                                    html: `${lvl.height}p (${Math.round(lvl.bitrate / 1000)}k)`,
+                                    level: index
+                                }));
+
+                                qualityLevels.unshift({
+                                    default: hls.currentLevel === -1,
+                                    html: 'Auto (Adaptive)',
+                                    level: -1
+                                });
+
+                                artInstance.setting.update({
+                                    name: 'quality-levels',
+                                    html: 'Resolution',
+                                    tooltip: 'Auto',
+                                    selector: qualityLevels,
+                                    onSelect: function (item) {
+                                        hls.currentLevel = item.level;
+                                        return item.html;
+                                    }
+                                });
+                            }
+                        });
+
+                        artInstance.on('destroy', () => hls.destroy());
+                    } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+                        video.src = url;
+                    } else {
+                        artInstance.notice.show = 'HLS format not supported on this browser';
+                    }
+                }
+            },
+
+            // Full Settings Menu Configuration
+            settings: [
+                {
+                    name: 'server-source',
+                    html: 'Server Source',
+                    width: 250,
+                    tooltip: currentData?.sources?.[0]?.server || 'Select',
+                    selector: serverSelectorItems,
+                    onSelect: function (item) {
+                        switchArtStream(item.url);
+                        return item.html;
+                    }
+                },
+                {
+                    name: 'subtitles-list',
+                    html: 'Captions / Subtitle',
+                    width: 240,
+                    tooltip: defaultSubtitleUrl ? 'English' : 'Off',
+                    selector: subtitleSelectorItems,
+                    onSelect: function (item) {
+                        switchArtSubtitle(item.url, item.html);
+                        return item.html;
+                    }
+                },
+                {
+                    name: 'subtitle-sync',
+                    html: 'Subtitle Sync Delay',
+                    width: 200,
+                    tooltip: '0.0s',
+                    selector: [
+                        { html: '-2.0s', offset: -2.0 },
+                        { html: '-1.0s', offset: -1.0 },
+                        { html: '-0.5s', offset: -0.5 },
+                        { html: '-0.25s', offset: -0.25 },
+                        { default: true, html: '0.0s (Exact Sync)', offset: 0.0 },
+                        { html: '+0.25s', offset: 0.25 },
+                        { html: '+0.5s', offset: 0.5 },
+                        { html: '+1.0s', offset: 1.0 },
+                        { html: '+2.0s', offset: 2.0 }
+                    ],
+                    onSelect: function (item) {
+                        if (art && art.subtitle) {
+                            art.subtitleOffset = item.offset;
+                            art.notice.show = `Subtitle Sync Offset: ${item.html}`;
+                        }
+                        return item.html;
+                    }
+                },
+                {
+                    name: 'subtitle-size',
+                    html: 'Subtitle Font Size',
+                    width: 180,
+                    tooltip: 'Medium',
+                    selector: [
+                        { html: 'Small (16px)', size: '16px' },
+                        { default: true, html: 'Medium (20px)', size: '20px' },
+                        { html: 'Large (26px)', size: '26px' },
+                        { html: 'Extra Large (32px)', size: '32px' }
+                    ],
+                    onSelect: function (item) {
+                        if (art && art.subtitle) {
+                            art.subtitle.style({ fontSize: item.size });
+                        }
+                        return item.html;
+                    }
+                }
+            ],
+
+            // Context Menu Customization
+            contextmenu: [
+                {
+                    html: 'VidBolt Scraper v1.0',
+                    click: function () {
+                        window.open('https://vidbolt.pro', '_blank');
+                    }
+                },
+                {
+                    html: 'Reload Stream',
+                    click: function (item, event) {
+                        if (art) art.play();
+                    }
+                }
+            ]
+        });
+
+        // Synchronize external quick select dropdowns
+        document.getElementById('quickStreamSelect').value = streamUrl;
+        document.getElementById('quickSubSelect').value = defaultSubtitleUrl;
+
+        art.on('ready', () => {
+            console.log('ArtPlayer is ready with full settings');
+        });
+    }
+
+    /* Switch Stream Source */
+    function switchArtStream(url) {
+        const streamUrl = decodeURIComponent(url);
+        document.getElementById('quickStreamSelect').value = streamUrl;
+        if (art) {
+            art.switchUrl(streamUrl).then(() => {
+                art.notice.show = 'Stream Switched Successfully';
+            }).catch(err => {
+                console.error('Stream switch error:', err);
+            });
+        }
+    }
+
+    /* Switch Subtitle Track */
+    function switchArtSubtitle(url, label = '') {
+        const subUrl = decodeURIComponent(url);
+        document.getElementById('quickSubSelect').value = subUrl;
+
+        if (art && art.subtitle) {
+            if (!subUrl) {
+                art.subtitle.show = false;
+                art.notice.show = 'Subtitles Turned Off';
+            } else {
+                art.subtitle.switch(subUrl, { name: label || 'Subtitle' }).then(() => {
+                    art.subtitle.show = true;
+                    art.notice.show = `Subtitle: ${label || 'Loaded'}`;
+                }).catch(err => {
+                    console.error('Subtitle switch error:', err);
+                });
+            }
+        }
+    }
+
+    function copyToClipboard(encodedUrl) {
+        const url = decodeURIComponent(encodedUrl);
+        navigator.clipboard.writeText(url).then(() => {
+            alert('Stream URL copied to clipboard!');
+        });
+    }
+
+    function switchTab(tabId) {
+        document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+        document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+
+        event.target.classList.add('active');
+        document.getElementById(tabId).classList.add('active');
+    }
+</script>
+
+</body>
+</html>

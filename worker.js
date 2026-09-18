@@ -903,26 +903,30 @@ export default {
                     }
                 }
 
-                // Format expected by Anigo2 useStreamFetch hook
+                // Format expected by Anigo2 useStreamFetch hook (prioritizing fastest & most reliable CDN first)
+                const rawUrl = streamData.raw_stream_url || "";
+                const backupUrl = rawUrl.includes("hls2.") ? rawUrl.replace("hls2.", "hls.") : rawUrl;
+                const backupProxiedUrl = backupUrl ? `${baseUrl}/api/proxy/m3u8?token=${encryptStreamToken(backupUrl)}` : streamData.stream_url;
+
                 const anigoFormatted = {
                     "zoko": {
                         "streams": [
                             {
                                 "url": streamData.stream_url,
                                 "type": "hls",
-                                "server": "Zoko Edge (Primary)",
+                                "server": "Zoko CDN-2 (Fast)",
                                 "priority": 1
                             },
                             {
-                                "url": streamData.stream_url,
+                                "url": backupProxiedUrl,
                                 "type": "hls",
-                                "server": "Zoko CDN-2 (Fast)",
+                                "server": "Zoko Backup (Direct)",
                                 "priority": 2
                             },
                             {
                                 "url": streamData.stream_url,
                                 "type": "hls",
-                                "server": "Zoko Backup (Direct)",
+                                "server": "Zoko Edge (Primary)",
                                 "priority": 3
                             }
                         ],

@@ -80,6 +80,13 @@ async function scrapeDirectMegaPlay(embedPath) {
         if (dec?.file) masterFile = dec.file;
     }
 
+    if (masterFile) {
+        masterFile = masterFile
+            .replace("fetch.nexabloom.top", "ncdn.imgnex.top")
+            .replace("bb.akirax.buzz", "f0ja7.zhaevor.top")
+            .replace("yoot.akirax.buzz", "f0ja7.zhaevor.top");
+    }
+
     if (!masterFile) throw new Error("Failed to extract master stream URL from direct MegaPlay payload");
 
     return {

@@ -119,7 +119,7 @@ export async function extractPlayerIds(embedUrl) {
  * @param {string} [refererUrl] - Optional referer header
  * @returns {Promise<any>}
  */
-export async function getSources(id, server = "bcdn", refererUrl = "") {
+export async function getSources(id, server = "tcdn", refererUrl = "") {
     let url = `${MEGAPLAY_BASE}/stream/getSourcesNew?id=${encodeURIComponent(id)}`;
     if (server) {
         url += `&s=${encodeURIComponent(server)}`;
@@ -150,7 +150,7 @@ export async function getSources(id, server = "bcdn", refererUrl = "") {
  * @param {string} [server="tcdn"] - 'tcdn' or 'bcdn' (default 'tcdn')
  * @returns {Promise<any>}
  */
-export async function resolveFromEmbedUrl(embedUrl, server = "bcdn") {
+export async function resolveFromEmbedUrl(embedUrl, server = "tcdn") {
     const ids = await extractPlayerIds(embedUrl);
     const targetId = ids.dataId || ids.realId;
     let rawData = await getSources(targetId, server, embedUrl);
@@ -212,7 +212,7 @@ export async function resolveFromEmbedUrl(embedUrl, server = "bcdn") {
  * @param {string} [track="sub"] - 'sub' or 'dub'
  * @param {string} [server="tcdn"] - 'tcdn' or 'bcdn' (default 'tcdn')
  */
-export async function resolveFromMal(malId, episode = 1, track = "sub", server = "bcdn") {
+export async function resolveFromMal(malId, episode = 1, track = "sub", server = "tcdn") {
     const lang = track.toLowerCase() === "dub" ? "dub" : "sub";
     const embedUrl = `${MEGAPLAY_BASE}/stream/mal/${malId}/${episode}/${lang}`;
     const data = await resolveFromEmbedUrl(embedUrl, server);
@@ -282,7 +282,7 @@ export async function mapAniToMal(aniId) {
  * @param {string} [track="sub"] - 'sub' or 'dub'
  * @param {string} [server="tcdn"] - 'tcdn' or 'bcdn' (default 'tcdn')
  */
-export async function resolveFromAnilist(aniId, episode = 1, track = "sub", server = "bcdn") {
+export async function resolveFromAnilist(aniId, episode = 1, track = "sub", server = "tcdn") {
     const lang = track.toLowerCase() === "dub" ? "dub" : "sub";
 
     // 1. Resolve MAL ID mapping first for guaranteed accurate stream resolution
@@ -319,7 +319,7 @@ export async function resolveFromAnilist(aniId, episode = 1, track = "sub", serv
  * @param {string} [track="sub"] - 'sub' or 'dub'
  * @param {string} [server="tcdn"] - 'tcdn' or 'bcdn' (default 'tcdn')
  */
-export async function resolveFromCatalogId(catalogEpId, track = "sub", server = "bcdn") {
+export async function resolveFromCatalogId(catalogEpId, track = "sub", server = "tcdn") {
     const lang = track.toLowerCase() === "dub" ? "dub" : "sub";
     const embedUrl = `${MEGAPLAY_BASE}/stream/s-2/${catalogEpId}/${lang}`;
     const data = await resolveFromEmbedUrl(embedUrl, server);

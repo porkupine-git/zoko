@@ -252,7 +252,9 @@ function extractClientReferer(request, url) {
     if (!domain) {
         const secFetchDest = request.headers.get("sec-fetch-dest");
         const secFetchSite = request.headers.get("sec-fetch-site");
-        if (secFetchDest === "iframe" || secFetchSite === "cross-site") {
+        if (secFetchDest === "document" || request.headers.get("sec-fetch-mode") === "navigate") {
+            domain = "direct";
+        } else if (secFetchDest === "iframe" || secFetchSite === "cross-site") {
             const clientIp = request.headers.get("cf-connecting-ip") || request.headers.get("x-forwarded-for") || "unknown";
             domain = `masked-iframe-${clientIp.replace(/[:.]/g, "-").slice(0, 16)}.leech`;
         }
@@ -1151,9 +1153,15 @@ export default {
                     return new Response("Invalid stream token", { status: 403, headers: CORS_HEADERS });
                 }
 
-                // Auto-heal blocked MegaPlay CDN (fetch.nexabloom.top -> ncdn.imgnex.top)
+                // Auto-heal blocked MegaPlay CDN (fetch.nexabloom.top -> ncdn.imgnex.top, akirax -> zhaevor)
                 if (targetUrl.includes("fetch.nexabloom.top")) {
                     targetUrl = targetUrl.replace("fetch.nexabloom.top", "ncdn.imgnex.top");
+                }
+                if (targetUrl.includes("bb.akirax.buzz")) {
+                    targetUrl = targetUrl.replace("bb.akirax.buzz", "f0ja7.zhaevor.top");
+                }
+                if (targetUrl.includes("yoot.akirax.buzz")) {
+                    targetUrl = targetUrl.replace("yoot.akirax.buzz", "f0ja7.zhaevor.top");
                 }
 
                 // If honeypot trap parameter is explicitly active, serve decoy stream
@@ -1175,7 +1183,7 @@ export default {
                     "Accept": request.headers.get("Accept") || "*/*",
                     "x-cluster-internal": CLUSTER_SECRET
                 };
-                if (targetUrl.includes("megaplay") || targetUrl.includes("mikora") || targetUrl.includes("shiora") || targetUrl.includes("norami") || targetUrl.includes("nexabloom") || targetUrl.includes("imgnex")) {
+                if (targetUrl.includes("megaplay") || targetUrl.includes("mikora") || targetUrl.includes("shiora") || targetUrl.includes("norami") || targetUrl.includes("nexabloom") || targetUrl.includes("imgnex") || targetUrl.includes("akirax") || targetUrl.includes("zhaevor") || targetUrl.includes("vidtube") || targetUrl.includes("anizara")) {
                     forwardHeaders["Referer"] = "https://megaplay.buzz/";
                     forwardHeaders["Origin"] = "https://megaplay.buzz";
                 }
@@ -1234,7 +1242,24 @@ export default {
                         }
 
                         const fullUrl = new URL(trimmed, targetUrl).toString();
-                        if (fullUrl.includes('.m3u8') || fullUrl.includes('/m3u8') || fullUrl.includes('aniko-backend') || fullUrl.includes('anineko') || fullUrl.includes('zoko') || fullUrl.includes('norami') || fullUrl.includes('megap') || fullUrl.includes('mux.dev')) {
+                        const shouldProxySegment = 
+                            fullUrl.includes('.m3u8') || 
+                            fullUrl.includes('/m3u8') || 
+                            fullUrl.includes('aniko-backend') || 
+                            fullUrl.includes('anineko') || 
+                            fullUrl.includes('zoko') || 
+                            fullUrl.includes('norami') || 
+                            fullUrl.includes('megap') || 
+                            fullUrl.includes('mux.dev') ||
+                            fullUrl.includes('akirax') ||
+                            fullUrl.includes('zhaevor') ||
+                            fullUrl.includes('nexabloom') ||
+                            fullUrl.includes('imgnex') ||
+                            fullUrl.includes('vidtube') ||
+                            fullUrl.includes('anizara') ||
+                            /ibyteimg\.com|tiktokcdn\.com|ipstatp\.com|\.image|\.png|\.ts/i.test(fullUrl);
+
+                        if (shouldProxySegment) {
                             return `${baseUrl}/api/stream/m3u8?t=${encryptStreamToken(fullUrl)}${isHoneypot ? '&h=1' : ''}`;
                         }
                         return fullUrl;
@@ -1252,18 +1277,25 @@ export default {
                     });
                 }
 
-                // Strip 252 bytes dummy PNG header from obfuscated TikTok CDN video chunks
-                const shouldStrip = /ibyteimg\.com|tiktokcdn\.com|ipstatp\.com|yoot\.akirax\.buzz/i.test(targetUrl);
-                if (shouldStrip && upstreamRes.body) {
+                // Smart handling of video chunks (auto-strip fake PNG header from TikTok CDN / yoot chunks)
+                if (upstreamRes.body) {
                     const buf = await upstreamRes.arrayBuffer();
                     const bytes = new Uint8Array(buf);
-                    const stripped = bytes.length <= 252 ? bytes : bytes.subarray(252);
-                    return new Response(stripped, {
+                    
+                    const isFakePng = bytes.length > 252 && 
+                                      bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4E && bytes[3] === 0x47 &&
+                                      bytes[252] === 0x47;
+
+                    const isLikelyObfuscated = /ibyteimg\.com|tiktokcdn\.com|ipstatp\.com|yoot\.akirax\.buzz|\.image/i.test(targetUrl);
+                    const shouldStrip = isFakePng || (isLikelyObfuscated && bytes.length > 252 && bytes[0] === 0x89);
+                    const finalBytes = shouldStrip ? bytes.subarray(252) : bytes;
+
+                    return new Response(finalBytes, {
                         status: 200,
                         headers: {
                             ...CORS_HEADERS,
                             "Content-Type": "video/MP2T",
-                            "Content-Length": stripped.length.toString(),
+                            "Content-Length": finalBytes.length.toString(),
                             "Cache-Control": isHoneypot ? "no-cache, no-store" : "public, max-age=86400, s-maxage=86400",
                             "X-Scraper-Advisory": SCRAPER_NOTICE_HEADER,
                             ...(isHoneypot ? { "X-Honeypot-Engaged": "1" } : {})
