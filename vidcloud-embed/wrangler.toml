@@ -20,7 +20,7 @@ enabled = true
 # Persistent Cloudflare KV Database for Admin Config, Firewall, and Keys
 [[kv_namespaces]]
 binding = "VIDCLOUD_ADMIN_STORE"
-id = "d8743d081b64441099d52e9e175268b1"
+id = "0d6952975eeb4eea96fa8f4f78c03f14"
 
 [vars]
 TURNSTILE_SECRET_KEY = "0x4AAAAAADGQxcZgLa0ZRtaJbL3mxiKj4RA"

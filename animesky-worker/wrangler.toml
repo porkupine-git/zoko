@@ -4,9 +4,9 @@ compatibility_date = "2024-11-01"
 compatibility_flags = ["nodejs_compat"]
 workers_dev = true
 
-routes = [
-  { pattern = "hindi.anixo.online/*", zone_name = "anixo.online" }
-]
+# routes = [
+#   { pattern = "hindi.anixo.online/*", zone_name = "anixo.online" }
+# ]
 
 # Smart Placement (executes worker closest to upstream data sources)
 [placement]
@@ -15,7 +15,7 @@ mode = "smart"
 # Cloudflare KV Cache (Included in $5/mo Paid Plan: 10M reads, 1M writes)
 [[kv_namespaces]]
 binding = "ANIMESKY_CACHE"
-id = "b77a4adff5014a8d89516a290add396a"
+id = "3e7da9d3d5964dfbbf134a8967c302f5"
 
 [assets]
 directory = "./public"

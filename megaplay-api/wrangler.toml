@@ -5,7 +5,7 @@ compatibility_flags = ["nodejs_compat"]
 # Cloudflare KV Cache Binding (Paid Plan High Speed Cache)
 [[kv_namespaces]]
 binding = "ANIKO_CACHE"
-id = "8211149c8ced401a81b4fb16b345594d"
+id = "c4366e9838794cff8a196de5a5e32840"
 
 # Enable Cloudflare Edge Observability & Logs
 [observability]
