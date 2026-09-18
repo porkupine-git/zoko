@@ -45,6 +45,21 @@ function attachProxyUrls(data) {
     return data;
 }
 
+const OPEN_CDN_HOSTS = [
+    'tiktokcdn.com',
+    'byteoversea.com',
+    'ibytedtos.com',
+    'ibyteimg.com',
+    'ipstatp.com'
+];
+
+function isDirectCdn(urlStr) {
+    for (const host of OPEN_CDN_HOSTS) {
+        if (urlStr.includes(host)) return true;
+    }
+    return false;
+}
+
 function getUpstreamHeaders(targetUrl = "") {
     const isVidtube = targetUrl.includes('akirax') || targetUrl.includes('vidtube') || targetUrl.includes('anizara');
     return {
@@ -167,12 +182,17 @@ const server = http.createServer(async (req, res) => {
                             if (resolved.includes('.m3u8') || resolved.includes('master') || resolved.includes('playlist')) {
                                 return `URI="/api/proxy/m3u8?url=${encodeURIComponent(resolved)}"`;
                             }
+                            if (isDirectCdn(resolved)) return `URI="${resolved}"`;
                             return `URI="/api/proxy/ts?url=${encodeURIComponent(resolved)}"`;
                         });
                     }
                     const resolved = new URL(trimmed, target).toString();
                     if (resolved.includes('.m3u8') || resolved.includes('master') || resolved.includes('playlist')) {
                         return `/api/proxy/m3u8?url=${encodeURIComponent(resolved)}`;
+                    }
+                    // SMART SEGMENT BYPASS: Direct open CDNs (TikTok CDN) bypass proxy completely!
+                    if (isDirectCdn(resolved)) {
+                        return resolved;
                     }
                     return `/api/proxy/ts?url=${encodeURIComponent(resolved)}`;
                 }).join('\n');

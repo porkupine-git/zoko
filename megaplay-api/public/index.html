@@ -892,10 +892,41 @@
                     m3u8: function (video, url, artInstance) {
                         if (Hls.isSupported()) {
                             if (artInstance.hls) artInstance.hls.destroy();
+
+                            // Custom Fragment Loader for Hls.js: Strips 252-byte fake PNG header client-side!
+                            // Enables 100% direct streaming from ByteDance / TikTok CDN with 0 server bandwidth!
+                            class ByteSliceLoader extends Hls.DefaultConfig.loader {
+                                constructor(config) {
+                                    super(config);
+                                    const originalLoad = this.load.bind(this);
+                                    this.load = function (context, config, callbacks) {
+                                        const originalOnSuccess = callbacks.onSuccess;
+                                        callbacks.onSuccess = function (response, stats, context, networkDetails) {
+                                            if (response && response.data) {
+                                                if (response.data instanceof ArrayBuffer) {
+                                                    const u8 = new Uint8Array(response.data);
+                                                    // Detect 252-byte fake PNG header (\x89PNG) on TikTok CDN / ByteDance chunks
+                                                    if (u8[0] === 0x89 && u8[1] === 0x50 && u8[2] === 0x4e && u8[3] === 0x47) {
+                                                        response.data = response.data.slice(252);
+                                                    }
+                                                } else if (response.data instanceof Uint8Array) {
+                                                    if (response.data[0] === 0x89 && response.data[1] === 0x50 && response.data[2] === 0x4e && response.data[3] === 0x47) {
+                                                        response.data = response.data.subarray(252);
+                                                    }
+                                                }
+                                            }
+                                            originalOnSuccess(response, stats, context, networkDetails);
+                                        };
+                                        originalLoad(context, config, callbacks);
+                                    };
+                                }
+                            }
+
                             const hls = new Hls({
                                 enableWorker: true,
                                 lowLatencyMode: true,
-                                backBufferLength: 90
+                                backBufferLength: 90,
+                                fLoader: ByteSliceLoader
                             });
                             hls.loadSource(url);
                             hls.attachMedia(video);

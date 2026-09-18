@@ -31,7 +31,9 @@ const CORS_HEADERS = {
 const OPEN_CDN_HOSTS = [
     'tiktokcdn.com',
     'byteoversea.com',
-    'ibytedtos.com'
+    'ibytedtos.com',
+    'ibyteimg.com',
+    'ipstatp.com'
 ];
 
 function isDirectCdn(urlStr) {
