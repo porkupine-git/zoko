@@ -1,0 +1,25 @@
+name: Auto Sync to porkupine-git/zoko
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  sync-repo:
+    if: github.repository == 'Zayrix-bit/zoko'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.SYNC_TOKEN }}
+
+      - name: Push to Target Repo (porkupine-git)
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git remote add target https://x-access-token:${{ secrets.SYNC_TOKEN }}@github.com/porkupine-git/zoko.git
+          git push target main --force
